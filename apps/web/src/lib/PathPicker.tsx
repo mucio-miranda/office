@@ -35,7 +35,9 @@ export function BrowseDialog({ title, scope, officeId, start, pick = 'folder', f
     const base = scope === 'system' ? '/api/system/browse' : `/api/offices/${officeId}/fs`;
     api<Listing>(`${base}${p ? `?path=${encodeURIComponent(p)}` : ''}`)
       .then((d) => { setData(d); setTyped(d.path); })
-      .catch((e) => setErr(e.message));
+      .catch((e) => setErr(e.status === 404
+        ? 'O servidor do Office está desatualizado. Reinicie (Ctrl+C no terminal e npm start) e tente de novo.'
+        : e.message));
   };
   useEffect(() => { go(start || undefined); }, []);
 
