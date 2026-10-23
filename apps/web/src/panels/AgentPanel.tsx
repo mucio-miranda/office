@@ -3,21 +3,12 @@ import { ArrowUp, Check, Plus, Square, Wrench } from 'lucide-react';
 import type { AgentJob } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
+import { renderMarkdown } from '../lib/markdown';
+import { desktop } from '../lib/desktop';
 
 const STATUS_LABEL: Record<AgentJob['status'], string> = {
   fila: 'na fila', rodando: 'trabalhando', aguardando: 'esperando você', concluido: 'concluído', erro: 'erro', cancelado: 'cancelado',
 };
-
-/** Markdown mínimo (negrito, código, títulos, citações), sempre escapando o HTML antes. */
-function miniMarkdown(s: string) {
-  const esc = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-  return esc
-    .replace(/```[\w-]*\n?([\s\S]*?)```/g, (_, c) => `<pre>${c}</pre>`)
-    .replace(/`([^`\n]+)`/g, '<code>$1</code>')
-    .replace(/\*\*([^*\n]+)\*\*/g, '<b>$1</b>')
-    .replace(/^#{1,4} (.+)$/gm, '<b class="h">$1</b>')
-    .replace(/^&gt; (.+)$/gm, '<span class="quote">$1</span>');
-}
 
 export function AgentPanel() {
   const { agents, jobs, messages, panelArg, office, demands, loadMessages, user } = useStore();
@@ -39,6 +30,19 @@ export function AgentPanel() {
   if (!agent) return <div className="empty">Nenhum funcionário neste escritório.</div>;
 
   const busy = job?.status === 'rodando' || job?.status === 'fila';
+
+  // caminhos citados pelo agente: no app de Windows, clicar abre no Explorer (relativos à pasta do escritório)
+  const openPath = (e: React.MouseEvent) => {
+    const el = (e.target as HTMLElement).closest('code[data-path]') as HTMLElement | null;
+    if (!el || !desktop) return;
+    const raw = el.dataset.path!.replace(/[\\/]+$/, '');
+    const isAbsolute = /^[a-z]:[\\/]/i.test(raw) || raw.startsWith('\\\\');
+    // shell.openPath devolve '' quando abriu, ou a mensagem de erro
+    desktop.openPath(isAbsolute ? raw : `${office!.rootPath}\\${raw}`).then((err) => {
+      if (err) useStore.getState().notify(`Não achei ${raw} a partir da pasta do escritório`);
+    });
+  };
+
   const submit = async (e?: React.FormEvent) => {
     e?.preventDefault();
     if (!text.trim() || busy) return;
@@ -94,7 +98,7 @@ export function AgentPanel() {
               ) : (
                 <div key={m.id} className="msg">
                   <div className="who"><span className="avatar" style={{ background: agent.color, width: 18, height: 18, fontSize: 10 }}>{agent.name[0]}</span>{agent.name}</div>
-                  <div className="msg-text" dangerouslySetInnerHTML={{ __html: miniMarkdown(m.text) }} />
+                  <div className="msg-text md" onClick={openPath} dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }} />
                 </div>
               ),
             )}
