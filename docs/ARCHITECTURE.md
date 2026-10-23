@@ -79,6 +79,23 @@ Drive estão sempre negados, seja qual for o modelo. O `CLAUDE.md` da pasta raiz
 Lição registrada: `zoompan` seguido de `xfade` travava o ffmpeg (197 s para 3,6 s de vídeo). Regenerar os
 timestamps com `setpts=N/FPS/TB` depois do `zoompan` resolve (1,4 s). Há teste cobrindo isso.
 
+## App de Windows (`apps/desktop`)
+
+Electron 45 (Node 24 embutido, com `node:sqlite`). Nada do servidor foi reescrito:
+
+- `scripts/build.mjs` empacota com esbuild o **servidor inteiro** (`server.mjs`), a **CLI da engine**
+  (`office-render.mjs`), o processo principal e o preload, e copia a UI, os modelos de funcionários e os ícones.
+- `src/main.ts`:
+  - Sobe o servidor num `utilityProcess`, isolado da janela. Se já existe um Office na porta 4747 (`/api/health`), apenas se conecta a ele.
+  - Usa a mesma pasta `data/` do repositório em desenvolvimento e `%APPDATA%/Office/data` quando instalado.
+  - Cria o atalho `office-render` (bash e .cmd) que roda a CLI com o próprio `Office.exe` em modo Node (`ELECTRON_RUN_AS_NODE`) e o põe no `PATH` dos funcionários.
+  - Janela com barra de título embutida (`titleBarOverlay` de 56 px, a mesma altura do cabeçalho), bandeja, atalho global, notificações, `flashFrame`, iniciar com o Windows e electron-updater.
+- `src/preload.ts` expõe `window.officeDesktop` com `contextIsolation` e `sandbox`. A UI checa se ele existe e, se não existir, cai no comportamento web.
+- `electron-builder` gera o instalador NSIS e publica nos releases do GitHub (`npm run release -w @office/desktop`).
+
+Nota de segurança: o fuse `RunAsNode` precisa ficar ligado para o `office-render` funcionar sem Node instalado.
+Quem quiser endurecer o binário pode desligá-lo e apontar `OFFICE_RENDER_CMD` para um Node do sistema.
+
 ## UI (`apps/web`)
 
 - `office/layout.ts`: planta (salas, paredes com portas, móveis, mesas dos agentes) e colisão com deslizamento.

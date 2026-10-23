@@ -29,6 +29,20 @@ function body<T extends z.ZodTypeAny>(schema: T, req: FastifyRequest, reply: Fas
   return r.data;
 }
 
+/**
+ * Funcionários já criados guardam uma cópia das permissões. Ao iniciar, somamos as ferramentas
+ * novas dos modelos (ex.: office-render no app de desktop) sem apagar personalizações.
+ */
+export function syncAgentTools() {
+  const templates = new Map(loadTemplates().map((t) => [t.slug, t]));
+  for (const a of all<AgentProfile>('SELECT * FROM agents')) {
+    const t = templates.get(a.slug);
+    if (!t) continue;
+    const merged = [...new Set([...a.allowedTools, ...t.allowedTools])];
+    if (merged.length !== a.allowedTools.length) update('agents', a.id, { allowedTools: merged });
+  }
+}
+
 export function seedAgents(officeId: string) {
   for (const t of loadTemplates()) {
     if (one('SELECT id FROM agents WHERE office_id = ? AND slug = ?', officeId, t.slug)) continue;

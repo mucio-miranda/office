@@ -8,6 +8,7 @@ import { LabelLayer } from './office/Labels';
 import { DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
 import { ThemeToggle } from './lib/ui';
+import { desktop } from './lib/desktop';
 
 type NavId = Exclude<PanelId, 'agente'>;
 const NAV: { id: NavId; icon: typeof Box; label: string; key: string }[] = [
@@ -29,6 +30,11 @@ export function OfficeView() {
   const { panel, open } = useStore();
   const toast = useStore((s) => s.toast);
   const inWorld = panel === null;
+  const waiting = useStore((s) => s.jobs.filter((j) => j.status === 'aguardando').length);
+
+  // app de Windows: clicar numa notificação abre o painel certo; a bandeja mostra quantos esperam aprovação
+  useEffect(() => desktop?.onNavigate((to) => open(to.panel as PanelId, to.arg)), [open]);
+  useEffect(() => { desktop?.setAttention(waiting); }, [waiting]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {

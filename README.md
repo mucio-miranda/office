@@ -168,7 +168,27 @@ sequenceDiagram
 Os funcionários são **arquivos Markdown** em [`agents/`](agents/). Para criar um novo (social media, tráfego pago,
 roteirista, atendimento...), copie um arquivo, escreva a persona e liste as skills e as ferramentas permitidas.
 
-## 🚀 Começando
+## 🖥️ App de Windows
+
+O jeito mais completo de usar o Office é o **app de Windows**: o mesmo escritório, só que nativo.
+
+- **Janela imersiva**, sem moldura de navegador, com **F11** para tela cheia
+- Fica na **bandeja**, perto do relógio, pode **iniciar com o Windows** e abre com **Ctrl+Shift+O** de qualquer lugar
+- **Notificações do Windows** quando um funcionário de IA precisa de você ou termina, e o ícone da bandeja fica laranja enquanto houver aprovação pendente
+- **Seletor de pastas nativo** do Windows
+- **Abrir e mostrar no Explorer** os vídeos renderizados e a pasta do escritório
+- O servidor roda dentro do app: **a equipe continua entrando pelo navegador** em `http://SEU-IP:4747`
+- Atualização automática pelos releases do GitHub
+
+Baixe o `Office-Setup-x.y.z.exe` em [Releases](https://github.com/mucio-miranda/office/releases) ou gere o instalador você mesmo:
+
+```bash
+npm install
+npm run desktop:dist     # gera apps/desktop/release/Office-Setup-<versão>.exe
+npm run desktop          # ou abre o app em modo de desenvolvimento
+```
+
+## 🚀 Começando (versão web)
 
 **Você precisa de:** [Node.js 22.13+](https://nodejs.org) · [ffmpeg](https://ffmpeg.org) no PATH (`winget install ffmpeg`) ·
 [Claude Code](https://claude.com/claude-code) instalado e logado (`npm i -g @anthropic-ai/claude-code`).

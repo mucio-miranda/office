@@ -3,6 +3,7 @@ import type {
   AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, Office, Presence, RoomId, ServerMsg, Transaction, User, Vec2,
 } from '@office/shared';
 import { api, getToken, setToken } from './api';
+import { desktop } from './desktop';
 
 export type PanelId = 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | null;
 
@@ -183,9 +184,16 @@ function handle(m: ServerMsg) {
     case 'job': {
       const prev = s.jobs.find((j) => j.id === m.job.id);
       useStore.setState((st) => ({ jobs: prev ? st.jobs.map((j) => (j.id === m.job.id ? m.job : j)) : [m.job, ...st.jobs] }));
-      if (prev && prev.status !== m.job.status && m.job.status === 'aguardando') {
+      if (prev && prev.status !== m.job.status) {
         const a = s.agents.find((x) => x.id === m.job.agentId);
-        s.notify(`✋ ${a?.name ?? 'Um funcionário'} precisa da sua aprovação`);
+        const name = a?.name ?? 'Um funcionário';
+        const task = m.job.prompt.replace(/^## Demanda: /, '').split(/\r?\n/)[0].slice(0, 120);
+        if (m.job.status === 'aguardando') {
+          s.notify(`${name} precisa da sua aprovação`);
+          desktop?.notify({ title: `${name} precisa de você`, body: task, panel: 'agente', arg: m.job.agentId });
+        } else if (m.job.status === 'concluido') {
+          desktop?.notify({ title: `${name} terminou`, body: task, panel: 'agente', arg: m.job.agentId });
+        }
       }
       break;
     }
@@ -196,8 +204,11 @@ function handle(m: ServerMsg) {
       break;
     case 'render':
       useStore.setState((st) => ({ renders: { ...st.renders, [m.timelineId]: { progress: m.progress, status: m.status, output: m.output, error: m.error } } }));
-      if (m.status === 'concluido') s.notify('🎬 Vídeo renderizado');
-      if (m.status === 'erro') s.notify('⚠️ A renderização falhou');
+      if (m.status === 'concluido') {
+        s.notify('Vídeo renderizado');
+        desktop?.notify({ title: 'Vídeo renderizado', body: m.output ?? '', panel: 'video' });
+      }
+      if (m.status === 'erro') s.notify('A renderização falhou');
       break;
   }
 }

@@ -1,0 +1,82 @@
+{
+  "name": "@office/desktop",
+  "productName": "Office",
+  "version": "0.2.0",
+  "description": "Office: escritório virtual com funcionários de IA, como app de Windows.",
+  "author": "Mucio Miranda",
+  "license": "MIT",
+  "private": true,
+  "main": "build/main.cjs",
+  "scripts": {
+    "build": "npm run build -w @office/web && node scripts/build.mjs",
+    "dev": "node scripts/build.mjs && electron .",
+    "start": "electron .",
+    "dist": "npm run build && electron-builder --win --publish never",
+    "release": "npm run build && electron-builder --win --publish always",
+    "icon": "node scripts/make-icon.mjs",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "^26.15.3",
+    "esbuild": "^0.25.0"
+  },
+  "build": {
+    "appId": "town.office.app",
+    "productName": "Office",
+    "copyright": "MIT · Mucio Miranda e contribuidores",
+    "directories": {
+      "output": "release",
+      "buildResources": "assets"
+    },
+    "files": [
+      "build/main.cjs",
+      "build/preload.cjs",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build",
+        "to": "office",
+        "filter": [
+          "server.mjs",
+          "office-render.mjs",
+          "web/**",
+          "agents/**",
+          "assets/**"
+        ]
+      }
+    ],
+    "asar": true,
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "assets/icon.png",
+      "artifactName": "Office-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Office"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "mucio-miranda",
+        "repo": "office"
+      }
+    ]
+  }
+}

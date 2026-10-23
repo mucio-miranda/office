@@ -14,6 +14,10 @@
 - Maquete 3D monocromática (piso sem iluminação + sombra suave, paredes baixas, peões)
 - Seletor de pastas navegável (máquina local e pastas do escritório) em todos os campos de caminho
 
+## ✅ v0.2.0: app de Windows (23/10/2026)
+- App Electron com servidor embutido, bandeja, atalho global, notificações nativas, seletor de pastas nativo,
+  tela cheia, iniciar com o Windows, abrir no Explorer e instalador NSIS com atualização automática
+
 ## 🔜 v0.2: o escritório ganha vida
 - [ ] Ferramentas MCP por funcionário: PhotoCraft/VectorCraft (Duda), FilmCraft (Vic), OfficeCLI (Theo e Rafa)
 - [ ] Mini-mapa ao vivo quando uma página está aberta (Gather) e "Ir até" nas notificações
@@ -37,4 +41,3 @@
 - [ ] Servidor na internet (túnel ou VPS) com HTTPS e login de verdade
 - [ ] Marketplace de funcionários (modelos `.md`) e de skills
 - [ ] Servidor MCP do Office: qualquer agente pode ler e escrever demandas e timelines
-- [ ] App desktop (Electron/Tauri) com bandeja e notificações

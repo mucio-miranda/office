@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { desktop } from './desktop';
 
 export type Theme = 'light' | 'dark';
 
@@ -16,10 +17,12 @@ export const useTheme = create<{ theme: Theme; toggle: () => void }>((set, get) 
     const theme = get().theme === 'dark' ? 'light' : 'dark';
     try { localStorage.setItem('office.theme', theme); } catch { /* ok */ }
     document.documentElement.dataset.theme = theme;
+    desktop?.setTheme(theme);
     set({ theme });
   },
 }));
 document.documentElement.dataset.theme = useTheme.getState().theme;
+desktop?.setTheme(useTheme.getState().theme);
 
 export interface ScenePalette {
   background: string; ground: string; floor: string; floorAlt: string; wall: string; wallTop: string;

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ArrowUp, Check, File, Folder, FolderOpen, HardDrive, X } from 'lucide-react';
 import { api } from './api';
+import { desktop, filterFromRegex } from './desktop';
 
 interface Listing {
   path: string;
@@ -102,10 +103,24 @@ export function PathField({ value, onChange, placeholder, scope = 'system', offi
   title?: string;
 }) {
   const [open, setOpen] = useState(false);
+  // no app de Windows, pastas da máquina abrem o diálogo nativo do sistema
+  const browse = async () => {
+    if (desktop && scope === 'system') {
+      if (pick === 'folder') {
+        const p = await desktop.pickFolder({ title, defaultPath: value || undefined });
+        if (p) onChange(p);
+      } else {
+        const [p] = await desktop.pickFiles({ title, defaultPath: value || undefined, filters: filterFromRegex('Arquivos', filter) });
+        if (p) onChange(p);
+      }
+      return;
+    }
+    setOpen(true);
+  };
   return (
     <div className="path-field">
       <input className="mono" value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)} spellCheck={false} />
-      <button type="button" onClick={() => setOpen(true)}><FolderOpen size={14} /> Procurar</button>
+      <button type="button" onClick={browse}><FolderOpen size={14} /> Procurar</button>
       {open && (
         <BrowseDialog title={title ?? (pick === 'folder' ? 'Escolher pasta' : 'Escolher arquivo')} scope={scope} officeId={officeId} start={value || undefined}
           pick={pick} filter={filter} onClose={() => setOpen(false)} onPick={(p) => { onChange(p); setOpen(false); }} />
@@ -125,7 +140,12 @@ export function PathList({ values, onChange, scope = 'system', officeId }: { val
           <button type="button" className="icon" onClick={() => onChange(values.filter((x) => x !== v))} aria-label="Remover"><X size={12} /></button>
         </div>
       ))}
-      <button type="button" className="ghost small" onClick={() => setOpen(true)}><FolderOpen size={14} /> Adicionar pasta</button>
+      <button type="button" className="ghost small" onClick={async () => {
+        if (desktop && scope === 'system') {
+          const p = await desktop.pickFolder({ title: 'Adicionar pasta' });
+          if (p && !values.includes(p)) onChange([...values, p]);
+        } else setOpen(true);
+      }}><FolderOpen size={14} /> Adicionar pasta</button>
       {open && (
         <BrowseDialog title="Adicionar pasta" scope={scope} officeId={officeId} onClose={() => setOpen(false)}
           onPick={(p) => { if (!values.includes(p)) onChange([...values, p]); setOpen(false); }} />

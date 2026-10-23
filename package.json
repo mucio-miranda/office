@@ -17,7 +17,9 @@
     "start": "npm run build && npm run start -w @office/server",
     "typecheck": "npm run typecheck --workspaces --if-present",
     "test": "npm run test --workspaces --if-present",
-    "seed": "npm run seed -w @office/server --"
+    "seed": "npm run seed -w @office/server --",
+    "desktop": "npm run dev -w @office/desktop",
+    "desktop:dist": "npm run dist -w @office/desktop"
   },
   "engines": {
     "node": ">=22.13"

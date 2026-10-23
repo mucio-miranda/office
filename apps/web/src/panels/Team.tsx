@@ -3,11 +3,17 @@ import { Copy } from 'lucide-react';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { PathField, PathList } from '../lib/PathPicker';
+import { desktop } from '../lib/desktop';
+import { FolderOpen } from 'lucide-react';
 
 export function Team() {
   const { office, members, presences, agents, user, notify, enterOffice } = useStore();
   const online = new Set([user!.id, ...Object.keys(presences)]);
-  const lan = `${location.protocol}//${location.hostname}:${location.port}`;
+  const [lanUrls, setLanUrls] = useState<string[]>([]);
+  const [autoStart, setAutoStart] = useState(false);
+  useEffect(() => { desktop?.info().then((i) => { setLanUrls(i.lanUrls); setAutoStart(i.autoStart); }); }, []);
+  // no app, localhost não serve para a equipe: mostra o IP real da rede
+  const lan = lanUrls[0] ?? `${location.protocol}//${location.hostname}:${location.port}`;
   const [root, setRoot] = useState(office!.rootPath);
   const [extra, setExtra] = useState<string[]>(office!.extraDirs);
   const dirty = root !== office!.rootPath || JSON.stringify(extra) !== JSON.stringify(office!.extraDirs);
@@ -25,8 +31,19 @@ export function Team() {
         </div>
       </section>
 
+      {desktop && (
+        <section className="card stack">
+          <h3>Aplicativo</h3>
+          <label className="check"><input type="checkbox" checked={autoStart} onChange={(e) => { setAutoStart(e.target.checked); desktop?.setAutoStart(e.target.checked); }} /> Iniciar o Office com o Windows (fica na bandeja)</label>
+          <p className="muted small" style={{ margin: 0 }}>Atalho global: <kbd>Ctrl</kbd> <kbd>Shift</kbd> <kbd>O</kbd> abre ou esconde o Office. <kbd>F11</kbd> alterna a tela cheia.</p>
+        </section>
+      )}
+
       <section className="card stack">
-        <h3>Pastas do escritório</h3>
+        <div className="row between">
+          <h3>Pastas do escritório</h3>
+          {desktop && <button className="small" onClick={() => desktop?.openPath(office!.rootPath)}><FolderOpen size={13} /> Abrir no Explorer</button>}
+        </div>
         <label>Pasta raiz <span className="muted">(onde os funcionários de IA trabalham)</span><PathField value={root} onChange={setRoot} title="Pasta raiz do escritório" /></label>
         <label>Pastas extras liberadas<PathList values={extra} onChange={setExtra} /></label>
         <div className="row end">

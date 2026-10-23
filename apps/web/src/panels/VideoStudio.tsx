@@ -3,6 +3,7 @@ import { TRANSITIONS, CAPTION_STYLES, Timeline as TimelineSchema, layout, clipDu
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import { BrowseDialog } from '../lib/PathPicker';
+import { desktop } from '../lib/desktop';
 import { Clapperboard, FileJson, Film, Image, Music, Plus, Type, X } from 'lucide-react';
 
 type TL = TimelineInput & { video: any[]; audio?: any[]; overlays?: any[]; captions?: any };
@@ -180,7 +181,9 @@ function Editor({ id }: { id: string }) {
               {previewSrc ? (
                 <ClipPreview src={previewSrc} from={sel?.lane === 'video' ? selected.in : 0} to={sel?.lane === 'video' ? selected.out : undefined} portrait={(tl.height ?? 1920) > (tl.width ?? 1080)} />
               ) : <div className="muted small">Selecione um clipe para ver a prévia</div>}
-              {row.output && <a className="small" href={mediaUrl(office!.id, row.output)} target="_blank">abrir último render</a>}
+              {row.output && (desktop
+                ? <span className="row gap"><a className="small" href="#" onClick={(e) => { e.preventDefault(); desktop?.openPath(row.output); }}>abrir último render</a><a className="small" href="#" onClick={(e) => { e.preventDefault(); desktop?.showInFolder(row.output); }}>mostrar no Explorer</a></span>
+                : <a className="small" href={mediaUrl(office!.id, row.output)} target="_blank">abrir último render</a>)}
             </div>
             <div className="inspector">
               {!sel && <p className="muted small">Clique num clipe, trilha ou legenda para editar. Arraste as bordas dos clipes para cortar.</p>}

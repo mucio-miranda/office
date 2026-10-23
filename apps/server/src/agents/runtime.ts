@@ -2,7 +2,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { APPROVAL_MARKER, uid, type AgentJob, type AgentProfile, type JobMessage, type Office } from '@office/shared';
-import { config, REPO_ROOT } from '../config.ts';
+import { config } from '../config.ts';
 import { all, insert, now, one, update, logActivity } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { houseRules } from './templates.ts';
@@ -25,7 +25,7 @@ const ALWAYS_DENIED = [
 const running = new Map<string, ChildProcess>();
 const queue: { jobId: string; input: string; resume: boolean }[] = [];
 
-const RENDER_CMD = `npx tsx "${path.join(REPO_ROOT, 'packages/video-engine/src/cli.ts')}"`;
+const RENDER_CMD = config.renderCmd;
 
 function systemPrompt(agent: AgentProfile, office: Office) {
   const fill = (s: string) =>

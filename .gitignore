@@ -6,3 +6,5 @@ renders/
 *.log
 .env
 .DS_Store
+apps/desktop/build/
+apps/desktop/release/
