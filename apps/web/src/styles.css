@@ -528,3 +528,9 @@ button.icon.tiny { width: 22px; height: 22px; }
 @media (max-width: 960px) { .minimap.floating, .minimap-pill { display: none; } }
 .minimap.floating.top { top: 12px; bottom: auto; }
 .page-head .ghost.small.active { background: var(--accent); }
+
+/* ---------- mesa própria (v0.2.5) ---------- */
+.nametag.desk { height: 20px; font-size: 10px; font-weight: 500; background: var(--background); border-style: dashed; box-shadow: none; }
+.nametag.desk small { font-size: 10px; }
+.nametag.desk.away { opacity: .6; }
+.mm-desk { opacity: .55; pointer-events: none; }

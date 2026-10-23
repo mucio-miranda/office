@@ -10,7 +10,7 @@ export interface AvatarProps {
   color: string;
   p: ScenePalette;
   /** Lido a cada quadro: posição e direção atuais. */
-  getState: () => { x: number; z: number; dir: number; moving: boolean };
+  getState: () => { x: number; z: number; dir: number; moving: boolean; seated?: boolean };
   /** Cor do anel de status no chão (agentes) ou destaque do próprio jogador. */
   ring?: string | null;
   pulse?: boolean;
@@ -41,7 +41,7 @@ export function Avatar({ anchorId, color, p, getState, ring, pulse, typing, seat
     t.current += dt * (s.moving ? 11 : 0);
     if (body.current) {
       const bob = s.moving ? Math.abs(Math.sin(t.current)) * 0.07 : Math.sin(performance.now() / (typing ? 140 : 700)) * (typing ? 0.02 : 0.008);
-      body.current.position.y = bob + (seated ? -0.12 : 0);
+      body.current.position.y = bob + ((s.seated ?? seated) ? -0.12 : 0);
       body.current.rotation.z = s.moving ? Math.sin(t.current) * 0.05 : 0;
     }
     if (ringRef.current && pulse) {

@@ -26,7 +26,7 @@ Cada etapa sai como um release próprio, testado, e o app instalado se atualiza 
 
 1. ✅ **Ir até e mini-mapa ao vivo (v0.2.4)**: "Ir até" nos avisos, na busca, no mapa e no painel do
    funcionário; lista de quem está online; aviso quando alguém entra; mini-mapa flutuando sobre as páginas
-2. **Mesa própria (v0.2.5)**: cada pessoa escolhe uma mesa no espaço aberto, "Ir para minha mesa" (`M`),
+2. ✅ **Mesa própria (v0.2.5)**: cada pessoa escolhe uma mesa no espaço aberto, "Ir para minha mesa" (`M`),
    o nome e o status ficam na mesa quando você está longe ou ausente
 3. **Tour guiado (v0.2.6)**: no primeiro acesso a Rafa apresenta o escritório, as salas, os atalhos e como
    delegar a primeira demanda

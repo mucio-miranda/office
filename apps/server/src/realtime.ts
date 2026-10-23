@@ -53,7 +53,7 @@ export function handleSocket(ws: WebSocket) {
     const c = conn;
     switch (msg.t) {
       case 'move':
-        Object.assign(c.presence, { pos: msg.pos, dir: msg.dir, moving: msg.moving, room: msg.room });
+        Object.assign(c.presence, { pos: msg.pos, dir: msg.dir, moving: msg.moving, seated: !!msg.seated, room: msg.room });
         broadcast(c.officeId, { t: 'presence', presence: c.presence }, c);
         break;
       case 'status':

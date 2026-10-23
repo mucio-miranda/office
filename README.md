@@ -50,6 +50,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - **Ctrl+K**: vá para qualquer sala, painel, cliente, demanda ou funcionário
 - Minimapa clicável, chat geral ou da sala, status (🎧 foco, ⛔ ocupado, 💤 ausente) e emotes
 - **Ir até**: um clique no aviso, no mapa, na lista de quem está online ou no `Ctrl+K` leva você até a pessoa ou o funcionário que chamou
+- **Mesa própria**: chegue perto de uma mesa livre e aperte **E**; **M** leva você de volta a ela, você entra no escritório já sentado e, quando sai, a plaquinha mostra que está fora
 - **Mini-mapa ao vivo** flutuando sobre as páginas: você vê o escritório enquanto trabalha nas demandas
 - Chegue perto de um móvel e aperte **E**: o quadro abre as demandas, o cofre abre o financeiro e a TV abre o estúdio de vídeo
 
@@ -217,6 +218,7 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 | clique no chão | ir até lá |
 | `Espaço` + arrastar | **modo drone**: sobrevoa o escritório sem mover o personagem (o botão do meio do mouse também arrasta) |
 | `Esc` | volta a câmera para você (ou fecha o painel) |
+| `M` | ir para a sua mesa (sem mesa, leva até uma livre) |
 | `E` | interagir com o que está perto |
 | `1`–`7` | teletransportar para uma sala |
 | `B` `C` `F` `V` `G` `H` | demandas · calendário · financeiro · vídeo · equipe · atividade |
@@ -276,7 +278,8 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Engine de vídeo com timeline
 - [x] Visual minimalista (estilo Paperclip) e seletor de pastas navegável
 - [x] App de Windows, modo drone, "Ir até" e mini-mapa ao vivo
-- [ ] Mesa própria por pessoa e tour guiado
+- [x] Mesa própria por pessoa
+- [ ] Tour guiado no primeiro acesso
 - [ ] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Whisper no estúdio (legenda automática) e exportação para CapCut/Premiere

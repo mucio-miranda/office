@@ -5,6 +5,13 @@ import { api } from '../lib/api';
 import { PathField, PathList } from '../lib/PathPicker';
 import { desktop } from '../lib/desktop';
 import { FolderOpen } from 'lucide-react';
+import { HUMAN_DESKS, ROOMS } from '../office/layout';
+
+/** "mesa na Redação" (ou "sem mesa"). */
+function deskLabel(desk: string | null) {
+  const d = HUMAN_DESKS.find((h) => h.id === desk);
+  return d ? `mesa: ${ROOMS.find((r) => r.id === d.room)?.label}` : 'sem mesa';
+}
 
 export function Team() {
   const { office, members, presences, agents, user, notify, enterOffice } = useStore();
@@ -62,6 +69,7 @@ export function Team() {
             <span className="avatar" style={{ background: m.color }}>{m.name[0]}</span>
             <b>{m.name}</b>
             <span className="badge">{m.role}</span>
+            <span className="muted small">{deskLabel(m.desk)}</span>
             <span className={`row gap small ${online.has(m.id) ? 'st-concluido' : 'st-livre'}`}><span className="status-dot" />{online.has(m.id) ? 'online' : 'offline'}</span>
           </div>
         ))}

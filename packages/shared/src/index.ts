@@ -11,6 +11,12 @@ export interface User {
 
 export type OfficeRole = 'dono' | 'membro' | 'convidado';
 
+/** Pessoa do escritório, com a mesa que escolheu (id de um lugar da planta, ou null). */
+export interface Member extends User {
+  role: OfficeRole;
+  desk: string | null;
+}
+
 export interface Office {
   id: ID;
   name: string;
@@ -158,6 +164,8 @@ export interface Presence {
   /** Direção em radianos. */
   dir: number;
   moving: boolean;
+  /** Sentado na própria mesa. */
+  seated?: boolean;
   room: RoomId | null;
   status: 'disponivel' | 'ocupado' | 'foco' | 'ausente';
 }
@@ -166,7 +174,7 @@ export interface Presence {
 
 export type ClientMsg =
   | { t: 'join'; officeId: ID; token: string }
-  | { t: 'move'; pos: Vec2; dir: number; moving: boolean; room: RoomId | null }
+  | { t: 'move'; pos: Vec2; dir: number; moving: boolean; seated?: boolean; room: RoomId | null }
   | { t: 'status'; status: Presence['status'] }
   | { t: 'chat'; text: string; room: RoomId | null }
   | { t: 'emote'; emoji: string };
@@ -178,7 +186,7 @@ export type ServerMsg =
   | { t: 'chat'; from: ID; name: string; text: string; room: RoomId | null; at: string }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' }
+  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' }
   | { t: 'job'; job: AgentJob }
   | { t: 'jobMessage'; message: JobMessage }
   | { t: 'render'; timelineId: ID; progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string };

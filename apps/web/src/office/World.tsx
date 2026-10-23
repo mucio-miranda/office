@@ -6,12 +6,18 @@ import type { AgentProfile, Presence, Vec2 } from '@office/shared';
 import { useStore, showEmote } from '../lib/store';
 import { useScene, type ScenePalette } from '../lib/theme';
 import { Avatar } from './Avatar';
-import { LabelProjector } from './Labels';
+import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
-import { DESKS, FURNITURE, ROOMS, SPAWN, WALLS, WALL_H, freeSpotNear, roomAt, step, type Furniture } from './layout';
+import { DESKS, FURNITURE, HUMAN_DESKS, ROOMS, SPAWN, WALLS, WALL_H, deskSeat, freeSpotNear, roomAt, step, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
-export const player = { x: SPAWN.x, z: SPAWN.z, dir: Math.PI, moving: false, target: null as Vec2 | null };
+export const player = {
+  x: SPAWN.x, z: SPAWN.z, dir: Math.PI, moving: false, target: null as Vec2 | null,
+  /** sentado na própria mesa (andar levanta) */
+  seated: false,
+  /** força o envio da posição no próximo quadro (sentar, aparecer na mesa) */
+  dirty: false,
+};
 export const cam = {
   zoom: 38,
   angle: Math.PI / 4,
@@ -52,6 +58,49 @@ export function goTo(target: Vec2, face?: Vec2) {
 export function goToAgent(a: AgentProfile) {
   const d = DESKS[a.room];
   goTo({ x: d.x + 1.5, z: d.z - 0.4 }, d);
+}
+
+/** Senta na cadeira de uma mesa, de frente para o monitor. */
+function sitAt(d: HumanDesk) {
+  const seat = deskSeat(d);
+  player.x = seat.x; player.z = seat.z; player.dir = Math.PI;
+  player.target = null;
+  player.seated = true;
+  player.dirty = true;
+  recenter();
+}
+
+/** A sua mesa neste escritório (ou undefined). */
+export function myDesk() {
+  const st = useStore.getState();
+  const id = st.members.find((m) => m.id === st.user?.id)?.desk;
+  return HUMAN_DESKS.find((d) => d.id === id);
+}
+
+/** "Ir para minha mesa" (M). Sem mesa, leva até a mesa livre mais próxima e explica como escolher. */
+export function goToMyDesk() {
+  const mine = myDesk();
+  if (mine) {
+    useStore.setState({ panel: null, panelArg: null });
+    sitAt(mine);
+    return;
+  }
+  const taken = new Set(useStore.getState().members.map((m) => m.desk));
+  const free = HUMAN_DESKS.filter((d) => !taken.has(d.id))
+    .sort((a, b) => Math.hypot(a.x - player.x, a.z - player.z) - Math.hypot(b.x - player.x, b.z - player.z))[0];
+  if (!free) return useStore.getState().notify('Todas as mesas estão ocupadas.');
+  const seat = deskSeat(free);
+  goTo({ x: seat.x + 1, z: seat.z + 0.4 }, seat);
+  useStore.getState().notify('Você ainda não tem mesa. Aperte E perto desta para ficar com ela.');
+}
+
+/** Libera a sua mesa (ela volta a ficar livre para outra pessoa). */
+export async function releaseMyDesk() {
+  if (!myDesk()) return;
+  if (await useStore.getState().claimDesk(null)) {
+    if (player.seated) { player.seated = false; player.dirty = true; }
+    useStore.getState().notify('Mesa liberada.');
+  }
 }
 
 /** Vai até uma pessoa online (também pela direita da tela). */
@@ -97,6 +146,15 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
   const camTarget = useRef(new THREE.Vector3(player.x, 0, player.z));
   const tmp = useMemo(() => new THREE.Vector3(), []);
 
+  // quem tem mesa entra no escritório já sentado nela
+  useEffect(() => {
+    const mine = myDesk();
+    if (mine) {
+      sitAt(mine);
+      camTarget.current.set(player.x, 0, player.z);
+    }
+  }, []);
+
   useFrame((_, dtRaw) => {
     const dt = Math.min(dtRaw, 0.05);
     const st = useStore.getState();
@@ -104,6 +162,8 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     if (st.teleport) {
       const q = freeSpotNear(st.teleport);
       player.x = q.x; player.z = q.z; player.target = null;
+      player.seated = false;
+      player.dirty = true;
       useStore.setState({ teleport: null });
       recenter();
     }
@@ -143,6 +203,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       player.dir = Math.atan2(dx, dz);
     }
     player.moving = moving;
+    if (moving && player.seated) { player.seated = false; player.dirty = true; }
     // andar devolve a câmera para você
     if (moving && !cam.follow) recenter();
 
@@ -153,9 +214,10 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     }
 
     const now = performance.now();
-    if ((moving && now - lastSent.current > 80) || (!moving && lastSent.current > 0)) {
-      send({ t: 'move', pos: { x: +player.x.toFixed(2), z: +player.z.toFixed(2) }, dir: +player.dir.toFixed(2), moving, room: room?.id ?? null });
+    if ((moving && now - lastSent.current > 80) || (!moving && lastSent.current > 0) || player.dirty) {
+      send({ t: 'move', pos: { x: +player.x.toFixed(2), z: +player.z.toFixed(2) }, dir: +player.dir.toFixed(2), moving, seated: player.seated, room: room?.id ?? null });
       lastSent.current = moving ? now : 0;
+      player.dirty = false;
     }
 
     let best: { d: number; key: string; n: Nearby } | null = null;
@@ -163,6 +225,14 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       if (!f.panel && !f.label) continue;
       const d = Math.hypot(f.x - player.x, f.z - player.z);
       if (d < 2.4 && (!best || d < best.d)) best = { d, key: `f:${f.x}:${f.z}`, n: { label: f.label ?? '', action: () => useFurniture(f) } };
+    }
+    for (const hd of HUMAN_DESKS) {
+      const seat = deskSeat(hd);
+      const d = Math.hypot(seat.x - player.x, seat.z - player.z);
+      if (d > 1.8 || (best && d >= best.d)) continue;
+      const owner = st.members.find((m) => m.desk === hd.id);
+      if (!owner) best = { d, key: `d:${hd.id}:livre`, n: { label: 'Ficar com esta mesa', action: () => { st.claimDesk(hd.id).then((ok) => ok && sitAt(hd)); } } };
+      else if (owner.id === st.user?.id && !player.seated) best = { d, key: `d:${hd.id}:minha`, n: { label: 'Sentar na sua mesa', action: () => sitAt(hd) } };
     }
     for (const a of st.agents) {
       const desk = DESKS[a.room];
@@ -202,7 +272,7 @@ export function useFurniture(f: Furniture) {
 }
 
 function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
-  const cur = useRef({ x: pr.pos.x, z: pr.pos.z, dir: pr.dir, moving: pr.moving });
+  const cur = useRef({ x: pr.pos.x, z: pr.pos.z, dir: pr.dir, moving: pr.moving, seated: pr.seated });
   const target = useRef(pr);
   target.current = pr;
   useFrame((_, dt) => {
@@ -211,6 +281,7 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
     cur.current.z += (target.current.pos.z - cur.current.z) * k;
     cur.current.dir = target.current.dir;
     cur.current.moving = target.current.moving;
+    cur.current.seated = target.current.seated;
   });
   return <Avatar anchorId={`user:${pr.userId}`} color={pr.color} p={p} getState={() => cur.current} />;
 }
@@ -222,6 +293,43 @@ function AgentNPC({ a, p }: { a: AgentProfile; p: ScenePalette }) {
   return (
     <Avatar anchorId={`agent:${a.id}`} seated typing={a.status === 'trabalhando'} color={a.color} p={p}
       ring={STATUS_RING[a.status]} pulse={a.status === 'aguardando'} getState={() => state} onClick={() => { if (!droneBlocksClick()) open('agente', a.id); }} />
+  );
+}
+
+/**
+ * Mesas das pessoas: plaquinha na cor do dono em cima da mesa e âncora do rótulo com nome e status,
+ * escondido enquanto o dono está sentado nela (aí vale o rótulo do próprio avatar).
+ */
+function DeskMarkers() {
+  const members = useStore((s) => s.members);
+  useEffect(() => {
+    const offs = HUMAN_DESKS.map((d) => registerAnchor(`desk:${d.id}`, () => {
+      const st = useStore.getState();
+      const owner = st.members.find((m) => m.desk === d.id);
+      const seat = deskSeat(d);
+      let hidden = !owner;
+      if (owner && owner.id === st.user?.id) hidden = player.seated && Math.hypot(player.x - seat.x, player.z - seat.z) < 0.3;
+      else if (owner) {
+        const pr = st.presences[owner.id];
+        hidden = !!pr?.seated && Math.hypot(pr.pos.x - seat.x, pr.pos.z - seat.z) < 0.5;
+      }
+      return { x: d.x, z: d.z, y: 1.45, hidden };
+    }));
+    return () => offs.forEach((off) => off());
+  }, []);
+  return (
+    <>
+      {members.map((m) => {
+        const d = HUMAN_DESKS.find((h) => h.id === m.desk);
+        if (!d) return null;
+        return (
+          <mesh key={m.id} position={[d.x + 0.7, 0.765, d.z + 0.38]} castShadow>
+            <boxGeometry args={[0.5, 0.03, 0.14]} />
+            <meshStandardMaterial color={m.color} roughness={0.6} />
+          </mesh>
+        );
+      })}
+    </>
   );
 }
 
@@ -357,6 +465,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       {FURNITURE.map((f, i) => (
         <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; player.target = freeSpotNear({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}
+      <DeskMarkers />
       {agents.map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
       {Object.values(presences).map((pr) => <Remote key={pr.userId} pr={pr} p={p} />)}
       {ready && <Player onNearby={onNearby} p={p} active={active} />}

@@ -7,7 +7,7 @@ import { DESKS, ROOMS } from './layout';
  * Rótulos (nomes, balões de status e nomes das salas) em DOM puro, fora do Canvas.
  * Cada avatar registra uma âncora 3D; um único useFrame projeta todas na tela.
  */
-type Anchor = () => { x: number; z: number; y?: number };
+type Anchor = () => { x: number; z: number; y?: number; hidden?: boolean };
 const anchors = new Map<string, Anchor>();
 const elements = new Map<string, HTMLDivElement>();
 
@@ -30,6 +30,7 @@ export function LabelProjector() {
       const a = anchors.get(id);
       if (!a) { el.style.display = 'none'; continue; }
       const p = a();
+      if (p.hidden) { el.style.display = 'none'; continue; }
       v.set(p.x, p.y ?? HEAD, p.z).project(camera);
       if (v.z > 1) { el.style.display = 'none'; continue; }
       const x = (v.x * 0.5 + 0.5) * size.width;
@@ -52,7 +53,11 @@ export function LabelLayer() {
   const emotes = useStore((s) => s.emotes);
   const open = useStore((s) => s.open);
 
-  type Item = { id: string; name: string; sub?: string; color: string; status?: string | null; statusClass?: string; emoji?: string; onClick?: () => void; me?: boolean };
+  const members = useStore((s) => s.members);
+  type Item = {
+    id: string; name: string; sub?: string; color: string; status?: string | null; statusClass?: string; emoji?: string;
+    onClick?: () => void; me?: boolean; desk?: boolean; away?: boolean;
+  };
   const items: Item[] = [];
   if (user) items.push({ id: `user:${user.id}`, name: user.name, color: user.color, emoji: emotes[user.id]?.emoji, me: true });
   for (const p of Object.values(presences))
@@ -60,6 +65,13 @@ export function LabelLayer() {
   for (const a of agents)
     if (DESKS[a.room])
       items.push({ id: `agent:${a.id}`, name: a.name, sub: a.role, color: a.color, status: AGENT_STATUS[a.status], statusClass: `st-${a.status}`, onClick: () => open('agente', a.id) });
+  // plaquinha das mesas com dono (o mundo esconde quando o dono está sentado nela)
+  for (const m of members) {
+    if (!m.desk) continue;
+    const pr = presences[m.id];
+    const sub = m.id === user?.id ? 'sua mesa' : !pr ? 'fora' : PRESENCE_STATUS[pr.status] ?? 'online';
+    items.push({ id: `desk:${m.desk}`, name: m.name, sub, color: m.color, desk: true, away: m.id !== user?.id && (!pr || pr.status === 'ausente') });
+  }
 
   return (
     <div className="labels">
@@ -70,7 +82,7 @@ export function LabelLayer() {
       ))}
       {items.map((it) => (
         <div key={it.id} ref={(el) => { if (el) elements.set(it.id, el); else elements.delete(it.id); }} style={{ display: 'none' }}>
-          <div className={`nametag ${it.me ? 'me' : ''} ${it.onClick ? 'clickable' : ''}`} onClick={it.onClick}>
+          <div className={`nametag ${it.me ? 'me' : ''} ${it.onClick ? 'clickable' : ''} ${it.desk ? 'desk' : ''} ${it.away ? 'away' : ''}`} onClick={it.onClick}>
             {it.emoji ? <div className="bubble emoji">{it.emoji}</div> : it.status && <div className={`bubble ${it.statusClass}`}>{it.status}</div>}
             {!it.me && <span className="dot" style={{ background: it.color }} />}
             {it.name}

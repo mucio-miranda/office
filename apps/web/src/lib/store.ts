@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, Office, Presence, RoomId, ServerMsg, Transaction, User, Vec2,
+  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, Member, Office, Presence, RoomId, ServerMsg, Transaction, User, Vec2,
 } from '@office/shared';
 import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
@@ -17,7 +17,7 @@ interface State {
   user: User | null;
   offices: OfficeWithRole[];
   office: OfficeWithRole | null;
-  members: (User & { role: string })[];
+  members: Member[];
 
   demands: Demand[];
   events: CalendarEvent[];
@@ -50,7 +50,9 @@ interface State {
   logout(): void;
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
-  reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines'): Promise<void>;
+  reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members'): Promise<void>;
+  /** Escolhe (ou libera, com null) a sua mesa. */
+  claimDesk(desk: string | null): Promise<boolean>;
   loadMessages(jobId: string): Promise<void>;
   open(panel: PanelId, arg?: string | null): void;
   send(msg: ClientMsg): void;
@@ -113,6 +115,19 @@ export const useStore = create<State>((set, get) => ({
     if (!o) return;
     const data = await api(`/api/offices/${o.id}/${what}`);
     set({ [what]: data } as Partial<State>);
+  },
+
+  async claimDesk(desk) {
+    const o = get().office;
+    if (!o) return false;
+    try {
+      await api(`/api/offices/${o.id}/desk`, { method: 'PUT', body: { desk } });
+      await get().reload('members');
+      return true;
+    } catch (e) {
+      get().notify((e as Error).message);
+      return false;
+    }
   },
 
   async loadMessages(jobId) {

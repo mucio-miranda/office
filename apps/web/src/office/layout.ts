@@ -89,7 +89,24 @@ export interface Furniture {
   solid?: boolean;
 }
 
+/**
+ * Mesas das pessoas: ao lado dos funcionários de IA de cada área e duas na recepção.
+ * `x,z` é o centro da mesa; a cadeira fica em `z + 1.1`, de frente para o monitor (como as dos funcionários).
+ */
+export interface HumanDesk { id: string; room: RoomId; x: number; z: number }
+export const HUMAN_DESKS: HumanDesk[] = [
+  { id: 'redacao-1', room: 'copy', x: -15.2, z: -6.5 },
+  { id: 'redacao-2', room: 'copy', x: -8.8, z: -6.5 },
+  { id: 'gerencia-1', room: 'gerencia', x: -1.6, z: -6.5 },
+  { id: 'video-1', room: 'video', x: 10, z: 2.4 },
+  { id: 'design-1', room: 'design', x: 10.6, z: 8.5 },
+  { id: 'recepcao-1', room: 'recepcao', x: -3.6, z: 4.2 },
+  { id: 'recepcao-2', room: 'recepcao', x: 3.6, z: 4.2 },
+];
+export const deskSeat = (d: HumanDesk): Vec2 => ({ x: d.x, z: d.z + 1.1 });
+
 export const FURNITURE: Furniture[] = [
+  ...HUMAN_DESKS.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true })),
   // recepção
   { kind: 'tapete', x: 0, z: 5, w: 7, d: 4 },
   { kind: 'sofa', x: -3.5, z: 9.6, rot: 0, solid: true },

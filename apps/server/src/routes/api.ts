@@ -6,7 +6,7 @@ import path from 'node:path';
 import { homedir } from 'node:os';
 import {
   DEMAND_COLUMNS, uid,
-  type AgentJob, type AgentProfile, type CalendarEvent, type Client, type Demand, type JobMessage, type Office, type Transaction, type User,
+  type AgentJob, type AgentProfile, type CalendarEvent, type Client, type Demand, type JobMessage, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
 import { checkPin, createSession, hashPin, membership, requireMember, requireUser, sessionCookie } from '../auth.ts';
@@ -20,6 +20,9 @@ const COLORS = ['#ff5c8a', '#7c5cff', '#22c3a6', '#ffb020', '#3fa7ff', '#ff7a45'
 const pick = () => COLORS[Math.floor(Math.random() * COLORS.length)];
 
 /** Valida o corpo com zod e responde 400 com mensagem legível. */
+const members = (officeId: string) =>
+  all<Member>('SELECT u.id, u.name, u.color, u.created_at, m.role, m.desk FROM office_members m JOIN users u ON u.id = m.user_id WHERE m.office_id = ?', officeId);
+
 function body<T extends z.ZodTypeAny>(schema: T, req: FastifyRequest, reply: FastifyReply): z.infer<T> | undefined {
   const r = schema.safeParse(req.body ?? {});
   if (!r.success) {
@@ -154,10 +157,30 @@ export async function api(app: FastifyInstance) {
       const { officeId } = req.params as { officeId: string };
       return {
         office: one<Office>('SELECT * FROM offices WHERE id = ?', officeId),
-        members: all<User & { role: string }>(
-          'SELECT u.id, u.name, u.color, m.role FROM office_members m JOIN users u ON u.id = m.user_id WHERE m.office_id = ?', officeId),
+        members: members(officeId),
         online: onlineUsers(officeId).map((p) => p.userId),
       };
+    });
+
+    r.get('/api/offices/:officeId/members', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return members((req.params as { officeId: string }).officeId);
+    });
+
+    // escolher (ou liberar, com null) a própria mesa
+    r.put('/api/offices/:officeId/desk', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as { officeId: string };
+      const b = body(z.object({ desk: z.string().regex(/^[a-z0-9-]{1,32}$/).nullable() }), req, reply);
+      if (!b) return;
+      if (b.desk) {
+        const owner = one<{ id: string; name: string }>(
+          'SELECT u.id, u.name FROM office_members m JOIN users u ON u.id = m.user_id WHERE m.office_id = ? AND m.desk = ?', officeId, b.desk);
+        if (owner && owner.id !== req.user.id) return reply.code(409).send({ error: `Essa mesa já é de ${owner.name}.` });
+      }
+      db.prepare('UPDATE office_members SET desk = ? WHERE office_id = ? AND user_id = ?').run(b.desk, officeId, req.user.id);
+      invalidate(officeId, 'members');
+      return { ok: true };
     });
 
     r.patch('/api/offices/:officeId', async (req, reply) => {

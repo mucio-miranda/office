@@ -59,6 +59,9 @@ const MIGRATIONS: string[] = [
    CREATE INDEX demands_office ON demands(office_id, status);
    CREATE INDEX jobs_office ON jobs(office_id, status);
    CREATE INDEX job_messages_job ON job_messages(job_id, created_at);`,
+  // v0.2.5: mesa própria por pessoa (uma mesa tem um dono só por escritório)
+  `ALTER TABLE office_members ADD COLUMN desk TEXT;
+   CREATE UNIQUE INDEX office_members_desk ON office_members(office_id, desk) WHERE desk IS NOT NULL;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

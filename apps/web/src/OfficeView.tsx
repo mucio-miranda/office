@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
-  LocateFixed, Navigation, Map as MapIcon, Minus,
+  LocateFixed, Navigation, Map as MapIcon, Minus, Armchair,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
-import { World, cam, player, recenter, goTo, goToAgent, goToPerson, type Nearby } from './office/World';
+import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
-import { DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
+import { DESKS, HUMAN_DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
 import { ThemeToggle } from './lib/ui';
 import { desktop } from './lib/desktop';
@@ -52,6 +52,7 @@ export function OfficeView() {
       const k = e.key.toLowerCase();
       const nav = NAV.find((d) => d.key.toLowerCase() === k);
       if (nav) { open(nav.id); return; }
+      if (k === 'm') { goToMyDesk(); return; }
       if (!inWorld) return;
       const room = ROOMS.find((r) => r.key === k);
       if (room) { goTo(roomCenter(room)); return; }
@@ -90,7 +91,7 @@ export function OfficeView() {
                 <Chat inputRef={chatRef} />
                 {nearby && !drone && <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>}
                 <DroneOverlay />
-                <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · 1–7 salas · roda: zoom</div>
+                <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · <kbd>M</kbd> minha mesa · 1–7 salas · roda: zoom</div>
               </>
             )}
           </div>
@@ -252,6 +253,7 @@ function MiniMap({ floating = false, onClose }: { floating?: boolean; onClose?: 
   const agents = useStore((s) => s.agents);
   const user = useStore((s) => s.user);
   const [, force] = useState(0);
+  const members = useStore((s) => s.members);
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('office.mmCollapsed') === '1'; } catch { return false; } });
   useEffect(() => { const id = setInterval(() => force((x) => x + 1), 200); return () => clearInterval(id); }, []);
   const toggle = () => setCollapsed((c) => { try { localStorage.setItem('office.mmCollapsed', c ? '0' : '1'); } catch { /* ok */ } return !c; });
@@ -281,6 +283,14 @@ function MiniMap({ floating = false, onClose }: { floating?: boolean; onClose?: 
           <circle cx={DESKS[a.room].x} cy={DESKS[a.room].z} r={0.7} fill={a.color} />
         </g>
       ))}
+      {members.map((m) => {
+        const d = HUMAN_DESKS.find((h) => h.id === m.desk);
+        return d && (
+          <rect key={m.id} className="mm-desk" x={d.x - 1.1} y={d.z - 0.55} width={2.2} height={1.1} rx={0.2} fill={m.color}>
+            <title>Mesa de {m.name}</title>
+          </rect>
+        );
+      })}
       {Object.values(presences).map((p) => (
         <g key={p.userId} className="mm-dot" onClick={() => goToPerson(p)}>
           <title>Ir até {p.name}</title>
@@ -343,12 +353,18 @@ function Chat({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | null>
 }
 
 function Palette({ onClose }: { onClose: () => void }) {
-  const { agents, demands, clients, open, presences } = useStore();
+  const { agents, demands, clients, open, presences, members, user } = useStore();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const items = useMemo(() => {
     const all: { icon: typeof Box; label: string; hint: string; run: () => void }[] = [
       ...NAV.map((d) => ({ icon: d.icon, label: d.label, hint: d.key, run: () => open(d.id) })),
+      { icon: Armchair, label: 'Ir para minha mesa', hint: 'M', run: goToMyDesk },
+      ...(myDesk() ? [{ icon: Armchair, label: 'Liberar minha mesa', hint: 'mesa', run: () => { releaseMyDesk(); } }] : []),
+      ...members.filter((m) => m.desk && m.id !== user?.id && !presences[m.id]).map((m) => {
+        const d = HUMAN_DESKS.find((h) => h.id === m.desk)!;
+        return { icon: Armchair, label: `Ir até a mesa de ${m.name}`, hint: 'fora', run: () => goTo({ x: d.x + 1.6, z: d.z + 1.1 }, d) };
+      }),
       ...ROOMS.map((r) => ({ icon: Box, label: `Ir para ${r.label}`, hint: r.key, run: () => goTo(roomCenter(r)) })),
       ...agents.map((a) => ({ icon: Bot, label: `${a.name} · ${a.role}`, hint: 'funcionário', run: () => open('agente', a.id) })),
       ...agents.map((a) => ({ icon: Navigation, label: `Ir até ${a.name}`, hint: 'mesa', run: () => goToAgent(a) })),
@@ -358,7 +374,7 @@ function Palette({ onClose }: { onClose: () => void }) {
     ];
     const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     return all.filter((i) => norm(i.label).includes(norm(q))).slice(0, 12);
-  }, [q, agents, demands, clients, open, presences]);
+  }, [q, agents, demands, clients, open, presences, members, user]);
   return (
     <div className="palette-bg" onClick={onClose}>
       <div className="palette" onClick={(e) => e.stopPropagation()}>
