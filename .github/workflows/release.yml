@@ -1,0 +1,33 @@
+# Gera o instalador do app de Windows e publica o release no GitHub a cada tag v*.
+# Usa o GITHUB_TOKEN do próprio Actions: ninguém precisa criar token pessoal.
+name: Release do app de Windows
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Testes da engine de vídeo (sem ffmpeg o teste de render é pulado)
+        run: npm test
+
+      - name: Gerar e publicar o instalador
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run release -w @office/desktop
