@@ -1,0 +1,203 @@
+import { create } from 'zustand';
+import type {
+  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, Office, Presence, RoomId, ServerMsg, Transaction, User, Vec2,
+} from '@office/shared';
+import { api, getToken, setToken } from './api';
+
+export type PanelId = 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | null;
+
+export interface ChatLine { from: string; name: string; text: string; at: string; room: RoomId | null }
+export interface RenderState { progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string }
+export type OfficeWithRole = Office & { role: string; inviteCode: string };
+
+interface State {
+  user: User | null;
+  offices: OfficeWithRole[];
+  office: OfficeWithRole | null;
+  members: (User & { role: string })[];
+
+  demands: Demand[];
+  events: CalendarEvent[];
+  transactions: Transaction[];
+  clients: Client[];
+  agents: AgentProfile[];
+  jobs: AgentJob[];
+  messages: Record<string, JobMessage[]>;
+  timelines: any[];
+  renders: Record<string, RenderState>;
+
+  presences: Record<string, Presence>;
+  chat: ChatLine[];
+  emotes: Record<string, { emoji: string; at: number }>;
+
+  panel: PanelId;
+  panelArg: string | null;
+  /** Destino de teletransporte pedido pela UI (atalhos, minimapa, paleta). */
+  teleport: Vec2 | null;
+  myRoom: RoomId | null;
+  toast: string | null;
+
+  boot(): Promise<void>;
+  login(name: string, pin?: string): Promise<void>;
+  logout(): void;
+  enterOffice(id: string): Promise<void>;
+  leaveOffice(): void;
+  reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines'): Promise<void>;
+  loadMessages(jobId: string): Promise<void>;
+  open(panel: PanelId, arg?: string | null): void;
+  send(msg: ClientMsg): void;
+  notify(text: string): void;
+}
+
+let ws: WebSocket | null = null;
+let toastTimer: ReturnType<typeof setTimeout> | undefined;
+
+export const useStore = create<State>((set, get) => ({
+  user: null, offices: [], office: null, members: [],
+  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], renders: {},
+  presences: {}, chat: [], emotes: {},
+  panel: null, panelArg: null, teleport: null, myRoom: 'recepcao', toast: null,
+
+  async boot() {
+    if (!getToken()) return;
+    try {
+      const me = await api('/api/me');
+      set({ user: me.user, offices: me.offices });
+      const last = (() => { try { return localStorage.getItem('office.last'); } catch { return null; } })();
+      if (last && me.offices.some((o: Office) => o.id === last)) await get().enterOffice(last);
+    } catch {
+      setToken(null);
+    }
+  },
+
+  async login(name, pin) {
+    const r = await api('/api/auth/enter', { body: { name, pin: pin || undefined } });
+    setToken(r.token);
+    await get().boot();
+  },
+
+  logout() {
+    ws?.close();
+    setToken(null);
+    set({ user: null, office: null, offices: [] });
+  },
+
+  async enterOffice(id) {
+    const info = await api(`/api/offices/${id}`);
+    const me = await api('/api/me');
+    const office = me.offices.find((o: OfficeWithRole) => o.id === id) ?? info.office;
+    try { localStorage.setItem('office.last', id); } catch { /* ok */ }
+    set({ office, offices: me.offices, members: info.members, presences: {}, chat: [], messages: {} });
+    await Promise.all((['demands', 'events', 'transactions', 'clients', 'agents', 'jobs', 'timelines'] as const).map((w) => get().reload(w)));
+    connect(id);
+  },
+
+  leaveOffice() {
+    ws?.close();
+    ws = null;
+    try { localStorage.removeItem('office.last'); } catch { /* ok */ }
+    set({ office: null, panel: null });
+  },
+
+  async reload(what) {
+    const o = get().office;
+    if (!o) return;
+    const data = await api(`/api/offices/${o.id}/${what}`);
+    set({ [what]: data } as Partial<State>);
+  },
+
+  async loadMessages(jobId) {
+    const o = get().office;
+    if (!o) return;
+    const msgs = await api(`/api/offices/${o.id}/jobs/${jobId}/messages`);
+    set((s) => ({ messages: { ...s.messages, [jobId]: msgs } }));
+  },
+
+  open(panel, arg = null) {
+    set({ panel, panelArg: arg });
+  },
+
+  send(msg) {
+    if (ws?.readyState === 1) ws.send(JSON.stringify(msg));
+  },
+
+  notify(text) {
+    clearTimeout(toastTimer);
+    set({ toast: text });
+    toastTimer = setTimeout(() => set({ toast: null }), 3500);
+  },
+}));
+
+function connect(officeId: string) {
+  ws?.close();
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const sock = new WebSocket(`${proto}://${location.host}/ws`);
+  ws = sock;
+  sock.onopen = () => sock.send(JSON.stringify({ t: 'join', officeId, token: getToken() ?? '' } satisfies ClientMsg));
+  sock.onmessage = (e) => handle(JSON.parse(e.data) as ServerMsg);
+  sock.onclose = (e) => {
+    if (ws !== sock) return;
+    if (e.code === 4000) return useStore.getState().notify('O escritório foi aberto em outra aba.');
+    setTimeout(() => useStore.getState().office?.id === officeId && connect(officeId), 1500);
+  };
+}
+
+/** Mostra o emoji em cima do avatar e some sozinho depois de 4 s. */
+export function showEmote(userId: string, emoji: string) {
+  const at = Date.now();
+  useStore.setState((st) => ({ emotes: { ...st.emotes, [userId]: { emoji, at } } }));
+  setTimeout(() => useStore.setState((st) => {
+    if (st.emotes[userId]?.at !== at) return st;
+    const e = { ...st.emotes };
+    delete e[userId];
+    return { emotes: e };
+  }), 4000);
+}
+
+function handle(m: ServerMsg) {
+  const s = useStore.getState();
+  switch (m.t) {
+    case 'welcome':
+      useStore.setState({ presences: Object.fromEntries(m.presences.filter((p) => p.userId !== m.you).map((p) => [p.userId, p])) });
+      break;
+    case 'presence':
+      if (m.presence.userId === s.user?.id) return;
+      useStore.setState((st) => ({ presences: { ...st.presences, [m.presence.userId]: m.presence } }));
+      break;
+    case 'leave':
+      useStore.setState((st) => {
+        const p = { ...st.presences };
+        delete p[m.userId];
+        return { presences: p };
+      });
+      break;
+    case 'chat':
+      useStore.setState((st) => ({ chat: [...st.chat.slice(-199), { from: m.from, name: m.name, text: m.text, at: m.at, room: m.room }] }));
+      break;
+    case 'emote':
+      showEmote(m.from, m.emoji);
+      break;
+    case 'invalidate':
+      s.reload(m.what);
+      break;
+    case 'job': {
+      const prev = s.jobs.find((j) => j.id === m.job.id);
+      useStore.setState((st) => ({ jobs: prev ? st.jobs.map((j) => (j.id === m.job.id ? m.job : j)) : [m.job, ...st.jobs] }));
+      if (prev && prev.status !== m.job.status && m.job.status === 'aguardando') {
+        const a = s.agents.find((x) => x.id === m.job.agentId);
+        s.notify(`✋ ${a?.name ?? 'Um funcionário'} precisa da sua aprovação`);
+      }
+      break;
+    }
+    case 'jobMessage':
+      useStore.setState((st) => ({
+        messages: st.messages[m.message.jobId] ? { ...st.messages, [m.message.jobId]: [...st.messages[m.message.jobId], m.message] } : st.messages,
+      }));
+      break;
+    case 'render':
+      useStore.setState((st) => ({ renders: { ...st.renders, [m.timelineId]: { progress: m.progress, status: m.status, output: m.output, error: m.error } } }));
+      if (m.status === 'concluido') s.notify('🎬 Vídeo renderizado');
+      if (m.status === 'erro') s.notify('⚠️ A renderização falhou');
+      break;
+  }
+}

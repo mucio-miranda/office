@@ -1,0 +1,8 @@
+node_modules/
+dist/
+data/*
+!data/.gitkeep
+renders/
+*.log
+.env
+.DS_Store

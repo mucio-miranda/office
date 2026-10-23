@@ -1,0 +1,22 @@
+{
+  "name": "@office/video-engine",
+  "version": "0.1.0",
+  "description": "Engine de vídeo por timeline JSON: a IA (ou você) descreve a edição, o ffmpeg renderiza.",
+  "type": "module",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts",
+    "./schema": "./src/schema.ts"
+  },
+  "bin": {
+    "office-render": "src/cli.ts"
+  },
+  "scripts": {
+    "test": "tsx --test src/*.test.ts",
+    "typecheck": "tsc -p . --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.25.0"
+  }
+}

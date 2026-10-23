@@ -1,0 +1,31 @@
+{
+  "name": "office",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Escritório virtual 3D com funcionários de IA (Claude Code), gestão de demandas e engine de vídeo. Roda local.",
+  "license": "MIT",
+  "type": "module",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,web -c magenta,cyan \"npm:dev:server\" \"npm:dev:web\"",
+    "dev:server": "npm run dev -w @office/server",
+    "dev:web": "npm run dev -w @office/web",
+    "build": "npm run build -w @office/web",
+    "start": "npm run build && npm run start -w @office/server",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "seed": "npm run seed -w @office/server --"
+  },
+  "engines": {
+    "node": ">=22.13"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "@types/node": "^24.0.0"
+  }
+}
