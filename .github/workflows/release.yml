@@ -27,7 +27,25 @@ jobs:
       - name: Testes da engine de vídeo (sem ffmpeg o teste de render é pulado)
         run: npm test
 
-      - name: Gerar e publicar o instalador
+      # cria o release antes dos uploads: o electron-builder envia os arquivos em paralelo e,
+      # sem um release existente, cada envio criava o seu (releases duplicados na mesma tag)
+      - name: Criar o release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          gh release view "$GITHUB_REF_NAME" > /dev/null 2>&1 ||             gh release create "$GITHUB_REF_NAME" --title "Office $GITHUB_REF_NAME" --generate-notes
+
+      - name: Gerar o instalador e enviar os arquivos
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: npm run release -w @office/desktop
+
+      - name: Conferir os arquivos do release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          assets=$(gh release view "$GITHUB_REF_NAME" --json assets --jq '.assets[].name')
+          echo "$assets"
+          for f in latest.yml ".exe" ".blockmap"; do echo "$assets" | grep -q -- "$f" || { echo "faltou $f"; exit 1; }; done
