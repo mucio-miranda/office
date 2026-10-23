@@ -18,6 +18,47 @@ Análise com a REA (captura de navegador headless, rede e acessibilidade) em `ap
   perto da sua mesa, reunião em um clique, notas e transcrição por IA, música na sala de reunião.
   Itens do roadmap deles: **vários andares** e **presença de agentes de IA**, exatamente o que o Office já nasce fazendo.
 
+#### Gather por dentro (conta de teste, 23/10/2026)
+
+Percorri o onboarding completo, o tour do "Escritório de demonstração" e um espaço criado do zero ("Office Lab Teste").
+
+- **Onboarding em 4 perguntas** (cargo, tamanho, uso, origem). Depois vêm o nome do escritório, o **layout**
+  (Híbrido, Aberto ou Privado), o **tema** (Startup, Antique, Zen ou Eco) e o **tamanho** (1–10 até 81–100). O mapa é
+  **gerado proceduralmente** juntando módulos (mesas, salas de reunião, auditório) conforme o tamanho.
+- **Tour guiado interativo** num escritório de demonstração cheio de bots. Ele ensina fazendo: buscar uma pessoa
+  (pesquisa global), acenar, receber "Fulano acenou de volta" com o botão **Ir até**, chegar perto e a chamada abrir
+  sozinha ("sem vínculos, sem agendamento") e entrar numa reunião pela notificação do calendário.
+- **Mesa dedicada**: cada pessoa tem uma mesa, que é a sua posição padrão fora das reuniões. Zonas por time têm
+  rótulo no chão ("Product team", "Engineering team").
+- **Visualização Simplificada**: planta esquemática minimalista, com avatares como círculos com foto e salas de
+  reunião destacadas, para quem acha o escritório cheio caótico.
+- **Casca do app**: trilho de ícones (busca Ctrl K, mapa, chat, calendário, atividade, configurações), painel
+  lateral com seletor de **andar**, busca de pessoas (Ctrl F) e lista de online. Ao abrir chat ou calendário, o
+  **mapa vira um mini-mapa ao vivo no canto**, junto com os controles de mídia: você nunca "sai" do escritório.
+- **Chat** com canais (#general, #social), mensagens diretas e **Resumos**. **Calendário** semanal com conexão ao
+  Google Calendar e aba de **Notas da reunião**. **Feed de atividade**.
+- Antes de entrar: prévia de câmera e microfone, e uma sugestão do app desktop ("Não, inicie no navegador").
+
+#### SoWork por dentro (convidado no escritório público, 23/10/2026)
+
+- Entrada como **convidado** com nome, avatar e prévia de câmera/microfone, com "Continuar sem câmera ou microfone" e um modo **Lite**.
+- **Tutorial no cenário**: placas no próprio mundo ("1 · Use WASD ou clique com o botão direito para andar") e um
+  elevador para os andares.
+- **Três modos de visão**: Imersivo, **Simplificado** e **Auto**. O simplificado é uma planta isométrica
+  esquemática: zonas coloridas por tipo (vermelho para reunião e auditório, verde para salas individuais, amarelo
+  para mesas pessoais, azul para colaboração), nome da zona no chão e avatares como pinos com foto e status.
+  **É a mesma linguagem visual da maquete do Office**, o que valida a direção.
+- Trilho: Ver escritório, Chat, Calendário, **Biblioteca de reuniões**, **Insights**, **Criador de mapas**.
+  Controles do mapa: **Centrar em mim**, **Ir para minha mesa**, modo, **Andares** e zoom.
+
+#### O que entra no Office a partir disso
+1. **Mini-mapa ao vivo** quando uma página está aberta (em vez de esconder o mundo).
+2. **"Ir até"** em notificações (aprovação de agente, menção, reunião), levando o avatar até lá.
+3. **Mesa própria** para cada pessoa e botão **Ir para minha mesa**. Zonas por cliente/time com cor por tipo de sala.
+4. **Modo Auto**: a maquete detalhada no zoom de perto e a planta esquemática no zoom de longe.
+5. **Tour guiado** no primeiro acesso, ensinando com os próprios funcionários de IA (acenar para a Vic, aprovar uma tarefa).
+6. **Criação assistida**: layout e tamanho geram a planta (salas por funcionário e por cliente).
+
 ### SoWork
 - Visual **2.5D isométrico**, com modo "simplificado" para quem prefere menos imersão. **Adotado**: o Office é
   isométrico, e os painéis funcionam como o modo simplificado.
@@ -26,8 +67,8 @@ Análise com a REA (captura de navegador headless, rede e acessibilidade) em `ap
   **Adotado e ampliado**: no Office a IA não só resume, ela trabalha (edita vídeo, cria arte, escreve).
 - Lobby para convidados e clientes. **Roadmap**.
 
-Sobre contas: criar contas de teste nos serviços acima fica a cargo de uma pessoa (o agente não cria contas
-em serviços de terceiros). Com uma conta logada, dá para aprofundar a análise das telas internas com a REA.
+As contas de teste foram criadas por uma pessoa (o agente não cria contas em serviços de terceiros). A análise
+das telas internas está nas seções "por dentro" abaixo.
 
 ## Open source que serviu de referência
 

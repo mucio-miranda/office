@@ -16,6 +16,9 @@
 
 ## 🔜 v0.2: o escritório ganha vida
 - [ ] Ferramentas MCP por funcionário: PhotoCraft/VectorCraft (Duda), FilmCraft (Vic), OfficeCLI (Theo e Rafa)
+- [ ] Mini-mapa ao vivo quando uma página está aberta (Gather) e "Ir até" nas notificações
+- [ ] Mesa própria por pessoa, "Ir para minha mesa" e modo Auto (maquete de perto, planta esquemática de longe)
+- [ ] Tour guiado no primeiro acesso, ensinando com os funcionários de IA
 - [ ] Sons (passos por piso, aceno, mão levantada, mensagem), à moda do Gather
 - [ ] Editor de planta (arrastar móveis, criar salas, temas) e vários andares
 - [ ] Prévia rápida da timeline (render em baixa resolução) e player com a sequência completa
