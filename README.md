@@ -49,6 +49,8 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - **WASD** ou clique para andar, **Shift** para correr, **1–7** para teletransportar
 - **Ctrl+K**: vá para qualquer sala, painel, cliente, demanda ou funcionário
 - Minimapa clicável, chat geral ou da sala, status (🎧 foco, ⛔ ocupado, 💤 ausente) e emotes
+- **Ir até**: um clique no aviso, no mapa, na lista de quem está online ou no `Ctrl+K` leva você até a pessoa ou o funcionário que chamou
+- **Mini-mapa ao vivo** flutuando sobre as páginas: você vê o escritório enquanto trabalha nas demandas
 - Chegue perto de um móvel e aperte **E**: o quadro abre as demandas, o cofre abre o financeiro e a TV abre o estúdio de vídeo
 
 </td>
@@ -273,6 +275,8 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Funcionários de IA com Claude Code e aprovação
 - [x] Engine de vídeo com timeline
 - [x] Visual minimalista (estilo Paperclip) e seletor de pastas navegável
+- [x] App de Windows, modo drone, "Ir até" e mini-mapa ao vivo
+- [ ] Mesa própria por pessoa e tour guiado
 - [ ] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Whisper no estúdio (legenda automática) e exportação para CapCut/Premiere

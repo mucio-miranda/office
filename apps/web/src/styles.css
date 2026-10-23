@@ -204,7 +204,7 @@ hr { border: none; border-top: 1px solid var(--border); margin: 16px 0; }
 .prompt { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 8px; height: 34px; padding: 0 14px; border-radius: 99px; background: var(--foreground); color: var(--background); font-size: 13px; cursor: pointer; box-shadow: var(--shadow); }
 .prompt kbd { background: transparent; color: var(--background); border-color: color-mix(in srgb, var(--background) 40%, transparent); }
 .hint { position: absolute; left: 50%; bottom: 18px; transform: translateX(-50%); font-size: 11px; color: var(--muted-foreground); white-space: nowrap; pointer-events: none; }
-.toast { position: fixed; bottom: 20px; right: 20px; background: var(--foreground); color: var(--background); padding: 10px 14px; border-radius: var(--radius); box-shadow: var(--shadow); font-size: 13px; z-index: 80; display: flex; align-items: center; gap: 8px; }
+.toast { position: fixed; top: 68px; left: 50%; transform: translateX(-50%); max-width: calc(100vw - 32px); background: var(--foreground); color: var(--background); padding: 10px 14px; border-radius: var(--radius); box-shadow: var(--shadow); font-size: 13px; z-index: 80; display: flex; align-items: center; gap: 8px; }
 
 /* rótulos dos avatares e das salas */
 .labels { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
@@ -498,3 +498,33 @@ button.link.muted { color: var(--muted-foreground); text-decoration: none; }
 .mm-view path { stroke: var(--foreground); stroke-width: .3; }
 .hint kbd { font-size: 9px; padding: 1px 4px; }
 @media (max-width: 1280px) { .hint { display: none; } }
+
+/* ---------- "Ir até" e mini-mapa ao vivo (v0.2.4) ---------- */
+.mm-dot { cursor: pointer; }
+.mm-dot:hover circle:last-child { stroke: var(--foreground); stroke-width: .3; }
+.mm-ring { fill: none; stroke: var(--st); stroke-width: .35; }
+.mm-dot.st-aguardando .mm-ring { animation: mm-ping 1.4s ease-out infinite; transform-box: fill-box; transform-origin: center; }
+@keyframes mm-ping { from { opacity: 1; transform: scale(.7); } to { opacity: 0; transform: scale(1.6); } }
+.minimap.floating { z-index: 20; width: 236px; padding: 6px 8px 8px; }
+.minimap.floating svg { display: block; width: 100%; }
+.mm-head { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; }
+.mm-back { height: 24px; padding: 0 6px; border: 0; background: transparent; font-size: 12px; font-weight: 600; display: inline-flex; align-items: center; gap: 6px; color: var(--foreground); }
+.mm-back:hover { background: var(--accent); }
+button.icon.tiny { width: 22px; height: 22px; }
+.live-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--done); box-shadow: 0 0 0 0 var(--done); animation: live 2s ease-out infinite; }
+@keyframes live { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--done) 60%, transparent); } 100% { box-shadow: 0 0 0 6px transparent; } }
+.minimap-pill { position: absolute; right: 12px; bottom: 12px; z-index: 20; height: 30px; padding: 0 12px; border-radius: 99px; background: var(--overlay); backdrop-filter: blur(8px); border: 1px solid var(--border); box-shadow: var(--shadow-sm); font-size: 12px; display: inline-flex; align-items: center; gap: 6px; }
+.minimap-pill .count { font: 12px var(--mono); }
+.minimap-pill .count.alert { color: var(--waiting); }
+.toast-btn { height: 24px; padding: 0 8px; font-size: 12px; border-radius: 6px; border: 1px solid color-mix(in srgb, var(--background) 35%, transparent); background: var(--background); color: var(--foreground); display: inline-flex; align-items: center; gap: 4px; }
+.toast-btn.ghost { background: transparent; color: var(--background); }
+.toast-btn:hover { opacity: .85; }
+.ps-disponivel { --st: var(--done); }
+.ps-ocupado { --st: var(--error); }
+.ps-foco { --st: var(--review); }
+.ps-ausente { --st: var(--idle); }
+.person-row .go { margin-left: auto; color: var(--muted-foreground); opacity: 0; }
+.person-row:hover .go { opacity: 1; }
+@media (max-width: 960px) { .minimap.floating, .minimap-pill { display: none; } }
+.minimap.floating.top { top: 12px; bottom: auto; }
+.page-head .ghost.small.active { background: var(--accent); }

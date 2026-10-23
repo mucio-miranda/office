@@ -18,17 +18,25 @@
 - App Electron com servidor embutido, bandeja, atalho global, notificações nativas, seletor de pastas nativo,
   tela cheia, iniciar com o Windows, abrir no Explorer e instalador NSIS com atualização automática
 
-## 🔜 v0.2: o escritório ganha vida
-- [ ] Ferramentas MCP por funcionário: PhotoCraft/VectorCraft (Duda), FilmCraft (Vic), OfficeCLI (Theo e Rafa)
-- [ ] Mini-mapa ao vivo quando uma página está aberta (Gather) e "Ir até" nas notificações
-- [ ] Mesa própria por pessoa, "Ir para minha mesa" e modo Auto (maquete de perto, planta esquemática de longe)
-- [ ] Tour guiado no primeiro acesso, ensinando com os funcionários de IA
-- [ ] Sons (passos por piso, aceno, mão levantada, mensagem), à moda do Gather
-- [ ] Editor de planta (arrastar móveis, criar salas, temas) e vários andares
-- [ ] Prévia rápida da timeline (render em baixa resolução) e player com a sequência completa
-- [ ] Transcrição com Whisper dentro do estúdio, gerando legendas automáticas na timeline
-- [ ] Exportar para rascunho do CapCut (`draft_content.json`) e XML do Premiere
-- [ ] O gerente aplica direto as demandas que sugere (bloco JSON → um clique)
+## ✅ v0.2.3: modo drone (23/10/2026)
+- `Espaço` + arrastar (ou botão do meio) sobrevoa o escritório; `Esc` / "Voltar para mim" recentraliza
+
+## 🔜 v0.2: o escritório ganha vida, por etapas
+Cada etapa sai como um release próprio, testado, e o app instalado se atualiza sozinho.
+
+1. ✅ **Ir até e mini-mapa ao vivo (v0.2.4)**: "Ir até" nos avisos, na busca, no mapa e no painel do
+   funcionário; lista de quem está online; aviso quando alguém entra; mini-mapa flutuando sobre as páginas
+2. **Mesa própria (v0.2.5)**: cada pessoa escolhe uma mesa no espaço aberto, "Ir para minha mesa" (`M`),
+   o nome e o status ficam na mesa quando você está longe ou ausente
+3. **Tour guiado (v0.2.6)**: no primeiro acesso a Rafa apresenta o escritório, as salas, os atalhos e como
+   delegar a primeira demanda
+4. **Ferramentas criativas por funcionário (v0.3.0)**: servidores MCP por agente, com PhotoCraft/VectorCraft
+   (Duda), FilmCraft (Vic) e OfficeCLI (Theo e Rafa), configurados e testados com tarefas reais
+5. **Estúdio de vídeo turbinado (v0.3.1)**: transcrição com Whisper gerando legendas na timeline, prévia rápida
+   em baixa resolução e exportação para CapCut (`draft_content.json`) e Premiere (XML)
+6. **Vida no escritório (v0.3.2)**: sons à moda do Gather, o gerente aplica direto as demandas que sugere
+   (um clique) e o modo Auto (maquete de perto, planta esquemática de longe)
+7. **Editor de planta (v0.4)**: arrastar móveis, criar salas, temas e vários andares
 
 ## 🧭 v0.3: equipe e integrações
 - [ ] Voz e vídeo por proximidade (WebRTC/LiveKit) e salas de reunião com porta

@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
-  LocateFixed, Navigation,
+  LocateFixed, Navigation, Map as MapIcon, Minus,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
-import { World, cam, player, recenter, type Nearby } from './office/World';
+import { World, cam, player, recenter, goTo, goToAgent, goToPerson, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
@@ -33,6 +33,9 @@ export function OfficeView() {
   const inWorld = panel === null;
   const waiting = useStore((s) => s.jobs.filter((j) => j.status === 'aguardando').length);
   const drone = useStore((s) => s.drone);
+  // páginas de tela cheia (funcionário, estúdio): o mapa abre pelo cabeçalho para não cobrir a caixa de mensagem nem a timeline
+  const flush = panel === 'agente' || panel === 'video';
+  const [peek, setPeek] = useState(false);
   const droneDragging = useStore((s) => s.droneDragging);
 
   // app de Windows: clicar numa notificação abre o painel certo; a bandeja mostra quantos esperam aprovação
@@ -51,7 +54,7 @@ export function OfficeView() {
       if (nav) { open(nav.id); return; }
       if (!inWorld) return;
       const room = ROOMS.find((r) => r.key === k);
-      if (room) { useStore.setState({ teleport: roomCenter(room) }); return; }
+      if (room) { goTo(roomCenter(room)); return; }
       if (k === 'e' && nearby) { nearby.action(); return; }
       if (k === 't' || k === 'enter') { e.preventDefault(); chatRef.current?.focus(); return; }
       if (k === '[') cam.angle -= Math.PI / 2;
@@ -69,6 +72,11 @@ export function OfficeView() {
           <button className="icon menu-btn" onClick={() => setNavOpen((v) => !v)} aria-label="Menu"><Menu size={16} /></button>
           <PageTitle />
           <span className="spacer" />
+          {!inWorld && flush && (
+            <button className={`ghost small ${peek ? 'active' : ''}`} onClick={() => setPeek((v) => !v)} title="Mapa do escritório">
+              <span className="live-dot" /> Escritório ao vivo
+            </button>
+          )}
           <button className="ghost small" onClick={() => setPalette(true)}><Search size={14} /> Buscar <kbd>Ctrl K</kbd></button>
         </header>
         <div className="world-page">
@@ -87,10 +95,29 @@ export function OfficeView() {
             )}
           </div>
           {!inWorld && <Pages />}
+          {!inWorld && !flush && <MiniMap floating />}
+          {!inWorld && flush && peek && <MiniMap floating onClose={() => setPeek(false)} />}
         </div>
       </main>
       {palette && <Palette onClose={() => setPalette(false)} />}
-      {toast && <div className="toast">{toast}</div>}
+      {toast && <ToastView />}
+    </div>
+  );
+}
+
+function ToastView() {
+  const toast = useStore((s) => s.toast)!;
+  const agents = useStore((s) => s.agents);
+  const presences = useStore((s) => s.presences);
+  const agent = toast.go?.agentId ? agents.find((a) => a.id === toast.go!.agentId) : undefined;
+  const person = toast.go?.userId ? presences[toast.go.userId] : undefined;
+  const close = () => useStore.setState({ toast: null });
+  return (
+    <div className="toast">
+      <span>{toast.text}</span>
+      {agent && <button className="toast-btn" onClick={() => { goToAgent(agent); close(); }}><Navigation size={12} /> Ir até</button>}
+      {agent && <button className="toast-btn ghost" onClick={() => { useStore.getState().open('agente', agent.id); close(); }}>Abrir</button>}
+      {person && <button className="toast-btn" onClick={() => { goToPerson(person); close(); }}><Navigation size={12} /> Ir até</button>}
     </div>
   );
 }
@@ -108,7 +135,8 @@ function PageTitle() {
 }
 
 function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: () => void }) {
-  const { panel, panelArg, open, agents, demands, jobs, user, office, leaveOffice, send } = useStore();
+  const { panel, panelArg, open, agents, demands, jobs, user, office, leaveOffice, send, presences } = useStore();
+  const online = Object.values(presences);
   const [status, setStatus] = useState<'disponivel' | 'ocupado' | 'foco' | 'ausente'>('disponivel');
   const openCount = demands.filter((d) => d.status !== 'entregue').length;
   const waiting = jobs.filter((j) => j.status === 'aguardando').length;
@@ -145,6 +173,18 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
           ))}
           {waiting > 0 && <div className="section-label" style={{ color: 'var(--waiting)' }}>{waiting} {waiting === 1 ? 'tarefa espera' : 'tarefas esperam'} aprovação</div>}
         </div>
+        {online.length > 0 && (
+          <div className="nav">
+            <div className="section-label">Online · {online.length}</div>
+            {online.map((p) => (
+              <button key={p.userId} className="nav-item agent-row person-row" onClick={() => { goToPerson(p); onNavigate(); }} title={`Ir até ${p.name}`}>
+                <span className={`avatar ps-${p.status}`} style={{ background: p.color }}>{p.name[0]}<span className="status-dot" /></span>
+                <div className="truncate"><span className="truncate">{p.name}</span><small className="truncate">{ROOMS.find((r) => r.id === p.room)?.label ?? 'Área externa'}</small></div>
+                <Navigation size={13} className="go" />
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="sidebar-foot">
         <div className="me">
@@ -206,31 +246,68 @@ function WorldHud() {
   );
 }
 
-function MiniMap() {
+/** Mapa do escritório. No mundo fica no canto; com uma página aberta flutua por cima (como o mini-mapa do Gather). */
+function MiniMap({ floating = false, onClose }: { floating?: boolean; onClose?: () => void }) {
   const presences = useStore((s) => s.presences);
   const agents = useStore((s) => s.agents);
   const user = useStore((s) => s.user);
   const [, force] = useState(0);
+  const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('office.mmCollapsed') === '1'; } catch { return false; } });
   useEffect(() => { const id = setInterval(() => force((x) => x + 1), 200); return () => clearInterval(id); }, []);
+  const toggle = () => setCollapsed((c) => { try { localStorage.setItem('office.mmCollapsed', c ? '0' : '1'); } catch { /* ok */ } return !c; });
   const W = BOUNDS.x1 - BOUNDS.x0, H = BOUNDS.z1 - BOUNDS.z0;
-  return (
-    <svg className="minimap" viewBox={`${BOUNDS.x0 - 1} ${BOUNDS.z0 - 1} ${W + 2} ${H + 2}`}>
+  const waiting = agents.filter((a) => a.status === 'aguardando').length;
+
+  if (floating && collapsed && !onClose) {
+    return (
+      <button className="minimap-pill" onClick={toggle} title="Mostrar o mapa do escritório">
+        <MapIcon size={14} /> Escritório{waiting > 0 && <span className="count alert">{waiting}</span>}
+      </button>
+    );
+  }
+  const map = (
+    <svg className={floating ? undefined : 'minimap'} viewBox={`${BOUNDS.x0 - 1} ${BOUNDS.z0 - 1} ${W + 2} ${H + 2}`}>
       {ROOMS.map((r) => (
-        <g key={r.id} onClick={() => useStore.setState({ teleport: roomCenter(r) })} className="mm-room">
+        <g key={r.id} onClick={() => goTo(roomCenter(r))} className="mm-room">
+          <title>Ir para {r.label}</title>
           <rect x={r.x0} y={r.z0} width={r.x1 - r.x0} height={r.z1 - r.z0} />
           <text x={(r.x0 + r.x1) / 2} y={(r.z0 + r.z1) / 2} fontSize={1.6} textAnchor="middle" dominantBaseline="middle">{r.key}</text>
         </g>
       ))}
-      {agents.map((a) => <circle key={a.id} cx={DESKS[a.room].x} cy={DESKS[a.room].z} r={0.6} fill={a.color} />)}
-      {Object.values(presences).map((p) => <circle key={p.userId} cx={p.pos.x} cy={p.pos.z} r={0.7} fill={p.color} />)}
-      <circle cx={player.x} cy={player.z} r={0.9} fill={user?.color} stroke="var(--foreground)" strokeWidth={0.3} />
-      {!cam.follow && (
+      {agents.map((a) => (
+        <g key={a.id} className={`mm-dot st-${a.status}`} onClick={() => goToAgent(a)}>
+          <title>Ir até {a.name} · {AGENT_LABEL[a.status]}</title>
+          {a.status !== 'livre' && <circle className="mm-ring" cx={DESKS[a.room].x} cy={DESKS[a.room].z} r={1.3} />}
+          <circle cx={DESKS[a.room].x} cy={DESKS[a.room].z} r={0.7} fill={a.color} />
+        </g>
+      ))}
+      {Object.values(presences).map((p) => (
+        <g key={p.userId} className="mm-dot" onClick={() => goToPerson(p)}>
+          <title>Ir até {p.name}</title>
+          <circle cx={p.pos.x} cy={p.pos.z} r={0.8} fill={p.color} />
+        </g>
+      ))}
+      <circle cx={player.x} cy={player.z} r={0.9} fill={user?.color} stroke="var(--foreground)" strokeWidth={0.3} pointerEvents="none" />
+      {!cam.follow && !floating && (
         <g className="mm-view">
           <circle cx={cam.cx} cy={cam.cz} r={2.2} />
           <path d={`M${cam.cx - 3.4} ${cam.cz}h2M${cam.cx + 1.4} ${cam.cz}h2M${cam.cx} ${cam.cz - 3.4}v2M${cam.cx} ${cam.cz + 1.4}v2`} />
         </g>
       )}
     </svg>
+  );
+  if (!floating) return map;
+  return (
+    <div className={`minimap floating ${onClose ? 'top' : ''}`}>
+      <div className="mm-head">
+        <button className="mm-back" onClick={() => useStore.getState().open(null)} title="Voltar para o escritório (O)">
+          <span className="live-dot" /> Escritório ao vivo
+        </button>
+        <span className="spacer" />
+        <button className="icon tiny" onClick={onClose ?? toggle} title="Recolher"><Minus size={13} /></button>
+      </div>
+      {map}
+    </div>
   );
 }
 
@@ -266,20 +343,22 @@ function Chat({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | null>
 }
 
 function Palette({ onClose }: { onClose: () => void }) {
-  const { agents, demands, clients, open } = useStore();
+  const { agents, demands, clients, open, presences } = useStore();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const items = useMemo(() => {
     const all: { icon: typeof Box; label: string; hint: string; run: () => void }[] = [
       ...NAV.map((d) => ({ icon: d.icon, label: d.label, hint: d.key, run: () => open(d.id) })),
-      ...ROOMS.map((r) => ({ icon: Box, label: `Ir para ${r.label}`, hint: r.key, run: () => { open(null); useStore.setState({ teleport: roomCenter(r) }); } })),
+      ...ROOMS.map((r) => ({ icon: Box, label: `Ir para ${r.label}`, hint: r.key, run: () => goTo(roomCenter(r)) })),
       ...agents.map((a) => ({ icon: Bot, label: `${a.name} · ${a.role}`, hint: 'funcionário', run: () => open('agente', a.id) })),
+      ...agents.map((a) => ({ icon: Navigation, label: `Ir até ${a.name}`, hint: 'mesa', run: () => goToAgent(a) })),
+      ...Object.values(presences).map((p) => ({ icon: Navigation, label: `Ir até ${p.name}`, hint: 'online', run: () => goToPerson(p) })),
       ...demands.filter((d) => d.status !== 'entregue').map((d) => ({ icon: KanbanSquare, label: d.title, hint: 'demanda', run: () => open('demandas', d.id) })),
       ...clients.map((c) => ({ icon: Users, label: c.name, hint: 'cliente', run: () => open('financeiro', c.id) })),
     ];
     const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     return all.filter((i) => norm(i.label).includes(norm(q))).slice(0, 12);
-  }, [q, agents, demands, clients, open]);
+  }, [q, agents, demands, clients, open, presences]);
   return (
     <div className="palette-bg" onClick={onClose}>
       <div className="palette" onClick={(e) => e.stopPropagation()}>

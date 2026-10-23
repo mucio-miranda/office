@@ -10,6 +10,8 @@ export type PanelId = 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agen
 export interface ChatLine { from: string; name: string; text: string; at: string; room: RoomId | null }
 export interface RenderState { progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string }
 export type OfficeWithRole = Office & { role: string; inviteCode: string };
+/** Aviso no canto da tela; `go` mostra o botão "Ir até" (funcionário ou pessoa). */
+export interface Toast { text: string; go?: { agentId?: string; userId?: string } }
 
 interface State {
   user: User | null;
@@ -36,7 +38,7 @@ interface State {
   /** Destino de teletransporte pedido pela UI (atalhos, minimapa, paleta). */
   teleport: Vec2 | null;
   myRoom: RoomId | null;
-  toast: string | null;
+  toast: Toast | null;
   /** Espaço segurado: modo drone (arrastar a câmera). */
   drone: boolean;
   droneDragging: boolean;
@@ -52,7 +54,7 @@ interface State {
   loadMessages(jobId: string): Promise<void>;
   open(panel: PanelId, arg?: string | null): void;
   send(msg: ClientMsg): void;
-  notify(text: string): void;
+  notify(text: string, go?: Toast['go']): void;
 }
 
 let ws: WebSocket | null = null;
@@ -128,10 +130,11 @@ export const useStore = create<State>((set, get) => ({
     if (ws?.readyState === 1) ws.send(JSON.stringify(msg));
   },
 
-  notify(text) {
+  notify(text, go) {
     clearTimeout(toastTimer);
-    set({ toast: text });
-    toastTimer = setTimeout(() => set({ toast: null }), 3500);
+    set({ toast: { text, go } });
+    // com ação o aviso fica mais tempo, para dar tempo de clicar
+    toastTimer = setTimeout(() => set({ toast: null }), go ? 8000 : 3500);
   },
 }));
 
@@ -169,6 +172,7 @@ function handle(m: ServerMsg) {
       break;
     case 'presence':
       if (m.presence.userId === s.user?.id) return;
+      if (!s.presences[m.presence.userId]) s.notify(`${m.presence.name} entrou no escritório`, { userId: m.presence.userId });
       useStore.setState((st) => ({ presences: { ...st.presences, [m.presence.userId]: m.presence } }));
       break;
     case 'leave':
@@ -195,9 +199,10 @@ function handle(m: ServerMsg) {
         const name = a?.name ?? 'Um funcionário';
         const task = m.job.prompt.replace(/^## Demanda: /, '').split(/\r?\n/)[0].slice(0, 120);
         if (m.job.status === 'aguardando') {
-          s.notify(`${name} precisa da sua aprovação`);
+          s.notify(`${name} precisa da sua aprovação`, { agentId: m.job.agentId });
           desktop?.notify({ title: `${name} precisa de você`, body: task, panel: 'agente', arg: m.job.agentId });
         } else if (m.job.status === 'concluido') {
+          s.notify(`${name} terminou`, { agentId: m.job.agentId });
           desktop?.notify({ title: `${name} terminou`, body: task, panel: 'agente', arg: m.job.agentId });
         }
       }

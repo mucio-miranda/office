@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, Plus, Square, Wrench } from 'lucide-react';
+import { ArrowUp, Check, Navigation, Plus, Square, Wrench } from 'lucide-react';
 import type { AgentJob } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { desktop } from '../lib/desktop';
+import { goToAgent } from '../office/World';
 
 const STATUS_LABEL: Record<AgentJob['status'], string> = {
   fila: 'na fila', rodando: 'trabalhando', aguardando: 'esperando você', concluido: 'concluído', erro: 'erro', cancelado: 'cancelado',
@@ -71,6 +72,7 @@ export function AgentPanel() {
           </div>
           <div className="chips">{agent.skills.map((s) => <span key={s} className="badge">{s}</span>)}</div>
           <div className="chips">{agent.tools.map((s) => <span key={s} className="badge outline">{s}</span>)}</div>
+          <button className="ghost small" onClick={() => goToAgent(agent)}><Navigation size={13} /> Ir até a mesa de {agent.name}</button>
         </div>
         <div className="job-list">
           <button className={`job-item ${job === null ? 'active' : ''}`} onClick={() => setJobId(null)}>

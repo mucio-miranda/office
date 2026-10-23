@@ -40,6 +40,25 @@ export function recenter() {
   if (useStore.getState().camDetached) useStore.setState({ camDetached: false });
 }
 
+/** Leva você até um ponto: fecha a página aberta, teletransporta (a câmera desliza junto) e vira de frente para `face`. */
+export function goTo(target: Vec2, face?: Vec2) {
+  const q = freeSpotNear(target);
+  if (face) player.dir = Math.atan2(face.x - q.x, face.z - q.z);
+  player.target = null;
+  useStore.setState({ panel: null, panelArg: null, teleport: q });
+}
+
+/** Vai até a mesa de um funcionário de IA. Chega pela direita da tela, para os nomes não se encobrirem. */
+export function goToAgent(a: AgentProfile) {
+  const d = DESKS[a.room];
+  goTo({ x: d.x + 1.5, z: d.z - 0.4 }, d);
+}
+
+/** Vai até uma pessoa online (também pela direita da tela). */
+export function goToPerson(p: Presence) {
+  goTo({ x: p.pos.x + 1.1, z: p.pos.z - 1.1 }, p.pos);
+}
+
 /** Arrasta a câmera: o escritório acompanha o cursor, como no Figma. */
 function panBy(dxPx: number, dyPx: number) {
   if (cam.follow) {
