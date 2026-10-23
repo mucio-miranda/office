@@ -8,7 +8,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': api,
+      '/api': { target: api, xfwd: true },
       '/ws': { target: api.replace('http', 'ws'), ws: true },
     },
   },

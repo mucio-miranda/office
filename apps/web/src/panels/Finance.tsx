@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import type { Client, Transaction } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
+import { PathField } from '../lib/PathPicker';
+import { Sparkles } from 'lucide-react';
 
 interface Metrics {
   month: string;
@@ -30,18 +32,19 @@ export function Finance() {
     const rafa = agents.find((a) => a.slug === 'gerente');
     if (!rafa) return;
     await api(`${base}/jobs`, { body: { agentId: rafa.id, prompt: 'Faça a análise financeira e operacional do mês: margem por cliente, inadimplência, demandas paradas ou atrasadas, e 3 ações prioritárias para esta semana.' } });
-    notify(`📊 ${rafa.name} está analisando os números`);
+    notify(`${rafa.name} está analisando os números`);
     open('agente', rafa.id);
   };
 
   return (
     <div>
-      <div className="tabs">
-        {(['resumo', 'clientes', 'lancamentos'] as const).map((t) => (
-          <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ resumo: 'Resumo', clientes: 'Clientes', lancamentos: 'Lançamentos' }[t]}</button>
-        ))}
-        <span className="spacer" />
-        <button className="primary" onClick={askManager}>📊 Pedir análise ao gerente</button>
+      <div className="row gap" style={{ marginBottom: 20 }}>
+        <div className="tabs-line" style={{ flex: 1 }}>
+          {(['resumo', 'clientes', 'lancamentos'] as const).map((t) => (
+            <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ resumo: 'Resumo', clientes: 'Clientes', lancamentos: 'Lançamentos' }[t]}</button>
+          ))}
+        </div>
+        <button onClick={askManager}><Sparkles size={14} /> Pedir análise ao gerente</button>
       </div>
 
       {tab === 'resumo' && m && (
@@ -57,13 +60,13 @@ export function Finance() {
             <Kpi label="Demandas atrasadas" value={String(m.overdue)} tone={m.overdue ? 'bad' : 'good'} />
           </div>
           <div className="grid2">
-            <div className="card">
-              <h4>Fluxo de caixa (6 meses)</h4>
+            <div className="card chart-card">
+              <h4>Fluxo de caixa · 6 meses</h4>
               <Bars rows={[...m.cashflow].reverse()} />
             </div>
-            <div className="card">
+            <div className="card chart-card">
               <h4>Horas por cliente</h4>
-              {m.hoursByClient.length === 0 && <p className="muted small">Use o ▶ nos cartões de demanda para contar horas.</p>}
+              {m.hoursByClient.length === 0 && <p className="muted small">Use o play nos cartões de demanda para contar horas.</p>}
               {m.hoursByClient.map((h) => {
                 const max = Math.max(...m.hoursByClient.map((x) => x.hours), 1);
                 return (
@@ -98,6 +101,7 @@ function Bars({ rows }: { rows: { month: string; receita: number; despesa: numbe
   if (!rows.length) return <p className="muted small">Sem lançamentos ainda.</p>;
   const max = Math.max(...rows.flatMap((r) => [r.receita, r.despesa]), 1);
   return (
+    <>
     <div className="bars">
       {rows.map((r) => (
         <div key={r.month} className="bar-group" title={`${r.month}: receita ${brl(r.receita)} · despesa ${brl(r.despesa)}`}>
@@ -108,22 +112,24 @@ function Bars({ rows }: { rows: { month: string; receita: number; despesa: numbe
           <small>{r.month.slice(5)}/{r.month.slice(2, 4)}</small>
         </div>
       ))}
-      <div className="legend"><span><i className="rec" /> receita</span><span><i className="desp" /> despesa</span></div>
     </div>
+    <div className="legend"><span><i className="rec" /> receita</span><span><i className="desp" /> despesa</span></div>
+    </>
   );
 }
 
 function Clients({ clients, base }: { clients: Client[]; base: string }) {
+  const officeId = base.split('/').pop()!;
   const [f, setF] = useState({ name: '', folder: '', monthlyFee: '' });
   return (
     <div>
-      <form className="row gap wrap" onSubmit={async (e) => {
+      <form className="toolbar" onSubmit={async (e) => {
         e.preventDefault();
         await api(`${base}/clients`, { body: { name: f.name, folder: f.folder || null, monthlyFee: Number(f.monthlyFee || 0) } });
         setF({ name: '', folder: '', monthlyFee: '' });
       }}>
         <input required placeholder="Nome do cliente" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
-        <input placeholder="Pasta (ex.: CLIENTES\BOLO DE MAE)" value={f.folder} onChange={(e) => setF({ ...f, folder: e.target.value })} />
+        <div style={{ flex: 1, minWidth: 260 }}><PathField value={f.folder} onChange={(v) => setF({ ...f, folder: v })} scope="office" officeId={officeId} placeholder="Pasta do cliente" title="Pasta do cliente" /></div>
         <input type="number" min="0" step="0.01" placeholder="Mensalidade R$" value={f.monthlyFee} onChange={(e) => setF({ ...f, monthlyFee: e.target.value })} />
         <button className="primary">Adicionar</button>
       </form>
@@ -132,8 +138,8 @@ function Clients({ clients, base }: { clients: Client[]; base: string }) {
         <tbody>
           {clients.map((c) => (
             <tr key={c.id}>
-              <td><span className="dot" style={{ background: c.color }} /> {c.name}</td>
-              <td className="muted small">{c.folder ?? '—'}</td>
+              <td><span className="row gap"><span className="dot" style={{ background: c.color }} />{c.name}</span></td>
+              <td className="muted mono truncate" style={{ maxWidth: 320 }}>{c.folder ?? '—'}</td>
               <td><input className="inline" type="number" defaultValue={c.monthlyFee} onBlur={(e) => api(`${base}/clients/${c.id}`, { method: 'PATCH', body: { monthlyFee: Number(e.target.value) } })} /></td>
               <td><select value={c.status} onChange={(e) => api(`${base}/clients/${c.id}`, { method: 'PATCH', body: { status: e.target.value } })}>
                 <option>ativo</option><option>pausado</option><option>encerrado</option></select></td>
@@ -150,7 +156,7 @@ function Transactions({ transactions, clients, base }: { transactions: Transacti
   const [f, setF] = useState(empty);
   return (
     <div>
-      <form className="row gap wrap" onSubmit={async (e) => {
+      <form className="toolbar" onSubmit={async (e) => {
         e.preventDefault();
         await api(`${base}/transactions`, { body: { ...f, amount: Number(f.amount), clientId: f.clientId || null } });
         setF({ ...empty, kind: f.kind });
@@ -165,16 +171,16 @@ function Transactions({ transactions, clients, base }: { transactions: Transacti
         <button className="primary">Lançar</button>
       </form>
       <table className="table">
-        <thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Cliente</th><th>Valor</th><th>Pago</th></tr></thead>
+        <thead><tr><th>Data</th><th>Tipo</th><th>Categoria</th><th>Descrição</th><th>Cliente</th><th style={{ textAlign: 'right' }}>Valor</th><th>Pago</th></tr></thead>
         <tbody>
           {transactions.map((t) => (
             <tr key={t.id}>
               <td>{t.date.split('-').reverse().join('/')}</td>
-              <td>{t.kind === 'receita' ? '⬆️' : '⬇️'}</td>
+              <td><span className="badge">{t.kind}</span></td>
               <td>{t.category}</td>
               <td className="muted">{t.description}</td>
               <td>{clients.find((c) => c.id === t.clientId)?.name ?? '—'}</td>
-              <td className={t.kind === 'receita' ? 'pos' : 'neg'}>{brl(t.amount)}</td>
+              <td className={`num ${t.kind === 'receita' ? 'pos' : 'neg'}`}>{brl(t.amount)}</td>
               <td><input type="checkbox" checked={t.paid} onChange={(e) => api(`${base}/transactions/${t.id}`, { method: 'PATCH', body: { paid: e.target.checked } })} /></td>
             </tr>
           ))}

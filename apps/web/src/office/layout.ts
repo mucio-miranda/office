@@ -36,8 +36,8 @@ export const ROOMS: Room[] = [
 
 export const BOUNDS = { x0: -18, z0: -12, x1: 18, z1: 12 };
 export const DOOR = 2.6;
-export const WALL_T = 0.25;
-export const WALL_H = 1.4;
+export const WALL_T = 0.14;
+export const WALL_H = 0.6;
 
 /** Paredes como segmentos (x1,z1)-(x2,z2) com portas (centro no eixo da parede). */
 interface WallDef { a: Vec2; b: Vec2; doors: number[] }
@@ -91,7 +91,7 @@ export interface Furniture {
 
 export const FURNITURE: Furniture[] = [
   // recepção
-  { kind: 'tapete', x: 0, z: 5, w: 7, d: 4, color: '#d9c7b0' },
+  { kind: 'tapete', x: 0, z: 5, w: 7, d: 4 },
   { kind: 'sofa', x: -3.5, z: 9.6, rot: 0, solid: true },
   { kind: 'sofa', x: 3.5, z: 9.6, rot: 0, solid: true },
   { kind: 'balcao', x: 0, z: 1.2, w: 5, d: 1.1, solid: true, panel: 'equipe', label: 'Equipe e convites' },

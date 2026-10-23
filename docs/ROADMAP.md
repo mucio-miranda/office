@@ -9,7 +9,13 @@
 - 4 funcionários de IA (vídeo, design, copy, gerente/contador) rodando no Claude Code headless, com aprovação
 - Engine de vídeo por timeline JSON com estúdio na UI e CLI para os agentes
 
+## ✅ v0.1.1: visual minimalista (23/10/2026)
+- Redesign no estilo Paperclip: tokens neutros, tema claro e escuro, sidebar, páginas e entrada com arte ASCII
+- Maquete 3D monocromática (piso sem iluminação + sombra suave, paredes baixas, peões)
+- Seletor de pastas navegável (máquina local e pastas do escritório) em todos os campos de caminho
+
 ## 🔜 v0.2: o escritório ganha vida
+- [ ] Ferramentas MCP por funcionário: PhotoCraft/VectorCraft (Duda), FilmCraft (Vic), OfficeCLI (Theo e Rafa)
 - [ ] Sons (passos por piso, aceno, mão levantada, mensagem), à moda do Gather
 - [ ] Editor de planta (arrastar móveis, criar salas, temas) e vários andares
 - [ ] Prévia rápida da timeline (render em baixa resolução) e player com a sequência completa

@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import type { Furniture } from './layout';
+import type { ScenePalette } from '../lib/theme';
 
-/** Móveis low-poly feitos só com primitivas: leve, sem assets externos, fácil de recolorir pelo tema. */
-export function FurnitureMesh({ f, accent, onUse }: { f: Furniture; accent: string; onUse?: (f: Furniture) => void }) {
+/**
+ * Móveis em estilo "maquete de arquitetura": volumes simples, tons neutros,
+ * sem texturas. A cor de destaque só aparece no hover de algo interativo.
+ */
+export function FurnitureMesh({ f, p, onUse }: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void }) {
   const [hover, setHover] = useState(false);
   const interactive = !!(f.panel || f.label);
-  const glow = hover && interactive ? 0.35 : 0;
   const handlers = interactive
     ? {
         onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; },
@@ -13,200 +16,107 @@ export function FurnitureMesh({ f, accent, onUse }: { f: Furniture; accent: stri
         onClick: (e: any) => { e.stopPropagation(); onUse?.(f); },
       }
     : {};
-  const mat = (color: string, extra: Record<string, unknown> = {}) => (
-    <meshStandardMaterial color={color} emissive={accent} emissiveIntensity={glow} roughness={0.8} {...extra} />
+  const mat = (c: string) => <meshStandardMaterial color={hover && interactive ? p.hover : c} roughness={0.9} metalness={0} />;
+  const box = (pos: [number, number, number], size: [number, number, number], c: string, key?: string | number) => (
+    <mesh key={key} position={pos} castShadow receiveShadow>
+      <boxGeometry args={size} />
+      {mat(c)}
+    </mesh>
   );
 
   const body = (() => {
     switch (f.kind) {
-      case 'mesa':
+      case 'mesa': {
+        const w = f.w ?? 2.2, d = f.d ?? 1.1;
         return (
           <group>
-            <mesh position={[0, 0.74, 0]} castShadow receiveShadow>
-              <boxGeometry args={[f.w ?? 2.2, 0.08, f.d ?? 1.1]} />
-              {mat('#c8a27a')}
-            </mesh>
-            {[[-1, -1], [1, -1], [-1, 1], [1, 1]].map(([sx, sz], i) => (
-              <mesh key={i} position={[sx * ((f.w ?? 2.2) / 2 - 0.08), 0.37, sz * ((f.d ?? 1.1) / 2 - 0.08)]} castShadow>
-                <boxGeometry args={[0.07, 0.74, 0.07]} />
-                {mat('#3b3b45')}
-              </mesh>
-            ))}
-            {/* monitor */}
-            <mesh position={[0, 1.08, -0.3]} castShadow>
-              <boxGeometry args={[0.9, 0.55, 0.05]} />
-              {mat('#1d1d26')}
-            </mesh>
-            <mesh position={[0, 1.08, -0.27]}>
-              <planeGeometry args={[0.82, 0.47]} />
-              <meshBasicMaterial color={accent} transparent opacity={0.55} />
-            </mesh>
-            <mesh position={[0, 0.82, -0.3]}>
-              <boxGeometry args={[0.1, 0.12, 0.1]} />
-              {mat('#1d1d26')}
-            </mesh>
-            {/* cadeira */}
-            <mesh position={[0, 0.48, 0.95]} castShadow>
-              <boxGeometry args={[0.55, 0.08, 0.55]} />
-              {mat('#3b3b45')}
-            </mesh>
-            <mesh position={[0, 0.8, 1.2]} castShadow>
-              <boxGeometry args={[0.55, 0.6, 0.08]} />
-              {mat('#3b3b45')}
-            </mesh>
+            {box([0, 0.72, 0], [w, 0.06, d], p.furniture)}
+            {box([-w / 2 + 0.05, 0.36, 0], [0.05, 0.72, d - 0.1], p.furnitureDark)}
+            {box([w / 2 - 0.05, 0.36, 0], [0.05, 0.72, d - 0.1], p.furnitureDark)}
+            {box([0, 1.02, -0.3], [0.8, 0.48, 0.03], p.screen)}
+            {box([0, 0.8, -0.3], [0.06, 0.14, 0.06], p.furnitureDark)}
+            {box([0, 0.46, 0.95], [0.5, 0.06, 0.5], p.furnitureDark)}
           </group>
         );
-      case 'mesa-reuniao':
+      }
+      case 'mesa-reuniao': {
+        const w = f.w ?? 6, d = f.d ?? 2.6;
         return (
           <group>
-            <mesh position={[0, 0.74, 0]} castShadow receiveShadow>
-              <boxGeometry args={[f.w ?? 6, 0.1, f.d ?? 2.6]} />
-              {mat('#f4f1ea')}
-            </mesh>
-            <mesh position={[0, 0.37, 0]}>
-              <boxGeometry args={[(f.w ?? 6) * 0.7, 0.74, 0.3]} />
-              {mat('#3b3b45')}
-            </mesh>
-            {Array.from({ length: 6 }).map((_, i) => {
-              const side = i < 3 ? -1 : 1;
-              const x = ((i % 3) - 1) * 1.8;
-              return (
-                <mesh key={i} position={[x, 0.5, side * ((f.d ?? 2.6) / 2 + 0.45)]} castShadow>
-                  <boxGeometry args={[0.55, 0.5, 0.55]} />
-                  {mat(accent)}
-                </mesh>
-              );
-            })}
+            {box([0, 0.72, 0], [w, 0.06, d], p.furniture)}
+            {box([0, 0.36, 0], [w * 0.6, 0.72, 0.2], p.furnitureDark)}
+            {Array.from({ length: 6 }).map((_, i) =>
+              box([((i % 3) - 1) * 1.8, 0.24, (i < 3 ? -1 : 1) * (d / 2 + 0.45)], [0.5, 0.48, 0.5], p.furnitureDark, i))}
           </group>
         );
+      }
       case 'sofa':
         return (
           <group>
-            <mesh position={[0, 0.3, 0]} castShadow receiveShadow>
-              <boxGeometry args={[2.6, 0.45, 1]} />
-              {mat(accent)}
-            </mesh>
-            <mesh position={[0, 0.7, 0.4]} castShadow>
-              <boxGeometry args={[2.6, 0.6, 0.25]} />
-              {mat(accent)}
-            </mesh>
+            {box([0, 0.22, 0], [2.6, 0.44, 1], p.furniture)}
+            {box([0, 0.55, 0.4], [2.6, 0.5, 0.2], p.furniture)}
           </group>
         );
       case 'planta':
         return (
           <group>
-            <mesh position={[0, 0.25, 0]} castShadow>
-              <cylinderGeometry args={[0.28, 0.22, 0.5, 8]} />
-              {mat('#d9d2c5')}
+            <mesh position={[0, 0.22, 0]} castShadow>
+              <cylinderGeometry args={[0.24, 0.2, 0.44, 16]} />
+              {mat(p.furniture)}
             </mesh>
-            <mesh position={[0, 0.95, 0]} castShadow>
-              <icosahedronGeometry args={[0.55, 0]} />
-              {mat('#4caf6a', { flatShading: true })}
+            <mesh position={[0, 0.78, 0]} castShadow>
+              <sphereGeometry args={[0.42, 20, 14]} />
+              {mat(p.plant)}
             </mesh>
           </group>
         );
       case 'quadro':
         return (
-          <group position={[0, 1.6, 0]}>
-            <mesh castShadow>
-              <boxGeometry args={[f.w ?? 3, 1.6, 0.08]} />
-              {mat('#ffffff')}
-            </mesh>
-            {Array.from({ length: 5 }).map((_, i) => (
-              <mesh key={i} position={[((i - 2) * (f.w ?? 3)) / 5.6, 0.1, 0.05]}>
-                <planeGeometry args={[(f.w ?? 3) / 6.5, 1.1]} />
-                <meshBasicMaterial color={['#ffd166', '#ef476f', '#06d6a0', '#118ab2', '#c3c3c3'][i]} transparent opacity={0.7} />
-              </mesh>
-            ))}
+          <group position={[0, 1.4, 0]}>
+            {box([0, 0, 0], [f.w ?? 3, 1.3, 0.05], p.floor)}
+            {Array.from({ length: 5 }).map((_, i) =>
+              box([((i - 2) * (f.w ?? 3)) / 5.6, 0.05, 0.03], [(f.w ?? 3) / 7, 0.9, 0.01], p.furniture, i))}
           </group>
         );
       case 'calendario':
         return (
-          <group position={[0, 1.7, 0]}>
-            <mesh castShadow>
-              <boxGeometry args={[1.2, 1.3, 0.06]} />
-              {mat('#ffffff')}
-            </mesh>
-            <mesh position={[0, 0.5, 0.04]}>
-              <planeGeometry args={[1.2, 0.3]} />
-              <meshBasicMaterial color={accent} />
-            </mesh>
+          <group position={[0, 1.5, 0]}>
+            {box([0, 0, 0], [1.1, 1.1, 0.04], p.floor)}
+            {box([0, 0.45, 0.025], [1.1, 0.2, 0.01], p.furnitureDark)}
           </group>
         );
-      case 'tv':
-        return (
-          <group position={[0, 1.7, 0]}>
-            <mesh castShadow>
-              <boxGeometry args={[f.w ?? 3, (f.w ?? 3) * 0.56, 0.08]} />
-              {mat('#111118')}
-            </mesh>
-            <mesh position={[0, 0, 0.05]}>
-              <planeGeometry args={[(f.w ?? 3) * 0.94, (f.w ?? 3) * 0.5]} />
-              <meshBasicMaterial color={hover ? accent : '#2b2f55'} />
-            </mesh>
-          </group>
-        );
+      case 'tv': {
+        const w = f.w ?? 3;
+        return <group position={[0, 1.5, 0]}>{box([0, 0, 0], [w, w * 0.56, 0.05], p.screen)}</group>;
+      }
       case 'balcao':
-        return (
-          <mesh position={[0, 0.55, 0]} castShadow receiveShadow>
-            <boxGeometry args={[f.w ?? 5, 1.1, f.d ?? 1.1]} />
-            {mat('#f8f6f2')}
-          </mesh>
-        );
+        return box([0, 0.5, 0], [f.w ?? 5, 1, f.d ?? 1.1], p.furniture);
       case 'cafeteira':
-        return (
-          <mesh position={[0, 1.35, 0]} castShadow>
-            <boxGeometry args={[0.45, 0.5, 0.4]} />
-            {mat('#2d2d33')}
-          </mesh>
-        );
+        return box([0, 1.2, 0], [0.4, 0.42, 0.36], p.screen);
       case 'cofre':
-        return (
-          <group>
-            <mesh position={[0, 0.55, 0]} castShadow>
-              <boxGeometry args={[1, 1.1, 1]} />
-              {mat('#5a6270', { metalness: 0.5 })}
-            </mesh>
-            <mesh position={[0, 0.6, 0.51]}>
-              <circleGeometry args={[0.18, 16]} />
-              <meshBasicMaterial color="#ffd166" />
-            </mesh>
-          </group>
-        );
+        return box([0, 0.5, 0], [0.9, 1, 0.9], p.furnitureDark);
       case 'estante':
         return (
           <group>
-            <mesh position={[0, 1, 0]} castShadow>
-              <boxGeometry args={[2.4, 2, 0.6]} />
-              {mat('#b8946b')}
-            </mesh>
-            {[0.5, 1.1, 1.7].map((y, i) => (
-              <mesh key={i} position={[0, y, 0.31]}>
-                <planeGeometry args={[2.2, 0.4]} />
-                <meshBasicMaterial color={['#ef476f', '#118ab2', '#06d6a0'][i]} />
-              </mesh>
-            ))}
+            {box([0, 0.9, 0], [2.4, 1.8, 0.5], p.furniture)}
+            {[0.45, 1.05, 1.6].map((y, i) => box([0, y, 0.2], [2.2, 0.04, 0.2], p.furnitureDark, i))}
           </group>
         );
       case 'tapete':
         return (
-          <mesh position={[0, 0.015, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
+          <mesh position={[0, 0.005, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
             <planeGeometry args={[f.w ?? 4, f.d ?? 3]} />
-            <meshStandardMaterial color={f.color ?? '#d9c7b0'} />
+            <meshBasicMaterial color={p.floorAlt} />
           </mesh>
         );
       case 'luminaria':
         return (
           <group>
-            <mesh position={[0, 1, 0]}>
-              <cylinderGeometry args={[0.03, 0.03, 2]} />
-              {mat('#222')}
+            {box([0, 0.9, 0], [0.04, 1.8, 0.04], p.furnitureDark)}
+            <mesh position={[0, 1.85, 0]}>
+              <sphereGeometry args={[0.16, 16, 12]} />
+              <meshBasicMaterial color="#fff7e0" />
             </mesh>
-            <mesh position={[0, 2, 0]}>
-              <coneGeometry args={[0.3, 0.35, 12, 1, true]} />
-              <meshBasicMaterial color="#fff3c4" />
-            </mesh>
-            <pointLight position={[0, 1.8, 0]} intensity={4} distance={6} color="#ffd9a0" />
           </group>
         );
       default:

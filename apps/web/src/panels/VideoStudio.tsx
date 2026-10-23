@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { TRANSITIONS, CAPTION_STYLES, Timeline as TimelineSchema, layout, clipDuration, type TimelineInput } from '@office/video-engine/schema';
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
+import { BrowseDialog } from '../lib/PathPicker';
+import { Clapperboard, FileJson, Film, Image, Music, Plus, Type, X } from 'lucide-react';
 
 type TL = TimelineInput & { video: any[]; audio?: any[]; overlays?: any[]; captions?: any };
 type Sel = { lane: 'video' | 'audio' | 'captions' | 'overlays'; index: number } | null;
@@ -20,18 +22,19 @@ export function VideoStudio() {
   return (
     <div className="studio">
       <aside className="studio-list">
-        <button className="primary" onClick={() => setCreating(true)}>+ Nova timeline</button>
-        <button className="ghost" onClick={() => setImporting(true)}>Importar timeline.json</button>
+        <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Nova timeline</button>
+        <button className="ghost" onClick={() => setImporting(true)}><FileJson size={14} /> Importar timeline.json</button>
+        <div className="section-label" style={{ marginTop: 12 }}>Timelines</div>
         {timelines.map((t) => (
           <button key={t.id} className={`tl-item ${t.id === openId ? 'active' : ''}`} onClick={() => setOpenId(t.id)}>
             <b>{t.name}</b>
-            <small>{t.renderStatus === 'concluido' ? '✅ renderizado' : t.renderStatus === 'rodando' ? '⏳ renderizando' : t.renderStatus === 'erro' ? '⚠️ erro' : 'rascunho'}</small>
+            <small className={`st-${t.renderStatus === 'concluido' ? 'concluido' : t.renderStatus === 'rodando' ? 'rodando' : t.renderStatus === 'erro' ? 'erro' : 'livre'}`}><span className="status-dot" />{t.renderStatus === 'concluido' ? 'renderizado' : t.renderStatus === 'rodando' ? 'renderizando' : t.renderStatus === 'erro' ? 'erro' : 'rascunho'}</small>
           </button>
         ))}
       </aside>
-      {openId ? <Editor key={openId} id={openId} /> : <div className="studio-empty muted">Crie uma timeline ou importe o <code>timeline.json</code> que a Vic (editora de IA) deixou na pasta do cliente.</div>}
+      {openId ? <Editor key={openId} id={openId} /> : <div className="studio-empty"><div className="stack" style={{ alignItems: 'center' }}><Clapperboard size={28} /><span>Crie uma timeline ou importe o <code>timeline.json</code> que a Vic deixou na pasta do cliente.</span></div></div>}
       {creating && (
-        <FolderPicker title="Pasta de saída da timeline (ex.: VIDEOS\EDITADOS\...)" onClose={() => setCreating(false)} askName
+        <NewTimeline onClose={() => setCreating(false)}
           onPick={async (dir, name) => {
             const row = await api(`/api/offices/${office!.id}/timelines`, { body: { name: name || 'nova edição', baseDir: dir, json: { name, width: 1080, height: 1920, fps: 30, video: [] } } });
             setCreating(false);
@@ -39,7 +42,7 @@ export function VideoStudio() {
           }} />
       )}
       {importing && (
-        <FolderPicker title="Escolha o timeline.json" fileFilter={/\.json$/i} onClose={() => setImporting(false)}
+        <BrowseDialog title="Escolha o timeline.json" scope="office" officeId={office!.id} pick="file" filter={/\.json$/i} onClose={() => setImporting(false)}
           onPick={async (file) => {
             const row = await api(`/api/offices/${office!.id}/timelines/import`, { body: { path: file } });
             setImporting(false);
@@ -154,12 +157,12 @@ function Editor({ id }: { id: string }) {
         </select>
         <span className="muted small">{lay.duration.toFixed(1)}s · saída em <code>{row.baseDir}</code></span>
         <span className="spacer" />
-        <div className="tabs mini">
+        <div className="tabs-line">
           <button className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')}>Timeline</button>
           <button className={view === 'json' ? 'active' : ''} onClick={() => { setJsonText(JSON.stringify(tl, null, 2)); setView('json'); }}>JSON</button>
         </div>
         <button className="primary" disabled={!!validation || render?.status === 'rodando'} onClick={doRender}>
-          {render?.status === 'rodando' ? `Renderizando ${Math.round(render.progress * 100)}%` : '🎬 Renderizar'}
+          {render?.status === 'rodando' ? `Renderizando ${Math.round(render.progress * 100)}%` : <><Film size={14} /> Renderizar</>}
         </button>
       </div>
       {render?.status === 'rodando' && <div className="progress"><i style={{ width: `${render.progress * 100}%` }} /></div>}
@@ -177,7 +180,7 @@ function Editor({ id }: { id: string }) {
               {previewSrc ? (
                 <ClipPreview src={previewSrc} from={sel?.lane === 'video' ? selected.in : 0} to={sel?.lane === 'video' ? selected.out : undefined} portrait={(tl.height ?? 1920) > (tl.width ?? 1080)} />
               ) : <div className="muted small">Selecione um clipe para ver a prévia</div>}
-              {row.output && <a className="small" href={mediaUrl(office!.id, row.output)} target="_blank">▶ abrir último render</a>}
+              {row.output && <a className="small" href={mediaUrl(office!.id, row.output)} target="_blank">abrir último render</a>}
             </div>
             <div className="inspector">
               {!sel && <p className="muted small">Clique num clipe, trilha ou legenda para editar. Arraste as bordas dos clipes para cortar.</p>}
@@ -264,29 +267,29 @@ function Editor({ id }: { id: string }) {
           </div>
 
           <div className="lanes-toolbar">
-            <button className="ghost" onClick={() => setPicker('video')}>+ Vídeo</button>
-            <button className="ghost" onClick={() => setPicker('audio')}>+ Música/áudio</button>
-            <button className="ghost" onClick={() => setPicker('overlays')}>+ Logo/imagem</button>
-            <button className="ghost" onClick={() => {
+            <button className="small" onClick={() => setPicker('video')}><Film size={13} /> Vídeo</button>
+            <button className="small" onClick={() => setPicker('audio')}><Music size={13} /> Áudio</button>
+            <button className="small" onClick={() => setPicker('overlays')}><Image size={13} /> Imagem</button>
+            <button className="small" onClick={() => {
               const items = [...(tl.captions?.items ?? [])];
               const start = items.length ? items[items.length - 1].end : 0;
               items.push({ start: r2(start), end: r2(start + 1.5), text: 'nova legenda' });
               update({ ...tl, captions: { style: 'rezzu', ...(tl.captions ?? {}), items } });
               setSel({ lane: 'captions', index: items.length - 1 });
-            }}>+ Legenda</button>
+            }}><Type size={13} /> Legenda</button>
             <span className="spacer" />
             <label className="small">zoom <input type="range" min={10} max={160} value={pps} onChange={(e) => setPps(Number(e.target.value))} /></label>
           </div>
 
           <div className="lanes">
             <Ruler duration={Math.max(lay.duration, 5)} pps={pps} />
-            <Lane label="🎬 Vídeo">
+            <Lane icon={<Film size={13} />} label="Vídeo">
               {tl.video.map((c, i) => {
                 const start = lay.starts[i] ?? 0;
                 const dur = parsed ? clipDuration(parsed.video[i]) : (c.out - (c.in ?? 0)) / (c.speed ?? 1);
                 return (
-                  <Block key={c.id ?? i} left={start * pps} width={dur * pps} active={sel?.lane === 'video' && sel.index === i} color="#7c5cff"
-                    label={`${c.transition && c.transition.type !== 'corte' ? '⟡ ' : ''}${c.src.split(/[\\/]/).pop()}${(c.speed ?? 1) !== 1 ? ` ${c.speed}x` : ''}${c.reverse ? ' ⟲' : ''}`}
+                  <Block key={c.id ?? i} left={start * pps} width={dur * pps} active={sel?.lane === 'video' && sel.index === i} color="var(--review)"
+                    label={`${c.transition && c.transition.type !== 'corte' ? `${c.transition.type} · ` : ''}${c.src.split(/[\\/]/).pop()}${(c.speed ?? 1) !== 1 ? ` · ${c.speed}x` : ''}${c.reverse ? ' · rev' : ''}`}
                     onClick={() => setSel({ lane: 'video', index: i })}
                     onTrim={(edge, dx) => {
                       const ds = (dx / pps) * (c.speed ?? 1);
@@ -298,24 +301,24 @@ function Editor({ id }: { id: string }) {
                 );
               })}
             </Lane>
-            <Lane label="🔤 Legendas">
+            <Lane icon={<Type size={13} />} label="Legendas">
               {(tl.captions?.items ?? []).map((c: any, i: number) => (
-                <Block key={i} left={c.start * pps} width={(c.end - c.start) * pps} color="#ffb020" label={c.text} active={sel?.lane === 'captions' && sel.index === i}
+                <Block key={i} left={c.start * pps} width={(c.end - c.start) * pps} color="var(--waiting)" label={c.text} active={sel?.lane === 'captions' && sel.index === i}
                   onClick={() => setSel({ lane: 'captions', index: i })}
                   onMove={(dx) => { const items = [...tl.captions.items]; const d = dx / pps; items[i] = { ...c, start: r2(Math.max(0, c.start + d)), end: r2(Math.max(0.2, c.end + d)) }; update({ ...tl, captions: { ...tl.captions, items } }); }}
                   onTrim={(edge, dx) => { const items = [...tl.captions.items]; const d = dx / pps; items[i] = edge === 'right' ? { ...c, end: r2(Math.max(c.start + 0.2, c.end + d)) } : { ...c, start: r2(Math.min(c.end - 0.2, Math.max(0, c.start + d))) }; update({ ...tl, captions: { ...tl.captions, items } }); }} />
               ))}
             </Lane>
-            <Lane label="🖼️ Sobrepos.">
+            <Lane icon={<Image size={13} />} label="Imagens">
               {(tl.overlays ?? []).map((o: any, i: number) => (
-                <Block key={o.id ?? i} left={o.start * pps} width={(o.end - o.start) * pps} color="#22c3a6" label={o.src.split(/[\\/]/).pop()} active={sel?.lane === 'overlays' && sel.index === i}
+                <Block key={o.id ?? i} left={o.start * pps} width={(o.end - o.start) * pps} color="var(--done)" label={o.src.split(/[\\/]/).pop()} active={sel?.lane === 'overlays' && sel.index === i}
                   onClick={() => setSel({ lane: 'overlays', index: i })}
                   onMove={(dx) => { const arr = [...tl.overlays!]; const d = dx / pps; arr[i] = { ...o, start: r2(Math.max(0, o.start + d)), end: r2(o.end + d) }; update({ ...tl, overlays: arr }); }} />
               ))}
             </Lane>
-            <Lane label="🎵 Áudio">
+            <Lane icon={<Music size={13} />} label="Áudio">
               {(tl.audio ?? []).map((a: any, i: number) => (
-                <Block key={a.id ?? i} left={(a.start ?? 0) * pps} width={Math.max(1, ((a.out ?? lay.duration) - (a.in ?? 0))) * pps} color="#3fa7ff" label={a.src.split(/[\\/]/).pop()} active={sel?.lane === 'audio' && sel.index === i}
+                <Block key={a.id ?? i} left={(a.start ?? 0) * pps} width={Math.max(1, ((a.out ?? lay.duration) - (a.in ?? 0))) * pps} color="var(--running)" label={a.src.split(/[\\/]/).pop()} active={sel?.lane === 'audio' && sel.index === i}
                   onClick={() => setSel({ lane: 'audio', index: i })}
                   onMove={(dx) => { const arr = [...tl.audio!]; arr[i] = { ...a, start: r2(Math.max(0, (a.start ?? 0) + dx / pps)) }; update({ ...tl, audio: arr }); }} />
               ))}
@@ -324,7 +327,8 @@ function Editor({ id }: { id: string }) {
         </>
       )}
       {picker && (
-        <FolderPicker title="Escolha o arquivo" fileFilter={picker === 'video' ? VIDEO_EXT : picker === 'audio' ? AUDIO_EXT : IMAGE_EXT} startAt={row.baseDir}
+        <BrowseDialog title={picker === 'video' ? 'Adicionar vídeo' : picker === 'audio' ? 'Adicionar áudio' : 'Adicionar imagem'} scope="office" officeId={office!.id} pick="file"
+          filter={picker === 'video' ? VIDEO_EXT : picker === 'audio' ? AUDIO_EXT : IMAGE_EXT} start={row.baseDir}
           onClose={() => setPicker(null)} onPick={async (file) => { setPicker(null); try { await addMedia(file, picker); } catch (x) { setErr((x as Error).message); } }} />
       )}
     </div>
@@ -355,10 +359,10 @@ function Ruler({ duration, pps }: { duration: number; pps: number }) {
   );
 }
 
-function Lane({ label, children }: { label: string; children: React.ReactNode }) {
+function Lane({ icon, label, children }: { icon: React.ReactNode; label: string; children: React.ReactNode }) {
   return (
     <div className="lane">
-      <div className="lane-label">{label}</div>
+      <div className="lane-label">{icon}{label}</div>
       <div className="lane-track">{children}</div>
     </div>
   );
@@ -378,7 +382,7 @@ function Block({ left, width, label, color, active, onClick, onTrim, onMove }: {
     addEventListener('pointerup', up);
   };
   return (
-    <div className={`block ${active ? 'active' : ''}`} style={{ left, width: Math.max(8, width), background: color }} onClick={onClick}
+    <div className={`block ${active ? 'active' : ''}`} style={{ left, width: Math.max(8, width), ['--lane' as any]: color }} onClick={onClick}
       onPointerDown={onMove ? (e) => { onClick(); drag(onMove)(e); } : undefined} title={label}>
       {onTrim && <i className="handle l" onPointerDown={drag((dx) => onTrim('left', dx))} />}
       <span>{label}</span>
@@ -387,42 +391,22 @@ function Block({ left, width, label, color, active, onClick, onTrim, onMove }: {
   );
 }
 
-function FolderPicker({ title, onPick, onClose, fileFilter, startAt, askName }: {
-  title: string; onPick: (path: string, name?: string) => void; onClose: () => void; fileFilter?: RegExp; startAt?: string; askName?: boolean;
-}) {
+/** Nova timeline: nome + pasta de saída escolhida navegando nas pastas do escritório. */
+function NewTimeline({ onPick, onClose }: { onPick: (dir: string, name: string) => void; onClose: () => void }) {
   const office = useStore((s) => s.office)!;
-  const [dir, setDir] = useState<any>(null);
   const [name, setName] = useState('');
-  const [err, setErr] = useState('');
-  const go = (p?: string) => api(`/api/offices/${office.id}/fs${p ? `?path=${encodeURIComponent(p)}` : ''}`).then(setDir).catch((x) => setErr(x.message));
-  useEffect(() => { go(startAt); }, []);
+  const [browsing, setBrowsing] = useState(false);
   return (
     <div className="modal-bg" onClick={onClose}>
-      <div className="modal card picker" onClick={(e) => e.stopPropagation()}>
-        <h3>{title}</h3>
-        {askName && <label>Nome<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="reels-depoimento-maria" /></label>}
-        {dir && (
-          <>
-            <div className="row gap wrap">
-              {dir.roots.map((r: string) => <button key={r} className="ghost small" onClick={() => go(r)}>📁 {r}</button>)}
-            </div>
-            <div className="crumb"><code>{dir.path}</code></div>
-            <div className="fs-list">
-              {dir.parent && <div className="fs-item" onClick={() => go(dir.parent)}>⬆️ ..</div>}
-              {dir.entries.filter((e: any) => e.dir || !fileFilter || fileFilter.test(e.name)).map((e: any) => (
-                <div key={e.path} className="fs-item" onClick={() => (e.dir ? go(e.path) : onPick(e.path))}>
-                  {e.dir ? '📁' : VIDEO_EXT.test(e.name) ? '🎞️' : AUDIO_EXT.test(e.name) ? '🎵' : IMAGE_EXT.test(e.name) ? '🖼️' : '📄'} {e.name}
-                </div>
-              ))}
-            </div>
-          </>
-        )}
-        {err && <div className="error">{err}</div>}
-        <div className="row gap end">
-          <button className="ghost" onClick={onClose}>Cancelar</button>
-          {!fileFilter && dir && <button className="primary" onClick={() => onPick(dir.path, name)}>Usar esta pasta</button>}
+      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={(e) => { e.preventDefault(); setBrowsing(true); }}>
+        <header className="modal-head"><h3>Nova timeline</h3><button type="button" className="icon" onClick={onClose}><X size={16} /></button></header>
+        <div className="modal-body">
+          <label>Nome<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="reels-depoimento-maria" /></label>
+          <p className="muted small" style={{ margin: 0 }}>Em seguida, escolha a pasta de saída (ex.: VIDEOS\EDITADOS do cliente). Os brutos podem estar em qualquer pasta do escritório.</p>
         </div>
-      </div>
+        <footer className="modal-foot"><span /><div className="row gap"><button type="button" className="ghost" onClick={onClose}>Cancelar</button><button className="primary" disabled={!name.trim()}>Escolher pasta</button></div></footer>
+      </form>
+      {browsing && <BrowseDialog title="Pasta de saída" scope="office" officeId={office.id} onClose={() => setBrowsing(false)} onPick={(dir) => onPick(dir, name.trim())} />}
     </div>
   );
 }

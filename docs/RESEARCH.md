@@ -41,6 +41,40 @@ em serviços de terceiros). Com uma conta logada, dá para aprofundar a análise
 | pyJianYingDraft / capcut-cli | — | Formato `draft_content.json` do CapCut (tempos em microssegundos, ids UUID). **Roadmap**: exportar a timeline do Office como rascunho do CapCut. |
 | Remotion | source-available | Evitado: exige licença paga para empresas com mais de 3 pessoas. |
 
+## Visual: Paperclip (atualizado em 23/10/2026)
+
+[paperclipai/paperclip](https://github.com/paperclipai/paperclip) (MIT): painel de "empresas" de agentes de IA.
+Inspirou o redesign minimalista do Office:
+
+- **Tela de entrada** dividida ao meio: formulário enxuto à esquerda (logo, título, subtítulo, rótulos pequenos,
+  botão de largura total, link sublinhado para alternar o modo) e uma **animação ASCII** à direita, com troca de tema no canto.
+  O Office tem a própria animação (`AsciiOffice`, com mesas e peões), escrita do zero.
+- **Tokens** shadcn/neutros: oklch sem croma, bordas translúcidas, Inter só em 400 e 600, raio de 8 px, cor reservada
+  ao **status** (ocioso `#a8aeb2`, rodando `#2563eb`, aguardando `#f59e0b`, revisão `#7c3aed`, pronto `#22c55e`, erro `#dc2626`).
+- **Casca**: sidebar de 240 px com rótulos de seção em caixa alta, cabeçalho de página de 56 px e páginas em vez de modais.
+
+## Suites "Craft" (clones open source da Adobe e do Office)
+
+Projetos do time ArtCraft ([storytold](https://github.com/storytold)), em Rust puro, licença MIT ou Apache-2.0, todos em alpha.
+O ponto que importa para o Office: **cada app expõe todos os comandos por CLI, canal JSON e servidor MCP**, ou seja,
+os nossos funcionários de IA conseguem operar sem interface.
+
+| App | Substitui | Destaques para o Office |
+|---|---|---|
+| [PhotoCraft](https://github.com/storytold/photocraft) (~71k ⭐) | Photoshop | Lê e grava PSD/PSB, camadas, máscaras, 27 modos de mesclagem e ajustes. `photocraft-cli run/batch` e `photocraft-cli mcp`, com mais de 500 comandos compartilhados entre UI, CLI e MCP. |
+| [VectorCraft](https://github.com/storytold/vectorcraft) (~10k ⭐) | Illustrator | SVG, PDF e `.ai` compatível com PDF. `vectorcraft-cli mcp` com pastas de leitura e escrita restritas (`--automation-read-root/--automation-write-root`). |
+| [FilmCraft](https://github.com/storytold/filmcraft) | Premiere | Todo comando de edição exposto por CLI, controle JSON e MCP. Ainda não abre `.prproj`. |
+| PdfCraft | Acrobat | Servidor MCP para agentes. |
+| WordCraft (~14k ⭐) · GridCraft (~5,7k ⭐) · DeckCraft (~3,7k ⭐) | Word · Excel · PowerPoint | DOCX, XLSX e PPTX (GridCraft cobre 513 das 523 funções do Excel). Lançados em outubro de 2026, ainda alpha. |
+
+Também no radar: [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) (~32k ⭐, Apache-2.0). É um binário único para
+**agentes** lerem, editarem e renderizarem DOCX/XLSX/PPTX (HTML/PNG), com MCP (`officecli mcp claude`) e skill
+para o Claude Code. É o caminho mais curto para o Theo e o Rafa entregarem propostas, planilhas e apresentações.
+
+**Plano**: virar "ferramentas" dos funcionários. A Duda usa PhotoCraft e VectorCraft via MCP no lugar do
+Photoshop por script, a Vic ganha o FilmCraft além da nossa engine e o Theo e o Rafa usam o OfficeCLI.
+O servidor do Office registra esses MCPs por escritório, com as pastas restritas às do escritório.
+
 ## Decisões que saíram daqui
 
 1. **Isométrico 3D low-poly** com primitivas (sem assets pesados): roda leve em qualquer notebook da equipe.

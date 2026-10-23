@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
 import { createReadStream, existsSync, statSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
+import { homedir } from 'node:os';
 import {
   DEMAND_COLUMNS, uid,
   type AgentJob, type AgentProfile, type CalendarEvent, type Client, type Demand, type JobMessage, type Office, type Transaction, type User,
@@ -69,13 +70,51 @@ export async function api(app: FastifyInstance) {
   app.register(async (r) => {
     r.addHook('preHandler', requireUser);
 
-    r.get('/api/me', async (req) => ({
-      user: req.user,
-      offices: all<Office & { role: string; inviteCode: string }>(
-        'SELECT o.*, m.role FROM offices o JOIN office_members m ON m.office_id = o.id WHERE m.user_id = ? ORDER BY o.created_at',
-        req.user.id,
-      ),
-    }));
+    r.get('/api/me', async (req, reply) => {
+      // renova o cookie de sessão (usado por <video>/<img>) a partir do token da UI
+      const h = req.headers.authorization;
+      if (h?.startsWith('Bearer ')) reply.header('Set-Cookie', sessionCookie(h.slice(7)));
+      return {
+        user: req.user,
+        offices: all<Office & { role: string; inviteCode: string }>(
+          'SELECT o.*, m.role FROM offices o JOIN office_members m ON m.office_id = o.id WHERE m.user_id = ? ORDER BY o.created_at',
+          req.user.id,
+        ),
+      };
+    });
+
+    // ---------------- navegador de pastas da máquina ----------------
+    // Só para quem está no próprio computador do servidor: na LAN isso exporia o disco inteiro.
+    r.get('/api/system/browse', async (req, reply) => {
+      const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
+      const socketIp = req.socket.remoteAddress ?? '';
+      // atrás do proxy do Vite (dev) a conexão vem de 127.0.0.1; o IP real chega no X-Forwarded-For
+      const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
+      const ip = LOOPBACK.includes(socketIp) && fwd ? fwd : socketIp;
+      if (!LOOPBACK.includes(ip))
+        return reply.code(403).send({ error: 'Por segurança, só dá para navegar pelas pastas no computador que roda o Office.' });
+      const q = (req.query as { path?: string }).path;
+      const places = [
+        { name: 'Início', path: homedir() },
+        { name: 'Documentos', path: path.join(homedir(), 'Documents') },
+        { name: 'Área de trabalho', path: path.join(homedir(), 'Desktop') },
+        ...(process.platform === 'win32'
+          ? 'CDEFGHIJKLMNOPQRSTUVWXYZ'.split('').map((l) => `${l}:\\`).filter((d) => existsSync(d)).map((d) => ({ name: `Disco ${d.slice(0, 2)}`, path: d }))
+          : [{ name: 'Raiz', path: '/' }]),
+      ].filter((p) => existsSync(p.path));
+      const dir = path.resolve(q || homedir());
+      let entries: { name: string; path: string; dir: boolean }[] = [];
+      try {
+        entries = readdirSync(dir, { withFileTypes: true })
+          .filter((e) => !e.name.startsWith('.') && !e.name.startsWith('$') && e.isDirectory())
+          .map((e) => ({ name: e.name, path: path.join(dir, e.name), dir: true }))
+          .sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'));
+      } catch (e) {
+        return reply.code(400).send({ error: `Não consegui abrir ${dir}: ${(e as Error).message}` });
+      }
+      const parent = path.dirname(dir);
+      return { path: dir, parent: parent !== dir ? parent : null, places, entries };
+    });
 
     // ---------------- escritórios ----------------
     r.post('/api/offices', async (req, reply) => {
@@ -111,6 +150,8 @@ export async function api(app: FastifyInstance) {
       if (!requireMember(req, reply)) return;
       const b = body(z.object({ name: z.string().min(2).optional(), rootPath: z.string().optional(), extraDirs: z.array(z.string()).optional(), theme: z.any().optional() }), req, reply);
       if (!b) return;
+      for (const dir of [b.rootPath, ...(b.extraDirs ?? [])].filter(Boolean) as string[])
+        if (!existsSync(dir) || !statSync(dir).isDirectory()) return reply.code(400).send({ error: `A pasta ${dir} não existe.` });
       update('offices', (req.params as any).officeId, b);
       return { ok: true };
     });

@@ -18,11 +18,13 @@ Ela abre os brutos do cliente, monta o corte, renderiza e **levanta a mão ✋**
 
 <br/>
 
-<img src="docs/img/escritorio.jpg" alt="Escritório 3D isométrico com recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa; funcionários de IA sentados nas mesas" width="100%"/>
+<img src="docs/img/escritorio.jpg" alt="Escritório em maquete 3D isométrica, minimalista, com sidebar de navegação e funcionários de IA nas mesas" width="100%"/>
 
 </div>
 
 ---
+
+<img src="docs/img/entrada.jpg" alt="Tela de entrada: formulário à esquerda e animação em arte ASCII à direita" width="100%"/>
 
 ## ✨ Por que o Office existe
 
@@ -43,7 +45,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 <td width="50%" valign="top">
 
 ### 🗺️ Escritório 3D navegável
-- Visão **isométrica low-poly** com 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
+- **Maquete isométrica minimalista** (tema claro e escuro) com 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
 - **WASD** ou clique para andar, **Shift** para correr, **1–7** para teletransportar
 - **Ctrl+K**: vá para qualquer sala, painel, cliente, demanda ou funcionário
 - Minimapa clicável, chat geral ou da sala, status (🎧 foco, ⛔ ocupado, 💤 ausente) e emotes
@@ -178,8 +180,8 @@ npm install
 npm start            # compila a UI e sobe tudo em http://localhost:4747
 ```
 
-Abra o navegador, entre com seu nome e **crie um escritório** apontando para a pasta onde ficam os seus clientes
-(ex.: `C:\Users\voce\Documents\MINHA-AGENCIA`). Se essa pasta tiver um `CLAUDE.md` e `.claude/skills`,
+Abra o navegador, entre com seu nome e **crie um escritório**, escolhendo (navegando, sem digitar) a pasta onde ficam
+os seus clientes. Se essa pasta tiver um `CLAUDE.md` e `.claude/skills`,
 os funcionários já chegam sabendo trabalhar do seu jeito.
 
 Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
@@ -248,6 +250,8 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Demandas, calendário, financeiro e métricas
 - [x] Funcionários de IA com Claude Code e aprovação
 - [x] Engine de vídeo com timeline
+- [x] Visual minimalista (estilo Paperclip) e seletor de pastas navegável
+- [ ] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Whisper no estúdio (legenda automática) e exportação para CapCut/Premiere
 - [ ] Voz e vídeo por proximidade
@@ -266,6 +270,7 @@ Funcionários novos, móveis, transições, integrações, traduções: tudo é 
 ## 🙏 Inspirações
 
 [Gather](https://gather.town) e [SoWork](https://sowork.com) pela experiência de escritório virtual ·
+[Paperclip](https://github.com/paperclipai/paperclip) pela estética e pela tela de entrada ·
 [Pixel Agents](https://github.com/pablodelucca/pixel-agents) e [Claude-Office](https://github.com/W17ant/Claude-Office)
 pela ideia de dar corpo aos agentes do Claude Code · [AI Town](https://github.com/a16z-infra/ai-town) pelo mundo
 compartilhado entre agentes · [OpenCut](https://github.com/OpenCut-app/OpenCut), Motion Canvas e Revideo pela edição de vídeo programável.

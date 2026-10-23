@@ -10,14 +10,15 @@
   },
   "dependencies": {
     "@office/shared": "*",
+    "@office/video-engine": "*",
     "@react-three/drei": "^10.7.0",
     "@react-three/fiber": "^9.3.0",
+    "lucide-react": "^0.544.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "three": "^0.179.0",
-    "zustand": "^5.0.0",
-    "@office/video-engine": "*",
-    "zod": "^3.25.0"
+    "zod": "^3.25.0",
+    "zustand": "^5.0.0"
   },
   "devDependencies": {
     "@types/react": "^19.1.0",
