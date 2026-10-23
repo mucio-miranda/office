@@ -474,3 +474,27 @@ button.link.muted { color: var(--muted-foreground); text-decoration: none; }
 .msg-text.md code.path { cursor: default; }
 .is-desktop .msg-text.md code.path { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 .is-desktop .msg-text.md code.path:hover { background: var(--accent); }
+
+/* ---------- modo drone (Espaço + arrastar) ---------- */
+/* cursor: rosa dos ventos minimalista; ao arrastar, as setas se fecham sobre o centro */
+.world-wrap.drone canvas {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg stroke='white' stroke-width='3.5' stroke-linejoin='round' fill='white'%3E%3Ccircle cx='16' cy='16' r='5.5'/%3E%3Cpath d='M16 3l-3 3.6h6zM16 29l-3-3.6h6zM3 16l3.6-3v6zM29 16l-3.6-3v6z'/%3E%3C/g%3E%3Cg fill='%23171717'%3E%3Cpath d='M16 3l-3 3.6h6zM16 29l-3-3.6h6zM3 16l3.6-3v6zM29 16l-3.6-3v6z'/%3E%3Ccircle cx='16' cy='16' r='1.7'/%3E%3C/g%3E%3Ccircle cx='16' cy='16' r='5.5' fill='none' stroke='%23171717' stroke-width='1.6'/%3E%3C/svg%3E") 16 16, move;
+}
+.world-wrap.drone.dragging canvas, .world-wrap.dragging canvas {
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' viewBox='0 0 32 32'%3E%3Cg stroke='white' stroke-width='3.5' stroke-linejoin='round' fill='white'%3E%3Ccircle cx='16' cy='16' r='4'/%3E%3Cpath d='M16 7l-2.6 3h5.2zM16 25l-2.6-3h5.2zM7 16l3-2.6v5.2zM25 16l-3-2.6v5.2z'/%3E%3C/g%3E%3Cg fill='%23171717'%3E%3Cpath d='M16 7l-2.6 3h5.2zM16 25l-2.6-3h5.2zM7 16l3-2.6v5.2zM25 16l-3-2.6v5.2z'/%3E%3Ccircle cx='16' cy='16' r='4'/%3E%3C/g%3E%3C/svg%3E") 16 16, grabbing;
+}
+.world-wrap.drone .labels .nametag.clickable { pointer-events: none; }
+.drone-frame { position: absolute; inset: 64px 20px 20px; pointer-events: none; animation: drone-in .18s ease-out; }
+.drone-frame i { position: absolute; width: 28px; height: 28px; border: 0 solid color-mix(in srgb, var(--foreground) 55%, transparent); }
+.drone-frame .tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; border-top-left-radius: 6px; }
+.drone-frame .tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; border-top-right-radius: 6px; }
+.drone-frame .bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; border-bottom-left-radius: 6px; }
+.drone-frame .br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; border-bottom-right-radius: 6px; }
+.drone-badge { position: absolute; top: 0; left: 50%; transform: translate(-50%, -50%); display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 12px; border-radius: 99px; background: var(--foreground); color: var(--background); font-size: 12px; font-weight: 600; box-shadow: var(--shadow-sm); }
+@keyframes drone-in { from { opacity: 0; transform: scale(1.015); } }
+.recenter { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); height: 34px; border-radius: 99px; background: var(--overlay); backdrop-filter: blur(8px); box-shadow: var(--shadow); font-size: 13px; gap: 8px; }
+.recenter kbd { margin-left: 2px; }
+.mm-view circle { fill: none; stroke: var(--foreground); stroke-width: .3; }
+.mm-view path { stroke: var(--foreground); stroke-width: .3; }
+.hint kbd { font-size: 9px; padding: 1px 4px; }
+@media (max-width: 1280px) { .hint { display: none; } }

@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
+  LocateFixed, Navigation,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
-import { World, cam, player, type Nearby } from './office/World';
+import { World, cam, player, recenter, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
@@ -31,6 +32,8 @@ export function OfficeView() {
   const toast = useStore((s) => s.toast);
   const inWorld = panel === null;
   const waiting = useStore((s) => s.jobs.filter((j) => j.status === 'aguardando').length);
+  const drone = useStore((s) => s.drone);
+  const droneDragging = useStore((s) => s.droneDragging);
 
   // app de Windows: clicar numa notificação abre o painel certo; a bandeja mostra quantos esperam aprovação
   useEffect(() => desktop?.onNavigate((to) => open(to.panel as PanelId, to.arg)), [open]);
@@ -69,7 +72,7 @@ export function OfficeView() {
           <button className="ghost small" onClick={() => setPalette(true)}><Search size={14} /> Buscar <kbd>Ctrl K</kbd></button>
         </header>
         <div className="world-page">
-          <div className={`world-wrap ${inWorld ? '' : 'hidden'}`}>
+          <div className={`world-wrap ${inWorld ? '' : 'hidden'} ${drone ? 'drone' : ''} ${droneDragging ? 'dragging' : ''}`}>
             <World onNearby={setNearby} active={inWorld} />
             {inWorld && (
               <>
@@ -77,8 +80,9 @@ export function OfficeView() {
                 <WorldHud />
                 <MiniMap />
                 <Chat inputRef={chatRef} />
-                {nearby && <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>}
-                <div className="hint">WASD para andar · clique para ir · 1–7 salas · [ ] girar · roda: zoom</div>
+                {nearby && !drone && <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>}
+                <DroneOverlay />
+                <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · 1–7 salas · roda: zoom</div>
               </>
             )}
           </div>
@@ -159,6 +163,27 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
   );
 }
 
+/** Modo drone: visor com cantoneiras enquanto o Espaço está segurado; "Voltar para mim" quando a câmera está solta. */
+function DroneOverlay() {
+  const drone = useStore((s) => s.drone);
+  const detached = useStore((s) => s.camDetached);
+  return (
+    <>
+      {drone && (
+        <div className="drone-frame" aria-hidden>
+          <i className="tl" /><i className="tr" /><i className="bl" /><i className="br" />
+          <span className="drone-badge"><Navigation size={12} /> Modo drone · arraste para sobrevoar</span>
+        </div>
+      )}
+      {detached && !drone && (
+        <button className="recenter" onClick={recenter} title="Voltar a câmera para você (Esc)">
+          <LocateFixed size={14} /> Voltar para mim <kbd>Esc</kbd>
+        </button>
+      )}
+    </>
+  );
+}
+
 function WorldHud() {
   const { demands, jobs, myRoom } = useStore();
   const presences = useStore((s) => s.presences);
@@ -199,6 +224,12 @@ function MiniMap() {
       {agents.map((a) => <circle key={a.id} cx={DESKS[a.room].x} cy={DESKS[a.room].z} r={0.6} fill={a.color} />)}
       {Object.values(presences).map((p) => <circle key={p.userId} cx={p.pos.x} cy={p.pos.z} r={0.7} fill={p.color} />)}
       <circle cx={player.x} cy={player.z} r={0.9} fill={user?.color} stroke="var(--foreground)" strokeWidth={0.3} />
+      {!cam.follow && (
+        <g className="mm-view">
+          <circle cx={cam.cx} cy={cam.cz} r={2.2} />
+          <path d={`M${cam.cx - 3.4} ${cam.cz}h2M${cam.cx + 1.4} ${cam.cz}h2M${cam.cx} ${cam.cz - 3.4}v2M${cam.cx} ${cam.cz + 1.4}v2`} />
+        </g>
+      )}
     </svg>
   );
 }

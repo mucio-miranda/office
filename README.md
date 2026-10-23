@@ -213,6 +213,8 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 |---|---|
 | `W A S D` / setas | andar (Shift corre) |
 | clique no chão | ir até lá |
+| `Espaço` + arrastar | **modo drone**: sobrevoa o escritório sem mover o personagem (o botão do meio do mouse também arrasta) |
+| `Esc` | volta a câmera para você (ou fecha o painel) |
 | `E` | interagir com o que está perto |
 | `1`–`7` | teletransportar para uma sala |
 | `B` `C` `F` `V` `G` `H` | demandas · calendário · financeiro · vídeo · equipe · atividade |

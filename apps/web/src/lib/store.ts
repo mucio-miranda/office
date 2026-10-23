@@ -37,6 +37,11 @@ interface State {
   teleport: Vec2 | null;
   myRoom: RoomId | null;
   toast: string | null;
+  /** Espaço segurado: modo drone (arrastar a câmera). */
+  drone: boolean;
+  droneDragging: boolean;
+  /** Câmera solta, longe do jogador (mostra "Voltar para mim"). */
+  camDetached: boolean;
 
   boot(): Promise<void>;
   login(name: string, pin?: string): Promise<void>;
@@ -58,6 +63,7 @@ export const useStore = create<State>((set, get) => ({
   demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], renders: {},
   presences: {}, chat: [], emotes: {},
   panel: null, panelArg: null, teleport: null, myRoom: 'recepcao', toast: null,
+  drone: false, droneDragging: false, camDetached: false,
 
   async boot() {
     if (!getToken()) return;

@@ -10,7 +10,7 @@ import { createServer } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import path from 'node:path';
 
-const DEFAULT_PORT = 4747;
+const DEFAULT_PORT = Number(process.env.PORT ?? 4747);
 const isDev = !app.isPackaged;
 /** Pasta com server.mjs, web/, agents/ e assets/ (gerada por scripts/build.mjs). */
 const RES = isDev ? path.join(__dirname) : path.join(process.resourcesPath, 'office');
