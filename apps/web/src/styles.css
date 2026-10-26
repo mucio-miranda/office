@@ -534,3 +534,18 @@ button.icon.tiny { width: 22px; height: 22px; }
 .nametag.desk small { font-size: 10px; }
 .nametag.desk.away { opacity: .6; }
 .mm-desk { opacity: .55; pointer-events: none; }
+
+/* tour guiado */
+.tour { position: absolute; left: 50%; bottom: 20px; transform: translateX(-50%); width: min(460px, calc(100% - 32px)); z-index: 30; background: var(--background); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); padding: 14px 16px 12px; display: flex; flex-direction: column; gap: 8px; animation: tour-in .25s ease-out; }
+@keyframes tour-in { from { opacity: 0; transform: translate(-50%, 8px); } }
+.tour-head { display: flex; align-items: center; gap: 10px; font-size: 14px; }
+.tour-head .avatar { width: 26px; height: 26px; flex: none; }
+.tour-body { font-size: 13px; line-height: 1.55; color: var(--muted-foreground); }
+.tour-body b { color: var(--foreground); }
+.tour-body kbd { font-size: 10px; padding: 1px 5px; margin: 0 1px; }
+.tour-keys { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.tour-foot { display: flex; align-items: center; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.tour-dots { display: inline-flex; gap: 4px; }
+.tour-dots i { width: 6px; height: 6px; border-radius: 99px; background: var(--border); transition: width .2s; }
+.tour-dots i.on { width: 16px; background: var(--foreground); }
+@media (max-width: 960px) { .tour { bottom: 12px; } }

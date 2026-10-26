@@ -44,6 +44,8 @@ interface State {
   droneDragging: boolean;
   /** Câmera solta, longe do jogador (mostra "Voltar para mim"). */
   camDetached: boolean;
+  /** Passo do tour guiado (null = fechado). */
+  tour: number | null;
 
   boot(): Promise<void>;
   login(name: string, pin?: string): Promise<void>;
@@ -67,7 +69,7 @@ export const useStore = create<State>((set, get) => ({
   demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], renders: {},
   presences: {}, chat: [], emotes: {},
   panel: null, panelArg: null, teleport: null, myRoom: 'recepcao', toast: null,
-  drone: false, droneDragging: false, camDetached: false,
+  drone: false, droneDragging: false, camDetached: false, tour: null,
 
   async boot() {
     if (!getToken()) return;
@@ -107,7 +109,7 @@ export const useStore = create<State>((set, get) => ({
     ws?.close();
     ws = null;
     try { localStorage.removeItem('office.last'); } catch { /* ok */ }
-    set({ office: null, panel: null });
+    set({ office: null, panel: null, tour: null });
   },
 
   async reload(what) {

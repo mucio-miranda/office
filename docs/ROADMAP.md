@@ -28,8 +28,8 @@ Cada etapa sai como um release próprio, testado, e o app instalado se atualiza 
    funcionário; lista de quem está online; aviso quando alguém entra; mini-mapa flutuando sobre as páginas
 2. ✅ **Mesa própria (v0.2.5)**: cada pessoa escolhe uma mesa no espaço aberto, "Ir para minha mesa" (`M`),
    o nome e o status ficam na mesa quando você está longe ou ausente
-3. **Tour guiado (v0.2.6)**: no primeiro acesso a Rafa apresenta o escritório, as salas, os atalhos e como
-   delegar a primeira demanda
+3. ✅ **Tour guiado (v0.2.6)**: no primeiro acesso a Rafa apresenta o escritório, as salas, os atalhos e como
+   delegar a primeira demanda (refaça pelo `Ctrl+K` → "Tour do escritório")
 4. **Ferramentas criativas por funcionário (v0.3.0)**: servidores MCP por agente, com PhotoCraft/VectorCraft
    (Duda), FilmCraft (Vic) e OfficeCLI (Theo e Rafa), configurados e testados com tarefas reais
 5. **Estúdio de vídeo turbinado (v0.3.1)**: transcrição com Whisper gerando legendas na timeline, prévia rápida

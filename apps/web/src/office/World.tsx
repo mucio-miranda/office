@@ -34,6 +34,9 @@ export const cam = {
   justDragged: false,
 };
 
+/** Farol pulsando no chão (o tour aponta para onde está falando). */
+export const beacon = { on: false, x: 0, z: 0 };
+
 /** Inclinação da câmera: altura 1.15 × distância horizontal (usada para converter pixels em metros). */
 const SIN_ELEV = 1.15 / Math.hypot(1, 1.15);
 
@@ -333,6 +336,27 @@ function DeskMarkers() {
   );
 }
 
+function Beacon({ p }: { p: ScenePalette }) {
+  const ref = useRef<THREE.Mesh>(null);
+  const mat = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame(({ clock }) => {
+    const m = ref.current;
+    if (!m) return;
+    m.visible = beacon.on;
+    if (!beacon.on) return;
+    const t = (clock.elapsedTime % 1.6) / 1.6;
+    m.position.set(beacon.x, 0.02, beacon.z);
+    m.scale.setScalar(0.6 + t * 1.6);
+    mat.current!.opacity = 0.7 * (1 - t);
+  });
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} visible={false} raycast={() => null}>
+      <ringGeometry args={[0.9, 1.05, 48]} />
+      <meshBasicMaterial ref={mat} color={p.screen} transparent depthWrite={false} />
+    </mesh>
+  );
+}
+
 function Floor({ p }: { p: ScenePalette }) {
   const walk = (e: any) => {
     e.stopPropagation();
@@ -466,6 +490,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; player.target = freeSpotNear({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}
       <DeskMarkers />
+      <Beacon p={p} />
       {agents.map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
       {Object.values(presences).map((pr) => <Remote key={pr.userId} pr={pr} p={p} />)}
       {ready && <Player onNearby={onNearby} p={p} active={active} />}

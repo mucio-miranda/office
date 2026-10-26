@@ -19,7 +19,11 @@ export function Demands() {
   const [over, setOver] = useState<DemandStatus | null>(null);
   const [, tick] = useState(0);
   useEffect(() => { const id = setInterval(() => tick((x) => x + 1), 1000); return () => clearInterval(id); }, []);
-  useEffect(() => { if (panelArg) setEditing(demands.find((d) => d.id === panelArg) ?? null); }, [panelArg]);
+  useEffect(() => {
+    // 'nova' abre o formulário de demanda em branco (fim do tour)
+    if (panelArg === 'nova') setEditing({ status: 'a_fazer', kind: 'video', priority: 'media' });
+    else if (panelArg) setEditing(demands.find((d) => d.id === panelArg) ?? null);
+  }, [panelArg]);
 
   const base = `/api/offices/${office!.id}/demands`;
   const move = (id: string, status: DemandStatus) => api(`${base}/${id}`, { method: 'PATCH', body: { status } });

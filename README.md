@@ -51,6 +51,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - Minimapa clicável, chat geral ou da sala, status (🎧 foco, ⛔ ocupado, 💤 ausente) e emotes
 - **Ir até**: um clique no aviso, no mapa, na lista de quem está online ou no `Ctrl+K` leva você até a pessoa ou o funcionário que chamou
 - **Mesa própria**: chegue perto de uma mesa livre e aperte **E**; **M** leva você de volta a ela, você entra no escritório já sentado e, quando sai, a plaquinha mostra que está fora
+- **Tour guiado**: no primeiro acesso a gerente (Rafa) apresenta as salas, a equipe de IA, a sua mesa, os atalhos e como delegar a primeira demanda; refaça quando quiser pelo `Ctrl+K` → "Tour do escritório"
 - **Mini-mapa ao vivo** flutuando sobre as páginas: você vê o escritório enquanto trabalha nas demandas
 - Chegue perto de um móvel e aperte **E**: o quadro abre as demandas, o cofre abre o financeiro e a TV abre o estúdio de vídeo
 
@@ -279,7 +280,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Visual minimalista (estilo Paperclip) e seletor de pastas navegável
 - [x] App de Windows, modo drone, "Ir até" e mini-mapa ao vivo
 - [x] Mesa própria por pessoa
-- [ ] Tour guiado no primeiro acesso
+- [x] Tour guiado no primeiro acesso
 - [ ] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Whisper no estúdio (legenda automática) e exportação para CapCut/Premiere

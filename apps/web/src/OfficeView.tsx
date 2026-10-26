@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
-  LocateFixed, Navigation, Map as MapIcon, Minus, Armchair,
+  LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
+import { Tour, startTour, tourSeen } from './office/Tour';
 import { DESKS, HUMAN_DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
 import { ThemeToggle } from './lib/ui';
@@ -37,6 +38,16 @@ export function OfficeView() {
   const flush = panel === 'agente' || panel === 'video';
   const [peek, setPeek] = useState(false);
   const droneDragging = useStore((s) => s.droneDragging);
+  const touring = useStore((s) => s.tour !== null);
+  const ready = useStore((s) => s.agents.length > 0);
+
+  // primeiro acesso: a gerente apresenta o escritório
+  useEffect(() => {
+    const uid = useStore.getState().user?.id;
+    if (!ready || !uid || tourSeen(uid)) return;
+    const t = setTimeout(startTour, 900);
+    return () => clearTimeout(t);
+  }, [ready]);
 
   // app de Windows: clicar numa notificação abre o painel certo; a bandeja mostra quantos esperam aprovação
   useEffect(() => desktop?.onNavigate((to) => open(to.panel as PanelId, to.arg)), [open]);
@@ -44,6 +55,8 @@ export function OfficeView() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      // tecla já tratada (ex.: Enter que escolheu um item da busca)
+      if (e.defaultPrevented) return;
       const el = document.activeElement as HTMLElement | null;
       const typing = el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setPalette((p) => !p); return; }
@@ -89,9 +102,10 @@ export function OfficeView() {
                 <WorldHud />
                 <MiniMap />
                 <Chat inputRef={chatRef} />
-                {nearby && !drone && <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>}
+                {nearby && !drone && !touring && <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>}
                 <DroneOverlay />
-                <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · <kbd>M</kbd> minha mesa · 1–7 salas · roda: zoom</div>
+                <Tour />
+                {!touring && <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · <kbd>M</kbd> minha mesa · 1–7 salas · roda: zoom</div>}
               </>
             )}
           </div>
@@ -360,6 +374,7 @@ function Palette({ onClose }: { onClose: () => void }) {
     const all: { icon: typeof Box; label: string; hint: string; run: () => void }[] = [
       ...NAV.map((d) => ({ icon: d.icon, label: d.label, hint: d.key, run: () => open(d.id) })),
       { icon: Armchair, label: 'Ir para minha mesa', hint: 'M', run: goToMyDesk },
+      { icon: Compass, label: 'Tour do escritório', hint: 'ajuda', run: startTour },
       ...(myDesk() ? [{ icon: Armchair, label: 'Liberar minha mesa', hint: 'mesa', run: () => { releaseMyDesk(); } }] : []),
       ...members.filter((m) => m.desk && m.id !== user?.id && !presences[m.id]).map((m) => {
         const d = HUMAN_DESKS.find((h) => h.id === m.desk)!;
@@ -382,7 +397,7 @@ function Palette({ onClose }: { onClose: () => void }) {
           onKeyDown={(e) => {
             if (e.key === 'ArrowDown') { e.preventDefault(); setSel((s) => Math.min(items.length - 1, s + 1)); }
             if (e.key === 'ArrowUp') { e.preventDefault(); setSel((s) => Math.max(0, s - 1)); }
-            if (e.key === 'Enter' && items[sel]) { items[sel].run(); onClose(); }
+            if (e.key === 'Enter' && items[sel]) { e.preventDefault(); items[sel].run(); onClose(); }
           }} />
         <div className="palette-list">
           {items.map((it, i) => (
