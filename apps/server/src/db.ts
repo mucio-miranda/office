@@ -62,6 +62,8 @@ const MIGRATIONS: string[] = [
   // v0.2.5: mesa própria por pessoa (uma mesa tem um dono só por escritório)
   `ALTER TABLE office_members ADD COLUMN desk TEXT;
    CREATE UNIQUE INDEX office_members_desk ON office_members(office_id, desk) WHERE desk IS NOT NULL;`,
+  // v0.3.0: ferramentas criativas (servidores MCP) por funcionário
+  `ALTER TABLE agents ADD COLUMN mcp TEXT NOT NULL DEFAULT '[]';`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -85,7 +87,7 @@ const camel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
-const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'json']);
+const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'json']);
 const BOOL_COLS = new Set(['paid']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {

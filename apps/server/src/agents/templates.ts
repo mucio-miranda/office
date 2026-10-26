@@ -12,6 +12,7 @@ export interface AgentTemplate {
   skills: string[];
   tools: string[];
   allowedTools: string[];
+  mcp: string[];
   persona: string;
 }
 
@@ -49,6 +50,7 @@ export function loadTemplates(dir = config.agentTemplatesDir): AgentTemplate[] {
         skills: (data.skills as string[]) ?? [],
         tools: (data.tools as string[]) ?? [],
         allowedTools: (data.allowedTools as string[]) ?? ['Read', 'Glob', 'Grep'],
+        mcp: (data.mcp as string[]) ?? [],
         persona: body,
       };
     });

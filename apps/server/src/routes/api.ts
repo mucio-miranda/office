@@ -13,6 +13,7 @@ import { checkPin, createSession, hashPin, membership, requireMember, requireUse
 import { invalidate, onlineUsers } from '../realtime.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
+import { installTool, listTools } from '../agents/tools.ts';
 import { renderTimeline } from '../video/service.ts';
 import { probe } from '@office/video-engine';
 
@@ -43,6 +44,11 @@ export function syncAgentTools() {
     if (!t) continue;
     const merged = [...new Set([...a.allowedTools, ...t.allowedTools])];
     if (merged.length !== a.allowedTools.length) update('agents', a.id, { allowedTools: merged });
+    // ferramentas MCP novas do modelo entram uma vez; as que a pessoa desligou ficam como `!id` e não voltam
+    const labels = [...t.tools, ...a.tools.filter((x) => !t.tools.includes(x))];
+    if (labels.join('|') !== a.tools.join('|')) update('agents', a.id, { tools: labels });
+    const missing = t.mcp.filter((id) => !a.mcp.includes(id) && !a.mcp.includes(`!${id}`));
+    if (missing.length) update('agents', a.id, { mcp: [...a.mcp, ...missing] });
   }
 }
 
@@ -321,12 +327,31 @@ export async function api(app: FastifyInstance) {
 
     r.patch('/api/offices/:officeId/agents/:id', async (req, reply) => {
       if (!requireMember(req, reply)) return;
-      const b = body(z.object({ name: z.string().optional(), role: z.string().optional(), persona: z.string().optional(), color: z.string().optional(), allowedTools: z.array(z.string()).optional(), skills: z.array(z.string()).optional() }), req, reply);
+      const b = body(z.object({ name: z.string().optional(), role: z.string().optional(), persona: z.string().optional(), color: z.string().optional(), allowedTools: z.array(z.string()).optional(), skills: z.array(z.string()).optional(), mcp: z.array(z.string().regex(/^!?[a-z0-9-]+$/)).optional() }), req, reply);
       if (!b) return;
       const { officeId, id } = req.params as any;
       update('agents', id, b);
       invalidate(officeId, 'agents');
       return { ok: true };
+    });
+
+    // ---------------- ferramentas criativas (MCP) ----------------
+    r.get('/api/offices/:officeId/tools', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return listTools();
+    });
+
+    // baixa o release oficial e confere o SHA256; só o dono do escritório instala programas nesta máquina
+    r.post('/api/offices/:officeId/tools/:id/install', async (req, reply) => {
+      const { officeId, id } = req.params as any;
+      if (membership(officeId, req.user.id)?.role !== 'dono') return reply.code(403).send({ error: 'Só o dono do escritório instala ferramentas.' });
+      try {
+        const tool = await installTool(id);
+        logActivity(officeId, `user:${req.user.id}`, 'instalou', `${tool.name} ${tool.version ?? ''}`.trim());
+        return tool;
+      } catch (e) {
+        return reply.code(400).send({ error: (e as Error).message });
+      }
     });
 
     r.get('/api/offices/:officeId/jobs', async (req, reply) => {

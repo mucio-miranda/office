@@ -549,3 +549,14 @@ button.icon.tiny { width: 22px; height: 22px; }
 .tour-dots i { width: 6px; height: 6px; border-radius: 99px; background: var(--border); transition: width .2s; }
 .tour-dots i.on { width: 16px; background: var(--foreground); }
 @media (max-width: 960px) { .tour { bottom: 12px; } }
+
+/* ferramentas criativas */
+.tool-row { display: flex; gap: 16px; align-items: flex-start; padding: 10px 0; border-top: 1px solid var(--border); }
+.tool-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.tool-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
+.ghost-link { display: inline-flex; align-items: center; gap: 5px; color: var(--muted-foreground); text-decoration: none; font-size: 12px; }
+.ghost-link:hover { color: var(--foreground); }
+.agent-tools { display: flex; flex-direction: column; gap: 4px; }
+.agent-tools .check { display: flex; align-items: center; gap: 8px; }
+.agent-tools .check button.link { font-size: 12px; }
+@media (max-width: 640px) { .tool-row { flex-direction: column; } .tool-side { align-items: flex-start; flex-direction: row; } }

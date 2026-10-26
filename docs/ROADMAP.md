@@ -30,8 +30,9 @@ Cada etapa sai como um release próprio, testado, e o app instalado se atualiza 
    o nome e o status ficam na mesa quando você está longe ou ausente
 3. ✅ **Tour guiado (v0.2.6)**: no primeiro acesso a Rafa apresenta o escritório, as salas, os atalhos e como
    delegar a primeira demanda (refaça pelo `Ctrl+K` → "Tour do escritório")
-4. **Ferramentas criativas por funcionário (v0.3.0)**: servidores MCP por agente, com PhotoCraft/VectorCraft
-   (Duda), FilmCraft (Vic) e OfficeCLI (Theo e Rafa), configurados e testados com tarefas reais
+4. ✅ **Ferramentas criativas por funcionário (v0.3.0)**: servidores MCP por agente, com PhotoCraft/VectorCraft
+   (Duda), FilmCraft (Vic) e OfficeCLI (Theo e Rafa), configurados e testados com tarefas reais (arte PNG/PSD,
+   ícone SVG, vídeo 1080x1920, proposta DOCX e planilha XLSX); instalação com um clique e SHA256 conferido
 5. **Estúdio de vídeo turbinado (v0.3.1)**: transcrição com Whisper gerando legendas na timeline, prévia rápida
    em baixa resolução e exportação para CapCut (`draft_content.json`) e Premiere (XML)
 6. **Vida no escritório (v0.3.2)**: sons à moda do Gather, o gerente aplica direto as demandas que sugere

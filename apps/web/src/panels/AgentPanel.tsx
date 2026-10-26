@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { desktop } from '../lib/desktop';
 import { goToAgent } from '../office/World';
+import { AgentTools } from './Tools';
 
 const STATUS_LABEL: Record<AgentJob['status'], string> = {
   fila: 'na fila', rodando: 'trabalhando', aguardando: 'esperando você', concluido: 'concluído', erro: 'erro', cancelado: 'cancelado',
@@ -72,6 +73,7 @@ export function AgentPanel() {
           </div>
           <div className="chips">{agent.skills.map((s) => <span key={s} className="badge">{s}</span>)}</div>
           <div className="chips">{agent.tools.map((s) => <span key={s} className="badge outline">{s}</span>)}</div>
+          <AgentTools agent={agent} />
           <button className="ghost small" onClick={() => goToAgent(agent)}><Navigation size={13} /> Ir até a mesa de {agent.name}</button>
         </div>
         <div className="job-list">

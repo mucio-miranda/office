@@ -6,6 +6,7 @@ import { PathField, PathList } from '../lib/PathPicker';
 import { desktop } from '../lib/desktop';
 import { FolderOpen } from 'lucide-react';
 import { HUMAN_DESKS, ROOMS } from '../office/layout';
+import { ToolsCard } from './Tools';
 
 /** "mesa na Redação" (ou "sem mesa"). */
 function deskLabel(desk: string | null) {
@@ -61,6 +62,8 @@ export function Team() {
           }}>Salvar pastas</button>
         </div>
       </section>
+
+      <ToolsCard />
 
       <section>
         <div className="section-label" style={{ padding: 0, marginBottom: 4 }}>Pessoas</div>

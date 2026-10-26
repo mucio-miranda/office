@@ -4,6 +4,8 @@ Cada arquivo `.md` aqui é um **modelo de funcionário**. Quando você cria um e
 modelos para o banco do escritório, e cada um vira um avatar sentado na sua sala.
 
 - O **frontmatter** define nome, cargo, sala, cor, skills, ferramentas e permissões (`allowedTools`).
+- `mcp` lista as **ferramentas criativas** do funcionário (`photocraft`, `vectorcraft`, `filmcraft`, `officecli`):
+  quando estão instaladas, cada tarefa sobe esses servidores MCP com as pastas do escritório.
 - O **corpo** é a persona: o jeito de trabalhar, que entra como prompt de sistema do Claude Code.
 - Os funcionários rodam com `claude -p` (headless) **dentro da pasta raiz do escritório**, então também
   seguem o `CLAUDE.md` e as skills de `.claude/skills` dessa pasta.

@@ -118,7 +118,24 @@ export interface AgentProfile {
   tools: string[];
   persona: string;
   allowedTools: string[];
+  /** Ferramentas criativas (servidores MCP) deste funcionário: ids do catálogo; `!id` = desligada pela equipe. */
+  mcp: string[];
   status: AgentStatus;
+}
+
+/** Ferramenta criativa com servidor MCP (PhotoCraft, VectorCraft, FilmCraft, OfficeCLI). */
+export interface ToolInfo {
+  id: string;
+  name: string;
+  /** O programa comercial que ela substitui. */
+  replaces: string;
+  summary: string;
+  url: string;
+  installed: boolean;
+  path: string | null;
+  version: string | null;
+  /** Instalação automática pelo Office (hoje só no Windows). */
+  canInstall: boolean;
 }
 
 export type JobStatus = 'fila' | 'rodando' | 'aguardando' | 'concluido' | 'erro' | 'cancelado';

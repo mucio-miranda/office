@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, Member, Office, Presence, RoomId, ServerMsg, Transaction, User, Vec2,
+  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, Member, Office, Presence, RoomId, ServerMsg, ToolInfo, Transaction, User, Vec2,
 } from '@office/shared';
 import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
@@ -27,6 +27,8 @@ interface State {
   jobs: AgentJob[];
   messages: Record<string, JobMessage[]>;
   timelines: any[];
+  /** Ferramentas criativas (MCP) desta máquina. */
+  tools: ToolInfo[];
   renders: Record<string, RenderState>;
 
   presences: Record<string, Presence>;
@@ -53,6 +55,9 @@ interface State {
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
   reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members'): Promise<void>;
+  loadTools(): Promise<void>;
+  /** Liga ou desliga uma ferramenta de um funcionário. */
+  toggleAgentTool(agentId: string, toolId: string, on: boolean): Promise<void>;
   /** Escolhe (ou libera, com null) a sua mesa. */
   claimDesk(desk: string | null): Promise<boolean>;
   loadMessages(jobId: string): Promise<void>;
@@ -66,7 +71,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
-  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], renders: {},
+  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], renders: {},
   presences: {}, chat: [], emotes: {},
   panel: null, panelArg: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
@@ -117,6 +122,20 @@ export const useStore = create<State>((set, get) => ({
     if (!o) return;
     const data = await api(`/api/offices/${o.id}/${what}`);
     set({ [what]: data } as Partial<State>);
+  },
+
+  async loadTools() {
+    const o = get().office;
+    if (o) set({ tools: await api(`/api/offices/${o.id}/tools`) });
+  },
+
+  async toggleAgentTool(agentId, toolId, on) {
+    const o = get().office;
+    const a = get().agents.find((x) => x.id === agentId);
+    if (!o || !a) return;
+    const mcp = [...a.mcp.filter((x) => x !== toolId && x !== `!${toolId}`), on ? toolId : `!${toolId}`];
+    await api(`/api/offices/${o.id}/agents/${agentId}`, { method: 'PATCH', body: { mcp } });
+    await get().reload('agents');
   },
 
   async claimDesk(desk) {

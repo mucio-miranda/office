@@ -64,6 +64,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - O avatar digita ⌨️ enquanto trabalha e **levanta a mão ✋** quando precisa de aprovação
 - Você responde pelo chat e ele **continua a mesma sessão**
 - Comandos destrutivos ficam **sempre bloqueados**, e o custo de cada tarefa aparece em US$
+- **Ferramentas criativas por MCP**: a Duda usa o PhotoCraft e o VectorCraft, a Vic usa o FilmCraft e o Theo e a Rafa usam o OfficeCLI, sempre presos às pastas do escritório
 
 </td>
 </tr>
@@ -171,6 +172,24 @@ sequenceDiagram
 
 Os funcionários são **arquivos Markdown** em [`agents/`](agents/). Para criar um novo (social media, tráfego pago,
 roteirista, atendimento...), copie um arquivo, escreva a persona e liste as skills e as ferramentas permitidas.
+
+### 🧰 Ferramentas criativas (MCP)
+
+Programas open source que os funcionários operam sem interface, cada um pelo seu servidor MCP:
+
+| Ferramenta | No lugar do | Quem usa | O que faz |
+|---|---|---|---|
+| [PhotoCraft](https://github.com/storytold/photocraft) | Photoshop | Duda | Imagens e PSD com camadas, máscaras, ajustes e exportação |
+| [VectorCraft](https://github.com/storytold/vectorcraft) | Illustrator | Duda | SVG, PDF e `.ai`: logos, ícones e layouts |
+| [FilmCraft](https://github.com/storytold/filmcraft) | Premiere | Vic | Projeto de vídeo por comandos: sequência, títulos e exportação |
+| [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) | Word, Excel e PowerPoint | Theo e Rafa | Cria e edita DOCX, XLSX e PPTX |
+
+- Em **Equipe → Ferramentas criativas** o dono do escritório vê o que está instalado e clica em **Instalar**: o Office baixa o
+  release oficial do GitHub, **confere o SHA256 publicado** e guarda em `%LOCALAPPDATA%\Office\tools\<ferramenta>\<versão>`
+  (outras plataformas: `~/.office/tools`, ou qualquer pasta no `PATH`; `OFFICE_TOOLS_DIR` muda o lugar).
+- Cada tarefa sobe só os servidores do funcionário (`--mcp-config`), com leitura nas pastas do escritório e gravação **só
+  na pasta raiz** (PhotoCraft e VectorCraft). Nada é registrado na configuração global do Claude Code.
+- No painel do funcionário dá para **ligar e desligar** cada ferramenta. No modelo `.md`, a lista fica em `mcp: [...]`.
 
 ## 🖥️ App de Windows
 
@@ -281,7 +300,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] App de Windows, modo drone, "Ir até" e mini-mapa ao vivo
 - [x] Mesa própria por pessoa
 - [x] Tour guiado no primeiro acesso
-- [ ] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
+- [x] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Whisper no estúdio (legenda automática) e exportação para CapCut/Premiere
 - [ ] Voz e vídeo por proximidade

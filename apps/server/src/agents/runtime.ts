@@ -6,6 +6,7 @@ import { config } from '../config.ts';
 import { all, insert, now, one, update, logActivity } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { houseRules } from './templates.ts';
+import { mcpConfig } from './tools.ts';
 
 /**
  * Cada funcionário de IA é uma sessão do Claude Code em modo headless (`claude -p`),
@@ -27,7 +28,7 @@ const queue: { jobId: string; input: string; resume: boolean }[] = [];
 
 const RENDER_CMD = config.renderCmd;
 
-function systemPrompt(agent: AgentProfile, office: Office) {
+function systemPrompt(agent: AgentProfile, office: Office, toolHints: string[]) {
   const fill = (s: string) =>
     s
       .replaceAll('{{OFFICE_NAME}}', office.name)
@@ -35,7 +36,10 @@ function systemPrompt(agent: AgentProfile, office: Office) {
       .replaceAll('{{OFFICE_RENDER}}', RENDER_CMD)
       .replaceAll('{{APPROVAL_MARKER}}', APPROVAL_MARKER)
       .replaceAll('{{TODAY}}', new Date().toLocaleDateString('pt-BR'));
-  return `${fill(agent.persona)}\n\n${fill(houseRules())}\n\nSkills que você domina: ${agent.skills.join(', ') || 'nenhuma específica'}.`;
+  const tools = toolHints.length
+    ? `\n\n## Suas ferramentas criativas (MCP)\n${toolHints.join('\n')}\nCada servidor lista os próprios comandos (\`command_list\` ou equivalente): consulte antes de usar.`
+    : '';
+  return `${fill(agent.persona)}\n\n${fill(houseRules())}\n\nSkills que você domina: ${agent.skills.join(', ') || 'nenhuma específica'}.${tools}`;
 }
 
 function addMessage(jobId: string, officeId: string, role: JobMessage['role'], text: string) {
@@ -64,6 +68,12 @@ function describeTool(name: string, input: Record<string, unknown>) {
   if (name === 'Skill') return `Usando a skill ${s(input.skill)}`;
   if (name === 'Glob' || name === 'Grep') return `${name}: ${s(input.pattern)}`;
   if (name === 'WebSearch') return `Pesquisando: ${s(input.query)}`;
+  // mcp__photocraft__command_run → "photocraft · command_run layer.new"
+  const m = name.match(/^mcp__([^_]+(?:_[^_]+)*)__(.+)$/);
+  if (m) {
+    const detail = input.id ?? input.command ?? input.path ?? input.file ?? '';
+    return `${m[1]} · ${m[2]}${detail ? ` ${s(detail)}` : ''}`;
+  }
   return name;
 }
 
@@ -114,16 +124,24 @@ function start(jobId: string, input: string, resume: boolean) {
 
   const dir = path.join(config.dataDir, 'jobs', jobId);
   mkdirSync(dir, { recursive: true });
+  // ferramentas criativas instaladas: um servidor MCP por ferramenta, com as pastas do escritório
+  const mcp = mcpConfig(agent.mcp ?? [], office);
+  const mcpIds = Object.keys(mcp.servers);
   const sysFile = path.join(dir, 'system.md');
-  writeFileSync(sysFile, systemPrompt(agent, office), 'utf8');
+  writeFileSync(sysFile, systemPrompt(agent, office, mcp.hints), 'utf8');
 
   const args = [
     '-p', '--output-format', 'stream-json', '--verbose',
     '--append-system-prompt-file', sysFile,
     '--permission-mode', 'acceptEdits',
-    '--allowedTools', ...agent.allowedTools,
+    '--allowedTools', ...agent.allowedTools, ...mcpIds.map((id) => `mcp__${id}`),
     '--disallowedTools', ...ALWAYS_DENIED,
   ];
+  if (mcpIds.length) {
+    const mcpFile = path.join(dir, 'mcp.json');
+    writeFileSync(mcpFile, JSON.stringify({ mcpServers: mcp.servers }, null, 2), 'utf8');
+    args.push('--mcp-config', mcpFile);
+  }
   for (const d of office.extraDirs) args.push('--add-dir', d);
   if (resume && job.sessionId) args.push('--resume', job.sessionId);
 
