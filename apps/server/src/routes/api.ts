@@ -15,8 +15,8 @@ import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
-import { renderTimeline } from '../video/service.ts';
-import { probe } from '@office/video-engine';
+import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
+import { EXPORT_FORMATS, probe } from '@office/video-engine';
 
 const COLORS = ['#ff5c8a', '#7c5cff', '#22c3a6', '#ffb020', '#3fa7ff', '#ff7a45', '#9be15d', '#e056fd'];
 const pick = () => COLORS[Math.floor(Math.random() * COLORS.length)];
@@ -517,6 +517,47 @@ export async function api(app: FastifyInstance) {
       }
     });
 
+    r.post('/api/offices/:officeId/timelines/:id/preview', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      try {
+        return previewTimeline(officeId, id);
+      } catch (e) {
+        return reply.code(400).send({ error: (e as Error).message });
+      }
+    });
+
+    r.get('/api/offices/:officeId/timelines/:id/preview', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const file = previewFile(id);
+      if (!one('SELECT id FROM timelines WHERE id = ? AND office_id = ?', id, officeId) || !existsSync(file)) return reply.code(404).send({ error: 'Sem prévia' });
+      return sendMedia(req, reply, file);
+    });
+
+    // legendas com o Whisper: em CPU leva por volta de duas vezes a duração da fala
+    r.post('/api/offices/:officeId/timelines/:id/captions', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      try {
+        return await captionRow(officeId, id);
+      } catch (e) {
+        return reply.code(400).send({ error: (e as Error).message });
+      }
+    });
+
+    r.post('/api/offices/:officeId/timelines/:id/export', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const b = body(z.object({ format: z.enum(EXPORT_FORMATS) }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      try {
+        return await exportRow(officeId, id, b.format);
+      } catch (e) {
+        return reply.code(400).send({ error: (e as Error).message });
+      }
+    });
+
     // ---------------- arquivos (só dentro das pastas do escritório) ----------------
     const allowedRoots = (officeId: string) => {
       const o = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
@@ -544,19 +585,24 @@ export async function api(app: FastifyInstance) {
       if (!requireMember(req, reply)) return;
       const file = path.resolve((req.query as any).path ?? '');
       if (!inside((req.params as any).officeId, file) || !existsSync(file)) return reply.code(404).send({ error: 'Arquivo não encontrado' });
-      const size = statSync(file).size;
-      const ext = path.extname(file).toLowerCase();
-      const type = ({ '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' } as Record<string, string>)[ext] ?? 'application/octet-stream';
-      // suporte a Range para o <video> conseguir pular no tempo
-      const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/);
-      if (range) {
-        const start = range[1] ? Number(range[1]) : 0;
-        const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
-        reply.code(206).headers({ 'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': type });
-        return reply.send(createReadStream(file, { start, end }));
-      }
-      reply.headers({ 'Content-Length': size, 'Content-Type': type, 'Accept-Ranges': 'bytes' });
-      return reply.send(createReadStream(file));
+      return sendMedia(req, reply, file);
     });
   });
+}
+
+/** Envia um arquivo de mídia com suporte a Range, para o <video> conseguir pular no tempo. */
+function sendMedia(req: FastifyRequest, reply: FastifyReply, file: string) {
+  const size = statSync(file).size;
+  const ext = path.extname(file).toLowerCase();
+  const type = ({ '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' } as Record<string, string>)[ext] ?? 'application/octet-stream';
+  // suporte a Range para o <video> conseguir pular no tempo
+  const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/);
+  if (range) {
+    const start = range[1] ? Number(range[1]) : 0;
+    const end = range[2] ? Math.min(Number(range[2]), size - 1) : size - 1;
+    reply.code(206).headers({ 'Content-Range': `bytes ${start}-${end}/${size}`, 'Accept-Ranges': 'bytes', 'Content-Length': end - start + 1, 'Content-Type': type });
+    return reply.send(createReadStream(file, { start, end }));
+  }
+  reply.headers({ 'Content-Length': size, 'Content-Type': type, 'Accept-Ranges': 'bytes' });
+  return reply.send(createReadStream(file));
 }

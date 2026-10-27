@@ -579,5 +579,9 @@ button.icon.tiny { width: 22px; height: 22px; }
 .live-screen img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
 .live-screen .muted { color: #a3a3a3; }
 .live-error { padding: 6px 12px; }
+.studio-live { flex: 1; min-width: 0; padding: 16px; display: flex; flex-direction: column; }
+.live-mirror.big { flex: 1; display: flex; flex-direction: column; }
+.live-mirror.big .live-screen { flex: 1; max-height: none; aspect-ratio: auto; min-height: 0; }
+.export-select { width: auto; }
 @media (max-width: 640px) { .live-strip { padding: 8px 12px 0; } .live-head { flex-wrap: wrap; } .live-mirror.full { inset: 0; border-radius: 0; } }
 @media (max-width: 640px) { .tool-row { flex-direction: column; } .tool-side { align-items: flex-start; flex-direction: row; } }

@@ -1,9 +1,10 @@
 import { execFile, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import type { Office, ToolInfo } from '@office/shared';
+import { findWhisper } from '@office/video-engine';
 
 /**
  * Ferramentas criativas dos funcionários: programas com servidor MCP que o Claude Code de cada
@@ -170,15 +171,28 @@ function version(t: ToolDef, bin: string) {
 }
 
 export function listTools(): ToolInfo[] {
-  return CATALOG.map((t) => {
+  return CATALOG.map((t): ToolInfo => {
     const bin = locate(t);
     return {
       id: t.id, name: t.name, replaces: t.replaces, summary: t.summary, url: `https://github.com/${t.repo}`,
       installed: !!bin, path: bin, version: bin ? version(t, bin) : null,
       canInstall: process.platform === 'win32',
       live: !!t.live,
+      kind: 'mcp',
     };
-  });
+  }).concat(whisperInfo());
+}
+
+/** Whisper (whisper.cpp + modelo + Silero VAD): o estúdio de vídeo e o Vic usam para as legendas. */
+function whisperInfo(): ToolInfo {
+  const w = findWhisper();
+  return {
+    id: 'whisper', name: 'Whisper', replaces: 'legenda automática do CapCut', kind: 'programa', usedBy: 'Estúdio de vídeo e Vic',
+    summary: 'Transcrição local (whisper.cpp, modelo large-v3-turbo e Silero VAD): legendas automáticas com tempo por palavra.',
+    url: 'https://github.com/ggml-org/whisper.cpp', installed: !!w?.vad, path: w?.bin ?? null,
+    version: w ? path.basename(path.dirname(path.dirname(w.bin))).replace(/^v/, '') : null,
+    canInstall: process.platform === 'win32', live: false,
+  };
 }
 
 /** O app de janela de uma ferramenta com modo ao vivo (mesma pasta do CLI). */
@@ -228,6 +242,7 @@ const installing = new Set<string>();
  * toolsDir/<id>/<versão>. Versões antigas ficam onde estão (nada é apagado); vale a mais nova.
  */
 export async function installTool(id: string) {
+  if (id === 'whisper') return installWhisper();
   const t = CATALOG.find((c) => c.id === id);
   if (!t) throw new Error('Ferramenta desconhecida');
   if (process.platform !== 'win32') throw new Error(`Instale pelo site: https://github.com/${t.repo}/releases`);
@@ -266,6 +281,77 @@ export async function installTool(id: string) {
     return listTools().find((x) => x.id === id)!;
   } finally {
     installing.delete(id);
+  }
+}
+
+/** Baixa direto para o disco conferindo o SHA256 no caminho (o modelo tem ~550 MB). */
+async function download(url: string, file: string, sha256: string) {
+  const r = await fetch(url, { headers: { 'User-Agent': 'office-app' }, redirect: 'follow' });
+  if (!r.ok || !r.body) throw new Error(`Download falhou (${r.status}) em ${url}`);
+  mkdirSync(path.dirname(file), { recursive: true });
+  const part = file + '.part';
+  const hash = createHash('sha256');
+  const out = createWriteStream(part);
+  for await (const chunk of r.body as unknown as AsyncIterable<Uint8Array>) {
+    hash.update(chunk);
+    if (!out.write(chunk)) await new Promise<void>((ok) => out.once('drain', () => ok()));
+  }
+  await new Promise<void>((ok, fail) => out.end((e?: Error | null) => (e ? fail(e) : ok())));
+  if (hash.digest('hex') !== sha256.toLowerCase()) {
+    // só o arquivo parcial que este download criou
+    rmSync(part, { force: true });
+    throw new Error(`O SHA256 de ${path.basename(file)} não confere com o publicado. Nada foi instalado.`);
+  }
+  renameSync(part, file);
+}
+
+/** Arquivos de um repositório do Hugging Face com o SHA256 (LFS) de cada um. */
+async function hfFiles(repo: string) {
+  const r = await fetch(`https://huggingface.co/api/models/${repo}/tree/main`, { headers: { 'User-Agent': 'office-app' } });
+  if (!r.ok) throw new Error(`Hugging Face respondeu ${r.status} em ${repo}`);
+  return (await r.json() as { path: string; lfs?: { oid: string } }[]).filter((f) => f.lfs?.oid);
+}
+
+/**
+ * Whisper: o whisper-cli do release oficial do whisper.cpp (SHA256 que o GitHub publica no asset),
+ * o modelo large-v3-turbo q5_0 e o Silero VAD dos repositórios oficiais no Hugging Face.
+ */
+async function installWhisper() {
+  if (process.platform !== 'win32') throw new Error('Instale o whisper.cpp pelo site: https://github.com/ggml-org/whisper.cpp');
+  if (installing.has('whisper')) throw new Error('O Whisper já está sendo instalado.');
+  installing.add('whisper');
+  try {
+    const base = path.join(toolsDir, 'whisper');
+    const have = findWhisper();
+    if (!have) {
+      // os binários de Windows saem nos releases de build (bNNNN), ao lado das tags de versão
+      const rels = await (await gh('https://api.github.com/repos/ggml-org/whisper.cpp/releases?per_page=10')).json() as { tag_name: string; assets: { name: string; browser_download_url: string; digest?: string }[] }[];
+      const rel = rels.find((x) => x.assets.some((a) => a.name === 'whisper-bin-x64.zip' && a.digest));
+      const asset = rel?.assets.find((a) => a.name === 'whisper-bin-x64.zip');
+      if (!rel || !asset?.digest) throw new Error('Não achei um release do whisper.cpp com binário para Windows e SHA256.');
+      const zip = path.join(toolsDir, '_dl', asset.name);
+      await download(asset.browser_download_url, zip, asset.digest.replace(/^sha256:/, ''));
+      const dest = path.join(base, rel.tag_name.replace(/^v/, ''));
+      mkdirSync(dest, { recursive: true });
+      const tar = path.join(process.env.SystemRoot ?? 'C:/Windows', 'System32', 'tar.exe');
+      await new Promise<void>((ok, fail) => execFile(tar, ['-xf', zip, '-C', dest], { windowsHide: true }, (e) => (e ? fail(e) : ok())));
+      rmSync(zip, { force: true });
+    }
+    const models = path.join(base, 'models');
+    if (!findWhisper()?.model) {
+      const f = (await hfFiles('ggerganov/whisper.cpp')).find((x) => x.path === 'ggml-large-v3-turbo-q5_0.bin');
+      if (!f) throw new Error('O modelo large-v3-turbo não está mais no repositório oficial.');
+      await download(`https://huggingface.co/ggerganov/whisper.cpp/resolve/main/${f.path}`, path.join(models, f.path), f.lfs!.oid);
+    }
+    if (!findWhisper()?.vad) {
+      const vad = (await hfFiles('ggml-org/whisper-vad')).filter((x) => /^ggml-silero.*\.bin$/.test(x.path))
+        .sort((a, b) => b.path.localeCompare(a.path, undefined, { numeric: true }))[0];
+      if (!vad) throw new Error('Não achei o modelo do Silero VAD no repositório oficial.');
+      await download(`https://huggingface.co/ggml-org/whisper-vad/resolve/main/${vad.path}`, path.join(models, vad.path), vad.lfs!.oid);
+    }
+    return whisperInfo();
+  } finally {
+    installing.delete('whisper');
   }
 }
 

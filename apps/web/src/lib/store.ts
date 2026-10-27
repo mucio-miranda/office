@@ -32,6 +32,8 @@ interface State {
   /** Apps criativos abertos ao vivo na máquina do servidor. */
   live: LiveSession[];
   renders: Record<string, RenderState>;
+  /** Prévias rápidas por timeline (não mexem no status do render final). */
+  previews: Record<string, RenderState>;
 
   presences: Record<string, Presence>;
   chat: ChatLine[];
@@ -75,7 +77,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
-  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {},
+  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {},
   presences: {}, chat: [], emotes: {},
   panel: null, panelArg: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
@@ -263,6 +265,10 @@ function handle(m: ServerMsg) {
       }));
       break;
     case 'render':
+      if (m.preview) {
+        useStore.setState((st) => ({ previews: { ...st.previews, [m.timelineId]: { progress: m.progress, status: m.status, output: m.output, error: m.error } } }));
+        break;
+      }
       useStore.setState((st) => ({ renders: { ...st.renders, [m.timelineId]: { progress: m.progress, status: m.status, output: m.output, error: m.error } } }));
       if (m.status === 'concluido') {
         s.notify('Vídeo renderizado');

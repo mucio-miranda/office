@@ -4,7 +4,18 @@ import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import { BrowseDialog } from '../lib/PathPicker';
 import { desktop } from '../lib/desktop';
-import { Clapperboard, FileJson, Film, Image, Music, Plus, Type, X } from 'lucide-react';
+import { Captions, Clapperboard, FileJson, Film, Image, Music, Plus, Radio, Type, X, Zap } from 'lucide-react';
+import { LiveMirror } from './Tools';
+
+/** Formatos de exportação da engine (mesmos ids de EXPORT_FORMATS). */
+const EXPORTS = [
+  ['otio', 'OpenTimelineIO (Kdenlive, DaVinci)'],
+  ['fcp7', 'XML (Premiere, DaVinci)'],
+  ['mlt', 'Shotcut (MLT)'],
+  ['srt', 'Legendas SRT (CapCut)'],
+] as const;
+/** Apps que aparecem na ilha de edição. */
+const ISLAND_TOOLS = new Set(['filmcraft', 'effectcraft', 'soundcraft']);
 
 type TL = TimelineInput & { video: any[]; audio?: any[]; overlays?: any[]; captions?: any };
 type Sel = { lane: 'video' | 'audio' | 'captions' | 'overlays'; index: number } | null;
@@ -16,24 +27,37 @@ const rid = () => Math.random().toString(36).slice(2, 8);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export function VideoStudio() {
-  const { office, timelines } = useStore();
+  const { office, timelines, live, agents, panelArg } = useStore();
   const [openId, setOpenId] = useState<string | null>(timelines[0]?.id ?? null);
+  // a TV da ilha no mapa abre o estúdio já no app ao vivo (panelArg = live:<id>)
+  const [liveId, setLiveId] = useState<string | null>(panelArg?.startsWith('live:') ? panelArg.slice(5) : null);
+  useEffect(() => { if (panelArg?.startsWith('live:')) setLiveId(panelArg.slice(5)); }, [panelArg]);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const island = live.filter((s) => ISLAND_TOOLS.has(s.toolId) && s.status !== 'erro');
+  const watching = island.find((s) => s.id === liveId);
   return (
     <div className="studio">
       <aside className="studio-list">
         <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Nova timeline</button>
         <button className="ghost" onClick={() => setImporting(true)}><FileJson size={14} /> Importar timeline.json</button>
+        {island.length > 0 && <div className="section-label" style={{ marginTop: 12 }}>Na ilha agora</div>}
+        {island.map((s) => (
+          <button key={s.id} className={`tl-item ${s.id === liveId ? 'active' : ''}`} onClick={() => setLiveId(s.id)}>
+            <b className="row gap"><Radio size={13} /> {s.toolName}</b>
+            <small className={s.status === 'ativa' ? 'st-rodando' : 'st-aguardando'}><span className="status-dot" />{agents.find((a) => a.id === s.agentId)?.name} · {s.status === 'ativa' ? 'editando ao vivo' : s.status === 'abrindo' ? 'abrindo' : 'esperando revisão'}</small>
+          </button>
+        ))}
         <div className="section-label" style={{ marginTop: 12 }}>Timelines</div>
         {timelines.map((t) => (
-          <button key={t.id} className={`tl-item ${t.id === openId ? 'active' : ''}`} onClick={() => setOpenId(t.id)}>
+          <button key={t.id} className={`tl-item ${t.id === openId && !watching ? 'active' : ''}`} onClick={() => { setOpenId(t.id); setLiveId(null); }}>
             <b>{t.name}</b>
             <small className={`st-${t.renderStatus === 'concluido' ? 'concluido' : t.renderStatus === 'rodando' ? 'rodando' : t.renderStatus === 'erro' ? 'erro' : 'livre'}`}><span className="status-dot" />{t.renderStatus === 'concluido' ? 'renderizado' : t.renderStatus === 'rodando' ? 'renderizando' : t.renderStatus === 'erro' ? 'erro' : 'rascunho'}</small>
           </button>
         ))}
       </aside>
-      {openId ? <Editor key={openId} id={openId} /> : <div className="studio-empty"><div className="stack" style={{ alignItems: 'center' }}><Clapperboard size={28} /><span>Crie uma timeline ou importe o <code>timeline.json</code> que a Vic deixou na pasta do cliente.</span></div></div>}
+      {watching ? <div className="studio-live"><LiveMirror s={watching} big /></div>
+        : openId ? <Editor key={openId} id={openId} /> : <div className="studio-empty"><div className="stack" style={{ alignItems: 'center' }}><Clapperboard size={28} /><span>Crie uma timeline ou importe o <code>timeline.json</code> que a Vic deixou na pasta do cliente.</span></div></div>}
       {creating && (
         <NewTimeline onClose={() => setCreating(false)}
           onPick={async (dir, name) => {
@@ -55,8 +79,11 @@ export function VideoStudio() {
 }
 
 function Editor({ id }: { id: string }) {
-  const { office, renders } = useStore();
+  const { office, renders, previews, notify } = useStore();
   const base = `/api/offices/${office!.id}`;
+  const [captioning, setCaptioning] = useState(false);
+  const [showPreview, setShowPreview] = useState(0);
+  const preview = previews[id];
   const [row, setRow] = useState<any>(null);
   const [tl, setTl] = useState<TL | null>(null);
   const [sel, setSel] = useState<Sel>(null);
@@ -69,6 +96,8 @@ function Editor({ id }: { id: string }) {
   const render = renders[id];
 
   useEffect(() => { api(`${base}/timelines/${id}`).then((r) => { setRow(r); setTl(r.json); }); }, [id, base]);
+  // quando a prévia termina, ela entra no lugar do player
+  useEffect(() => { if (preview?.status === 'concluido') { setSel(null); setShowPreview(Date.now()); } }, [preview?.status]);
   useEffect(() => { if (render?.status === 'concluido') api(`${base}/timelines/${id}`).then(setRow); }, [render?.status]);
 
   const update = (next: TL) => {
@@ -139,12 +168,47 @@ function Editor({ id }: { id: string }) {
     setSel({ lane: 'video', index: j });
   };
 
-  const doRender = async () => {
-    setErr('');
-    try { await api(`${base}/timelines/${id}/render`, { body: {} }); } catch (x) { setErr((x as Error).message); }
+  /** Grava agora o que ainda está no atraso do salvamento automático (antes de legendar, prever ou exportar). */
+  const flush = async () => {
+    clearTimeout(saveTimer.current);
+    await api(`${base}/timelines/${id}`, { method: 'PUT', body: { json: tl } });
   };
 
-  const previewSrc = selected && sel?.lane === 'video' ? mediaUrl(office!.id, abs(selected.src)) : row.output ? mediaUrl(office!.id, row.output) : null;
+  const doRender = async () => {
+    setErr('');
+    try { await flush(); await api(`${base}/timelines/${id}/render`, { body: {} }); } catch (x) { setErr((x as Error).message); }
+  };
+
+  const doPreview = async () => {
+    setErr('');
+    try { await flush(); await api(`${base}/timelines/${id}/preview`, { body: {} }); } catch (x) { setErr((x as Error).message); }
+  };
+
+  const doCaptions = async () => {
+    setErr('');
+    setCaptioning(true);
+    try {
+      await flush();
+      const r = await api<{ items: unknown[] }>(`${base}/timelines/${id}/captions`, { body: {} });
+      const fresh = await api(`${base}/timelines/${id}`);
+      setRow(fresh);
+      setTl(fresh.json);
+      notify(`${r.items.length} legendas geradas com o Whisper`);
+    } catch (x) { setErr((x as Error).message); } finally { setCaptioning(false); }
+  };
+
+  const doExport = async (format: string) => {
+    setErr('');
+    try {
+      await flush();
+      const r = await api<{ output: string }>(`${base}/timelines/${id}/export`, { body: { format } });
+      notify(`Exportado: ${r.output.split(/[\\/]/).pop()}`);
+      desktop?.showInFolder(r.output);
+    } catch (x) { setErr((x as Error).message); }
+  };
+
+  const previewUrl = `${base}/timelines/${id}/preview?t=${showPreview}`;
+  const previewSrc = selected && sel?.lane === 'video' ? mediaUrl(office!.id, abs(selected.src)) : showPreview ? previewUrl : row.output ? mediaUrl(office!.id, row.output) : null;
 
   return (
     <div className="editor">
@@ -162,12 +226,23 @@ function Editor({ id }: { id: string }) {
           <button className={view === 'timeline' ? 'active' : ''} onClick={() => setView('timeline')}>Timeline</button>
           <button className={view === 'json' ? 'active' : ''} onClick={() => { setJsonText(JSON.stringify(tl, null, 2)); setView('json'); }}>JSON</button>
         </div>
+        <button className="ghost" disabled={!!validation || captioning} onClick={doCaptions} title="Transcreve a fala dos clipes com 'manter áudio' (Whisper, nesta máquina)">
+          <Captions size={14} /> {captioning ? 'Transcrevendo…' : 'Legendas automáticas'}
+        </button>
+        <button className="ghost" disabled={!!validation || preview?.status === 'rodando'} onClick={doPreview} title="Render rápido em 540p para conferir a edição">
+          <Zap size={14} /> {preview?.status === 'rodando' ? `Prévia ${Math.round(preview.progress * 100)}%` : 'Prévia rápida'}
+        </button>
+        <select className="export-select" value="" disabled={!!validation} onChange={(e) => e.target.value && doExport(e.target.value)} title="Exportar para outro editor">
+          <option value="">Exportar…</option>
+          {EXPORTS.map(([k, label]) => <option key={k} value={k}>{label}</option>)}
+        </select>
         <button className="primary" disabled={!!validation || render?.status === 'rodando'} onClick={doRender}>
           {render?.status === 'rodando' ? `Renderizando ${Math.round(render.progress * 100)}%` : <><Film size={14} /> Renderizar</>}
         </button>
       </div>
       {render?.status === 'rodando' && <div className="progress"><i style={{ width: `${render.progress * 100}%` }} /></div>}
-      {(validation || err || render?.error) && <div className="error small">{err || render?.error || validation}</div>}
+      {(validation || err || render?.error || preview?.error) && <div className="error small">{err || render?.error || preview?.error || validation}</div>}
+      {captioning && <p className="muted small" style={{ margin: 0 }}>O Whisper roda nesta máquina: leva por volta de duas vezes a duração da fala.</p>}
 
       {view === 'json' ? (
         <div className="json-view">
@@ -180,7 +255,8 @@ function Editor({ id }: { id: string }) {
             <div className="preview">
               {previewSrc ? (
                 <ClipPreview src={previewSrc} from={sel?.lane === 'video' ? selected.in : 0} to={sel?.lane === 'video' ? selected.out : undefined} portrait={(tl.height ?? 1920) > (tl.width ?? 1080)} />
-              ) : <div className="muted small">Selecione um clipe para ver a prévia</div>}
+              ) : <div className="muted small">Selecione um clipe ou gere uma prévia rápida</div>}
+              {showPreview > 0 && !(selected && sel?.lane === 'video') && <span className="muted small">prévia rápida (540p)</span>}
               {row.output && (desktop
                 ? <span className="row gap"><a className="small" href="#" onClick={(e) => { e.preventDefault(); desktop?.openPath(row.output); }}>abrir último render</a><a className="small" href="#" onClick={(e) => { e.preventDefault(); desktop?.showInFolder(row.output); }}>mostrar no Explorer</a></span>
                 : <a className="small" href={mediaUrl(office!.id, row.output)} target="_blank">abrir último render</a>)}

@@ -31,7 +31,7 @@ function useFrameTexture(s: LiveSession) {
   return tex;
 }
 
-function Screen({ s, pos, size }: { s: LiveSession; pos: [number, number, number]; size: [number, number] }) {
+function Screen({ s, pos, size, island }: { s: LiveSession; pos: [number, number, number]; size: [number, number]; island?: boolean }) {
   const open = useStore((st) => st.open);
   const tex = useFrameTexture(s);
   if (!tex) return null;
@@ -46,7 +46,7 @@ function Screen({ s, pos, size }: { s: LiveSession; pos: [number, number, number
         <meshBasicMaterial color="#000" />
       </mesh>
       <mesh
-        onClick={(e) => { e.stopPropagation(); open('agente', s.agentId); }}
+        onClick={(e) => { e.stopPropagation(); if (island) open('video', `live:${s.id}`); else open('agente', s.agentId); }}
         onPointerOver={(e) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; }}
         onPointerOut={() => { document.body.style.cursor = ''; }}
       >
@@ -77,7 +77,7 @@ export function LiveScreens() {
         // o monitor da mesa fica 1,1 atrás da cadeira e 0,3 para dentro da mesa
         return <Screen key={s.id} s={s} pos={[desk.x, 1.02, desk.z - 1.1 - 0.3 + 0.017]} size={[0.76, 0.44]} />;
       })}
-      {tv && <Screen key={`tv-${tv.id}`} s={tv} pos={[ISLAND_TV.x, ISLAND_TV.y, ISLAND_TV.z]} size={[ISLAND_TV.w, ISLAND_TV.h]} />}
+      {tv && <Screen key={`tv-${tv.id}`} s={tv} island pos={[ISLAND_TV.x, ISLAND_TV.y, ISLAND_TV.z]} size={[ISLAND_TV.w, ISLAND_TV.h]} />}
     </>
   );
 }

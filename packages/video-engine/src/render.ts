@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { parseTimeline, type Timeline } from './schema.ts';
 import { compile, type ProbeInfo } from './compile.ts';
+import { buildExport, type ExportFormat } from './exporters.ts';
 
 export const FFMPEG = process.env.FFMPEG_BIN || 'ffmpeg';
 export const FFPROBE = process.env.FFPROBE_BIN || 'ffprobe';
@@ -39,25 +40,56 @@ export interface RenderOptions {
   baseDir?: string;
   onProgress?: (fraction: number) => void;
   signal?: AbortSignal;
+  /** Prévia rápida: lado menor em 540 px, no máximo 30 fps, encoder ultrarrápido. */
+  preview?: boolean;
 }
 
-export async function render(input: unknown, output: string, opts: RenderOptions = {}) {
+/** Valida a timeline, resolve os caminhos relativos e mede os arquivos com o ffprobe. */
+export async function resolveTimeline(input: unknown, baseDir = process.cwd()) {
   const raw = parseTimeline(input);
-  const base = opts.baseDir ?? process.cwd();
-  const abs = (p: string) => (path.isAbsolute(p) ? p : path.resolve(base, p));
+  const abs = (p: string) => (path.isAbsolute(p) ? p : path.resolve(baseDir, p));
   const t: Timeline = {
     ...raw,
     video: raw.video.map((c) => ({ ...c, src: abs(c.src) })),
     audio: raw.audio.map((a) => ({ ...a, src: abs(a.src) })),
     overlays: raw.overlays.map((o) => ({ ...o, src: abs(o.src) })),
   };
-
   const probes: Record<string, ProbeInfo> = {};
   for (const src of new Set([...t.video.map((c) => c.src), ...t.audio.map((a) => a.src)])) probes[src] = await probe(src);
   for (const c of t.video) {
     const d = probes[c.src].duration;
     if (d && c.out > d + 0.05) throw new Error(`Clipe ${c.id}: out=${c.out}s passa da duração do arquivo (${d.toFixed(2)}s)`);
   }
+  return { t, probes };
+}
+
+/** A mesma edição em tamanho menor: legenda e posições acompanham, só a resolução e o encoder mudam. */
+export function previewTimeline(t: Timeline): Timeline {
+  const k = Math.min(1, 540 / Math.min(t.width, t.height));
+  const even = (v: number) => Math.max(2, Math.round((v * k) / 2) * 2);
+  return {
+    ...t,
+    width: even(t.width),
+    height: even(t.height),
+    fps: Math.min(t.fps, 30),
+    captions: t.captions ? { ...t.captions, size: Math.round(t.captions.size * k) } : undefined,
+    output: { ...t.output, preset: 'ultrafast', crf: 30, voiceOnly: false },
+  };
+}
+
+/** Exporta para OTIO, XML do Premiere, Shotcut ou SRT. Devolve o caminho gravado. */
+export async function exportTimeline(input: unknown, format: ExportFormat, output: string, opts: { baseDir?: string } = {}) {
+  const { t, probes } = await resolveTimeline(input, opts.baseDir);
+  const out = path.resolve(output);
+  await mkdir(path.dirname(out), { recursive: true });
+  await writeFile(out, buildExport(format, t, probes), 'utf8');
+  return out;
+}
+
+export async function render(input: unknown, output: string, opts: RenderOptions = {}) {
+  const resolved = await resolveTimeline(input, opts.baseDir);
+  const probes = resolved.probes;
+  const t = opts.preview ? previewTimeline(resolved.t) : resolved.t;
 
   const outAbs = path.resolve(output);
   await mkdir(path.dirname(outAbs), { recursive: true });

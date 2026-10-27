@@ -137,7 +137,10 @@ A engine do Office descreve uma edição inteira num **JSON**, e é esse JSON qu
 ```
 
 ```bash
-npx tsx packages/video-engine/src/cli.ts timeline.json saida.mp4
+npx tsx packages/video-engine/src/cli.ts timeline.json saida.mp4             # render final
+npx tsx packages/video-engine/src/cli.ts legendas timeline.json              # legendas com o Whisper
+npx tsx packages/video-engine/src/cli.ts previa timeline.json previa.mp4     # prévia rápida em 540p
+npx tsx packages/video-engine/src/cli.ts exportar timeline.json otio         # otio | fcp7 | mlt | srt
 ```
 
 | Recurso | Detalhe |
@@ -145,6 +148,10 @@ npx tsx packages/video-engine/src/cli.ts timeline.json saida.mp4
 | Transições estilo CapCut | `corte` `fade` `fadeblack` `flash` `blur` `zoom` `whip-esquerda` `whip-direita` `slide-cima` `slide-baixo` `circulo` `pixel` `radial` `dissolve` |
 | Clipes | in/out, velocidade 0,1×–8× (com áudio acompanhando), reverse, zoom suave, brilho, contraste, saturação e gama |
 | Legendas | `rezzu` (caixa alta com contorno), `classica`, `karaoke` (palavra acende) e `caixa` |
+| Legendas automáticas | [whisper.cpp](https://github.com/ggml-org/whisper.cpp) com o modelo large-v3-turbo e o Silero VAD, **nesta máquina**: tempo por palavra, quebra em pausa e pontuação, direto na faixa de legendas (instale em **Equipe → Ferramentas criativas**) |
+| Prévia rápida | o mesmo render em 540p com encoder ultrarrápido, para conferir cortes e legendas antes do final |
+| Exportar | [OpenTimelineIO](https://opentimeline.io) (Kdenlive, DaVinci), XML FCP7 (Premiere, DaVinci), MLT ([Shotcut](https://shotcut.org)) e SRT (CapCut): cortes, velocidade, transições como dissolve, trilhas e imagens |
+| Ilha ao vivo | apps do FilmCraft, EffectCraft e SoundCraft abertos pelos funcionários aparecem em **Na ilha agora**, no estúdio, e na TV da ilha de vídeo, no mapa |
 | Áudio | voz dos clipes no ponto exato, trilhas com fade, mixagem com limitador |
 | Saída | MP4 H.264, opcionalmente também a versão **só voz**. **Nunca sobrescreve** (`_v1`, `_v2`...) e o `.timeline.json` fica ao lado |
 
@@ -321,7 +328,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Tour guiado no primeiro acesso
 - [x] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
 - [x] Suíte Craft completa e modo ao vivo (a IA opera o app aberto, a equipe assiste e assume)
-- [ ] Ilha de edição ao vivo, legendas com Whisper e exportação para OTIO, Kdenlive, Premiere e CapCut
+- [x] Ilha de edição ao vivo, legendas com Whisper, prévia rápida e exportação para OTIO, Premiere, Shotcut e SRT
 - [ ] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
 - [ ] Mesa do diretor de arte, publicação com Postiz e arquivo de documentos no mapa
 - [ ] Sons do mundo, editor de planta e vários andares

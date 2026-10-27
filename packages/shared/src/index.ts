@@ -140,6 +140,10 @@ export interface ToolInfo {
   canInstall: boolean;
   /** Tem modo ao vivo: o app abre na tela e a IA opera a janela pela ponte MCP. */
   live: boolean;
+  /** `mcp`: um funcionário opera por MCP; `programa`: o próprio Office usa (ex.: Whisper no estúdio). */
+  kind: 'mcp' | 'programa';
+  /** Quem usa, para os programas que não são de um funcionário. */
+  usedBy?: string;
 }
 
 /** Um app criativo aberto na tela, operado por um funcionário de IA (modo ao vivo). */
@@ -226,7 +230,8 @@ export type ServerMsg =
   | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' }
   | { t: 'job'; job: AgentJob }
   | { t: 'jobMessage'; message: JobMessage }
-  | { t: 'render'; timelineId: ID; progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string };
+  /** Progresso de render; `preview` = prévia rápida (não muda o status da timeline). */
+  | { t: 'render'; timelineId: ID; progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string; preview?: boolean };
 
 export const uid = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;

@@ -46,6 +46,7 @@ export function ToolsCard() {
               <div className="muted small">{t.summary}</div>
               <div className="chips">
                 {users.map((a) => <span key={a.id} className="badge"><span className="status-dot" style={{ background: a.color }} />{a.name}</span>)}
+                {t.usedBy && <span className="badge outline">{t.usedBy}</span>}
               </div>
             </div>
             <div className="tool-side">
@@ -126,7 +127,7 @@ const LIVE_STATUS: Record<LiveSession['status'], string> = {
 };
 
 /** Espelho ao vivo de um app criativo aberto: o print da janela, atualizado a cada segundo. */
-export function LiveMirror({ s }: { s: LiveSession }) {
+export function LiveMirror({ s, big }: { s: LiveSession; big?: boolean }) {
   const { office, agents, notify } = useStore();
   const [full, setFull] = useState(false);
   const src = useLiveFrame(s, true);
@@ -138,17 +139,17 @@ export function LiveMirror({ s }: { s: LiveSession }) {
     } catch (e) { notify((e as Error).message); }
   };
   return (
-    <div className={`live-mirror ${full ? 'full' : ''}`}>
+    <div className={`live-mirror ${full ? 'full' : ''} ${big ? 'big' : ''}`}>
       <div className="live-head">
         <span className={`live-dot ${s.status}`} />
         <b>{s.toolName}</b>
         <span className="muted small">{agent?.name} · {LIVE_STATUS[s.status]}</span>
         <span className="spacer" />
         <button className="small ghost" title="Trazer a janela para a frente no computador do servidor" onClick={() => act('focus')}><AppWindow size={13} /> Assumir</button>
-        <button className="small ghost" onClick={() => setFull(!full)}>{full ? 'Reduzir' : 'Ampliar'}</button>
+        {!big && <button className="small ghost" onClick={() => setFull(!full)}>{full ? 'Reduzir' : 'Ampliar'}</button>}
         {s.status !== 'ativa' && <button className="small ghost" title="Fechar o app (o que não foi salvo fica na recuperação do app)" onClick={() => act('close')}><X size={13} /> Fechar app</button>}
       </div>
-      <div className="live-screen" onDoubleClick={() => setFull(!full)}>
+      <div className="live-screen" onDoubleClick={() => !big && setFull(!full)}>
         {src ? <img src={src} alt={`Tela do ${s.toolName}`} /> : <div className="muted small">Esperando o primeiro print da janela…</div>}
       </div>
       {s.error && <div className="muted small live-error">{s.error}</div>}

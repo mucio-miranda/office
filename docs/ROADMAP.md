@@ -42,9 +42,12 @@ agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo 
    PdfCraft (Theo e Rafa) no catálogo; **ao vivo**: o app abre na tela, a IA opera a janela pela ponte MCP, o painel
    do funcionário espelha a tela a cada segundo (Ampliar, Assumir, Fechar app) e o monitor da mesa e a TV da ilha de
    vídeo mostram a edição no mapa; testado com tarefas reais no PhotoCraft (PSD + PNG) e no FilmCraft (projeto + MP4)
-6. **Ilha de edição ao vivo (v0.3.2)**: FilmCraft, EffectCraft e SoundCraft juntos na edição, legendas com
-   whisper.cpp (modelo large-v3-turbo, Silero VAD) direto na timeline, prévia rápida e exportação para
-   OpenTimelineIO, Kdenlive/Shotcut (MLT), Premiere (XML FCP7) e, como experimental, CapCut
+6. ✅ **Ilha de edição ao vivo (v0.3.2)**: legendas automáticas com whisper.cpp (large-v3-turbo + Silero VAD,
+   tempo por palavra, realinhado quando o VAD corta os silêncios) direto na timeline, prévia rápida em 540p,
+   exportação para OpenTimelineIO (Kdenlive, DaVinci), XML FCP7 (Premiere, DaVinci), MLT (Shotcut) e SRT (CapCut),
+   "Na ilha agora" no estúdio e a TV da ilha abrindo o app ao vivo; Vic com EffectCraft e SoundCraft e os
+   comandos `legendas`, `previa` e `exportar`; o Whisper se instala pelo Office com SHA256 conferido. O rascunho
+   nativo do CapCut ficou de fora: o formato é fechado e muda a cada versão, então o CapCut recebe o SRT
 7. **Cliente e esteira (v0.4)**: cliente novo com entrevista de briefing, pasta no padrão REZZU com índice de
    arquivos (ensaio, logo, IDV, brutos), demandas em etapas (briefing → pauta → copy → arte/vídeo → aprovação →
    agendado) passando sozinhas de um funcionário para outro, aprovação humana ou da IA configurável por cliente
