@@ -18,7 +18,7 @@ Ela abre os brutos do cliente, monta o corte, renderiza e **levanta a mão ✋**
 
 <br/>
 
-<img src="docs/img/escritorio.jpg" alt="Escritório em maquete 3D isométrica, minimalista, com sidebar de navegação e funcionários de IA nas mesas" width="100%"/>
+<img src="docs/img/escritorio-pixel.jpg" alt="Escritório em pixel art isométrica: recepção com piso de tacos e tapete, sala de reunião com carpete vermelho, redação, gerência e funcionários de IA nas mesas" width="100%"/>
 
 </div>
 
@@ -45,7 +45,8 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 <td width="50%" valign="top">
 
 ### 🗺️ Escritório 3D navegável
-- **Maquete isométrica minimalista** (tema claro e escuro) com 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
+- **Pixel art isométrica** (padrão), inspirada nos mundos de pixel do Habbo e do Gather: câmera 2:1, contorno escuro, sombreamento em 3 tons, piso de tacos, carpetes e ladrilhos por sala, paredes com papel de parede e janelas, avatares em blocos que andam, sentam e digitam e etiquetas de nome em pílula. Tudo desenhado por código, sem assets de terceiros
+- Ou a **maquete isométrica minimalista** (botão ao lado do tema ou `Ctrl+K` → "Mundo em maquete"), em tema claro e escuro, com as mesmas 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
 - **WASD** ou clique para andar, **Shift** para correr, **1–7** para teletransportar
 - **Ctrl+K**: vá para qualquer sala, painel, cliente, demanda ou funcionário
 - Minimapa clicável, chat geral ou da sala, status (🎧 foco, ⛔ ocupado, 💤 ausente) e emotes
@@ -329,6 +330,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
 - [x] Suíte Craft completa e modo ao vivo (a IA opera o app aberto, a equipe assiste e assume)
 - [x] Ilha de edição ao vivo, legendas com Whisper, prévia rápida e exportação para OTIO, Premiere, Shotcut e SRT
+- [x] Mundo em pixel art isométrica (com a maquete minimalista como opção)
 - [ ] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
 - [ ] Mesa do diretor de arte, publicação com Postiz e arquivo de documentos no mapa
 - [ ] Sons do mundo, editor de planta e vários andares

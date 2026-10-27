@@ -48,6 +48,11 @@ agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo 
    "Na ilha agora" no estúdio e a TV da ilha abrindo o app ao vivo; Vic com EffectCraft e SoundCraft e os
    comandos `legendas`, `previa` e `exportar`; o Whisper se instala pelo Office com SHA256 conferido. O rascunho
    nativo do CapCut ficou de fora: o formato é fechado e muda a cada versão, então o CapCut recebe o SRT
+6b. ✅ **Mundo em pixel art (v0.3.3)**: tema Pixel isométrico 2:1 (padrão), estudado no Habbo e no Gather e desenhado
+   do zero por código: render em baixa resolução ampliado sem suavizar, sombreamento em 3 tons, contorno escuro (que
+   acende no hover), pisos por sala, paredes do fundo altas com janelas, móveis detalhados, decoração (bebedouro,
+   geladeira, máquina de lanches, tripé com ring light, cavalete, cabideiro), avatares em blocos e etiquetas em pílula;
+   a maquete minimalista continua a um clique
 7. **Cliente e esteira (v0.4)**: cliente novo com entrevista de briefing, pasta no padrão REZZU com índice de
    arquivos (ensaio, logo, IDV, brutos), demandas em etapas (briefing → pauta → copy → arte/vídeo → aprovação →
    agendado) passando sozinhas de um funcionário para outro, aprovação humana ou da IA configurável por cliente

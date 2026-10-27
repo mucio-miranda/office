@@ -1,12 +1,17 @@
 import { useState } from 'react';
 import type { Furniture } from './layout';
-import type { ScenePalette } from '../lib/theme';
+import { useWorldStyle, type ScenePalette } from '../lib/theme';
+import { PixelFurniture } from './pixel/Furniture';
 
 /**
  * Móveis em estilo "maquete de arquitetura": volumes simples, tons neutros,
  * sem texturas. A cor de destaque só aparece no hover de algo interativo.
  */
-export function FurnitureMesh({ f, p, onUse }: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void }) {
+export function FurnitureMesh(props: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void }) {
+  return useWorldStyle((s) => s.style) === 'pixel' ? <PixelFurniture f={props.f} onUse={props.onUse} /> : <MaqueteFurniture {...props} />;
+}
+
+function MaqueteFurniture({ f, p, onUse }: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void }) {
   const [hover, setHover] = useState(false);
   const interactive = !!(f.panel || f.label);
   const handlers = interactive

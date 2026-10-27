@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import type { LiveSession } from '@office/shared';
 import { useStore } from '../lib/store';
+import { useWorldStyle } from '../lib/theme';
 import { useLiveFrame } from '../panels/Tools';
 import { DESKS } from './layout';
 
@@ -63,6 +64,8 @@ function Screen({ s, pos, size, island }: { s: LiveSession; pos: [number, number
  */
 export function LiveScreens() {
   const { live, agents } = useStore();
+  // no tema Pixel o monitor da mesa fica um pouco mais alto
+  const monitorY = useWorldStyle((s) => s.style) === 'pixel' ? 1.08 : 1.02;
   const shown = live.filter((s) => s.status === 'ativa' || s.status === 'livre');
   // um monitor por funcionário: o app mais recente dele
   const byAgent = new Map<string, LiveSession>();
@@ -75,7 +78,7 @@ export function LiveScreens() {
         if (!a) return null;
         const desk = DESKS[a.room];
         // o monitor da mesa fica 1,1 atrás da cadeira e 0,3 para dentro da mesa
-        return <Screen key={s.id} s={s} pos={[desk.x, 1.02, desk.z - 1.1 - 0.3 + 0.017]} size={[0.76, 0.44]} />;
+        return <Screen key={s.id} s={s} pos={[desk.x, monitorY, desk.z - 1.1 - 0.3 + 0.017]} size={[0.76, 0.44]} />;
       })}
       {tv && <Screen key={`tv-${tv.id}`} s={tv} island pos={[ISLAND_TV.x, ISLAND_TV.y, ISLAND_TV.z]} size={[ISLAND_TV.w, ISLAND_TV.h]} />}
     </>

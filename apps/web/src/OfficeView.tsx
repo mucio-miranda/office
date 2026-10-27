@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
-  LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass,
+  LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Grid2x2,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
@@ -9,7 +9,8 @@ import { LabelLayer } from './office/Labels';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { DESKS, HUMAN_DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
-import { ThemeToggle } from './lib/ui';
+import { ThemeToggle, WorldStyleToggle } from './lib/ui';
+import { useWorldStyle } from './lib/theme';
 import { desktop } from './lib/desktop';
 
 type NavId = Exclude<PanelId, 'agente'>;
@@ -212,6 +213,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
           <option value="foco">Foco</option>
           <option value="ausente">Ausente</option>
         </select>
+        <WorldStyleToggle />
         <ThemeToggle />
       </div>
     </aside>
@@ -375,6 +377,7 @@ function Palette({ onClose }: { onClose: () => void }) {
       ...NAV.map((d) => ({ icon: d.icon, label: d.label, hint: d.key, run: () => open(d.id) })),
       { icon: Armchair, label: 'Ir para minha mesa', hint: 'M', run: goToMyDesk },
       { icon: Compass, label: 'Tour do escritório', hint: 'ajuda', run: startTour },
+      { icon: Grid2x2, label: useWorldStyle.getState().style === 'pixel' ? 'Mundo em maquete minimalista' : 'Mundo em pixel art', hint: 'visual', run: () => useWorldStyle.getState().toggle() },
       ...(myDesk() ? [{ icon: Armchair, label: 'Liberar minha mesa', hint: 'mesa', run: () => { releaseMyDesk(); } }] : []),
       ...members.filter((m) => m.desk && m.id !== user?.id && !presences[m.id]).map((m) => {
         const d = HUMAN_DESKS.find((h) => h.id === m.desk)!;

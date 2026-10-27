@@ -1,6 +1,7 @@
 import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import { useStore } from '../lib/store';
+import { useWorldStyle } from '../lib/theme';
 import { DESKS, ROOMS } from './layout';
 
 /**
@@ -19,7 +20,8 @@ export const registerAnchor = (id: string, a: Anchor) => {
 // salas: âncora fixa no chão, perto da parede do fundo
 for (const r of ROOMS) anchors.set(`room:${r.id}`, () => ({ x: (r.x0 + r.x1) / 2, z: r.z0 + 1.2, y: 0.02 }));
 
-const HEAD = 1.75;
+/** Altura do rótulo acima do chão: o avatar em pixel art é maior que o peão da maquete. */
+const head = () => (useWorldStyle.getState().style === 'pixel' ? 2.1 : 1.75);
 const v = new Vector3();
 
 /** Fica dentro do Canvas: projeta as âncoras e move os elementos. */
@@ -31,7 +33,7 @@ export function LabelProjector() {
       if (!a) { el.style.display = 'none'; continue; }
       const p = a();
       if (p.hidden) { el.style.display = 'none'; continue; }
-      v.set(p.x, p.y ?? HEAD, p.z).project(camera);
+      v.set(p.x, p.y ?? head(), p.z).project(camera);
       if (v.z > 1) { el.style.display = 'none'; continue; }
       const x = (v.x * 0.5 + 0.5) * size.width;
       const y = (-v.y * 0.5 + 0.5) * size.height;

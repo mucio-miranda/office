@@ -2,7 +2,8 @@ import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Group, Mesh } from 'three';
 import { registerAnchor } from './Labels';
-import type { ScenePalette } from '../lib/theme';
+import { useWorldStyle, type ScenePalette } from '../lib/theme';
+import { PixelAvatar } from './pixel/Avatar';
 
 export interface AvatarProps {
   /** Chave do rótulo em LabelLayer (user:<id> ou agent:<id>). */
@@ -19,8 +20,13 @@ export interface AvatarProps {
   onClick?: () => void;
 }
 
+/** Avatar no estilo do mundo escolhido: blocos em pixel art ou o peão da maquete. */
+export function Avatar(props: AvatarProps) {
+  return useWorldStyle((s) => s.style) === 'pixel' ? <PixelAvatar {...props} /> : <PawnAvatar {...props} />;
+}
+
 /** Peão minimalista: cápsula na cor da pessoa, cabeça neutra, um ponto indicando a frente. */
-export function Avatar({ anchorId, color, p, getState, ring, pulse, typing, seated, onClick }: AvatarProps) {
+function PawnAvatar({ anchorId, color, p, getState, ring, pulse, typing, seated, onClick }: AvatarProps) {
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
   const ringRef = useRef<Mesh>(null);

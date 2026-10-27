@@ -4,7 +4,9 @@ import { OrthographicCamera } from '@react-three/drei';
 import * as THREE from 'three';
 import type { AgentProfile, Presence, Vec2 } from '@office/shared';
 import { useStore, showEmote } from '../lib/store';
-import { useScene, type ScenePalette } from '../lib/theme';
+import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/theme';
+import { PixelRoom } from './pixel/Room';
+import { PixelDecor } from './pixel/Decor';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
@@ -38,8 +40,15 @@ export const cam = {
 /** Farol pulsando no chão (o tour aponta para onde está falando). */
 export const beacon = { on: false, x: 0, z: 0 };
 
-/** Inclinação da câmera: altura 1.15 × distância horizontal (usada para converter pixels em metros). */
-const SIN_ELEV = 1.15 / Math.hypot(1, 1.15);
+/**
+ * Altura da câmera em relação à distância horizontal. Maquete: 1,15. Pixel: isométrico 2:1 do Habbo
+ * (elevação de 30°, altura = tan 30° × √2), em que as linhas do piso sobem 1 pixel a cada 2.
+ */
+const camHeight = () => (useWorldStyle.getState().style === 'pixel' ? Math.tan(Math.PI / 6) * Math.SQRT2 : 1.15);
+/** Seno da elevação (para converter o arraste em pixels em metros no chão). */
+const sinElev = () => camHeight() / Math.hypot(1, camHeight());
+/** Tamanho do pixel da arte no tema Pixel, em pixels da tela. */
+const PIXEL_SIZE = 2;
 
 /** Modo drone ligado (Espaço segurado) ou arrastando: cliques não movem o personagem. */
 export const droneBlocksClick = () => useStore.getState().drone || cam.justDragged;
@@ -123,8 +132,8 @@ function panBy(dxPx: number, dyPx: number) {
   const a = cam.angle;
   const k = 1 / cam.realZoom;
   // direita na tela = (sin a, -cos a) no chão; "para cima" na tela = (-cos a, -sin a)
-  cam.tx += -Math.sin(a) * dxPx * k + -Math.cos(a) * (dyPx * k) / SIN_ELEV;
-  cam.tz += Math.cos(a) * dxPx * k + -Math.sin(a) * (dyPx * k) / SIN_ELEV;
+  cam.tx += -Math.sin(a) * dxPx * k + -Math.cos(a) * (dyPx * k) / sinElev();
+  cam.tz += Math.cos(a) * dxPx * k + -Math.sin(a) * (dyPx * k) / sinElev();
   cam.tx = Math.max(-34, Math.min(34, cam.tx));
   cam.tz = Math.max(-26, Math.min(26, cam.tz));
 }
@@ -253,7 +262,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     cam.cx = camTarget.current.x;
     cam.cz = camTarget.current.z;
     const d = 30;
-    camera.position.set(camTarget.current.x + Math.cos(cam.angle) * d, d * 1.15, camTarget.current.z + Math.sin(cam.angle) * d);
+    camera.position.set(camTarget.current.x + Math.cos(cam.angle) * d, d * camHeight(), camTarget.current.z + Math.sin(cam.angle) * d);
     camera.lookAt(camTarget.current);
     const ortho = camera as THREE.OrthographicCamera;
     if (Math.abs(ortho.zoom - cam.zoom) > 0.01) {
@@ -358,12 +367,16 @@ function Beacon({ p }: { p: ScenePalette }) {
   );
 }
 
+const walk = (e: any) => {
+  e.stopPropagation();
+  if (droneBlocksClick()) return;
+  player.target = { x: e.point.x, z: e.point.z };
+};
+
 function Floor({ p }: { p: ScenePalette }) {
-  const walk = (e: any) => {
-    e.stopPropagation();
-    if (droneBlocksClick()) return;
-    player.target = { x: e.point.x, z: e.point.z };
-  };
+  const pixel = useWorldStyle((s) => s.style) === 'pixel';
+  const px = usePixel();
+  if (pixel) return <PixelRoom p={px} onWalk={walk} />;
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]} onClick={walk}>
@@ -401,6 +414,8 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
   const presences = useStore((s) => s.presences);
   const agents = useStore((s) => s.agents);
   const p = useScene();
+  const px = usePixel();
+  const pixel = useWorldStyle((s) => s.style) === 'pixel';
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -479,17 +494,31 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
   }, []);
 
   return (
-    <Canvas flat shadows="soft" dpr={[1, 2]} className="world" frameloop={active ? 'always' : 'demand'}>
-      <color attach="background" args={[p.background]} />
+    // Pixel: a cena sai em resolução menor e o CSS amplia sem suavizar (image-rendering: pixelated)
+    <Canvas key={pixel ? 'pixel' : 'maquete'} flat shadows={pixel ? 'basic' : 'soft'} dpr={pixel ? window.devicePixelRatio / PIXEL_SIZE : [1, 2]}
+      gl={{ antialias: !pixel }} className={`world ${pixel ? 'pixel' : ''}`} frameloop={active ? 'always' : 'demand'}>
+      <color attach="background" args={[pixel ? px.void : p.background]} />
       <OrthographicCamera makeDefault zoom={cam.zoom} near={-100} far={200} position={[30, 34, 30]} />
-      <ambientLight intensity={1.7} />
-      <hemisphereLight args={['#ffffff', p.ground, 0.6]} />
-      <directionalLight position={[14, 30, 18]} intensity={1.25} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
-        shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
+      {pixel ? (
+        <>
+          {/* luz de cima e da esquerda: topo claro, face da esquerda média, face da direita escura (como no Habbo) */}
+          <ambientLight intensity={1.1} />
+          <directionalLight position={[-10, 26, 14]} intensity={1.6} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0006}
+            shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
+        </>
+      ) : (
+        <>
+          <ambientLight intensity={1.7} />
+          <hemisphereLight args={['#ffffff', p.ground, 0.6]} />
+          <directionalLight position={[14, 30, 18]} intensity={1.25} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
+            shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
+        </>
+      )}
       <Floor p={p} />
       {FURNITURE.map((f, i) => (
         <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; player.target = freeSpotNear({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}
+      {pixel && <PixelDecor />}
       <DeskMarkers />
       <LiveScreens />
       <Beacon p={p} />
