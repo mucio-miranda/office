@@ -7,6 +7,7 @@ import { all, insert, now, one, update, logActivity } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { houseRules } from './templates.ts';
 import { mcpConfig } from './tools.ts';
+import { openLiveForJob, releaseLiveForJob } from './live.ts';
 
 /**
  * Cada funcionário de IA é uma sessão do Claude Code em modo headless (`claude -p`),
@@ -23,7 +24,7 @@ const ALWAYS_DENIED = [
   'mcp__claude_ai_Notion__notion-delete-pages', 'mcp__claude_ai_Notion__notion-delete-databases',
 ];
 
-const running = new Map<string, ChildProcess>();
+const running = new Map<string, ChildProcess | null>();
 const queue: { jobId: string; input: string; resume: boolean }[] = [];
 
 const RENDER_CMD = config.renderCmd;
@@ -106,6 +107,7 @@ export function cancelJob(jobId: string) {
   const idx = queue.findIndex((q) => q.jobId === jobId);
   if (idx >= 0) queue.splice(idx, 1);
   running.get(jobId)?.kill();
+  releaseLiveForJob(jobId);
   const job = setJob(jobId, { status: 'cancelado' });
   setAgentStatus(job.agentId, job.officeId, 'livre');
 }
@@ -113,19 +115,39 @@ export function cancelJob(jobId: string) {
 function pump() {
   while (running.size < config.maxConcurrentJobs && queue.length) {
     const next = queue.shift()!;
-    start(next.jobId, next.input, next.resume);
+    void start(next.jobId, next.input, next.resume);
   }
 }
 
-function start(jobId: string, input: string, resume: boolean) {
+async function start(jobId: string, input: string, resume: boolean) {
   const job = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId)!;
   const agent = one<AgentProfile>('SELECT * FROM agents WHERE id = ?', job.agentId)!;
   const office = one<Office>('SELECT * FROM offices WHERE id = ?', job.officeId)!;
+  // reserva a vaga enquanto os apps ao vivo abrem
+  running.set(jobId, null);
 
   const dir = path.join(config.dataDir, 'jobs', jobId);
   mkdirSync(dir, { recursive: true });
+  // modo ao vivo: o app abre na tela e o servidor MCP vira uma ponte para a janela
+  const liveIds = (agent.live ?? []).filter((id) => (agent.mcp ?? []).includes(id));
+  let bridges = {};
+  if (liveIds.length) {
+    setJob(jobId, { status: 'rodando' });
+    setAgentStatus(agent.id, office.id, 'trabalhando');
+    const r = await openLiveForJob(job, office, liveIds);
+    bridges = r.bridges;
+    if (r.failed.length) {
+      addMessage(jobId, office.id, 'sistema', `Não consegui abrir ao vivo: ${r.failed.join(', ')} (limite de ${config.maxLiveApps} apps abertos ou o app não respondeu). Essa ferramenta segue sem janela.`);
+    }
+    if (one<AgentJob>('SELECT status FROM jobs WHERE id = ?', jobId)?.status === 'cancelado') {
+      running.delete(jobId);
+      releaseLiveForJob(jobId);
+      pump();
+      return;
+    }
+  }
   // ferramentas criativas instaladas: um servidor MCP por ferramenta, com as pastas do escritório
-  const mcp = mcpConfig(agent.mcp ?? [], office);
+  const mcp = mcpConfig(agent.mcp ?? [], office, bridges);
   const mcpIds = Object.keys(mcp.servers);
   const sysFile = path.join(dir, 'system.md');
   writeFileSync(sysFile, systemPrompt(agent, office, mcp.hints), 'utf8');
@@ -156,6 +178,9 @@ function start(jobId: string, input: string, resume: boolean) {
     addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o Claude Code: ${(e as Error).message}`);
     setJob(jobId, { status: 'erro' });
     setAgentStatus(agent.id, office.id, 'erro');
+    running.delete(jobId);
+    releaseLiveForJob(jobId);
+    pump();
     return;
   }
   running.set(jobId, child);
@@ -195,6 +220,7 @@ function start(jobId: string, input: string, resume: boolean) {
 
   child.on('close', (code) => {
     running.delete(jobId);
+    releaseLiveForJob(jobId);
     const current = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId)!;
     if (current.status === 'cancelado') { pump(); return; }
     if (code !== 0 && !finalText) {

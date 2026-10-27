@@ -8,6 +8,7 @@ import { useScene, type ScenePalette } from '../lib/theme';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
+import { LiveScreens } from './LiveScreens';
 import { DESKS, FURNITURE, HUMAN_DESKS, ROOMS, SPAWN, WALLS, WALL_H, deskSeat, freeSpotNear, roomAt, step, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
@@ -490,6 +491,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; player.target = freeSpotNear({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}
       <DeskMarkers />
+      <LiveScreens />
       <Beacon p={p} />
       {agents.map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
       {Object.values(presences).map((pr) => <Remote key={pr.userId} pr={pr} p={p} />)}

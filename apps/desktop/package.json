@@ -1,7 +1,7 @@
 {
   "name": "@office/desktop",
   "productName": "Office",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Office: escritório virtual com funcionários de IA, como app de Windows.",
   "author": "Mucio Miranda",
   "license": "MIT",

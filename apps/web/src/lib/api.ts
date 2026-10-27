@@ -28,6 +28,10 @@ export async function api<T = any>(path: string, init: { method?: string; body?:
 
 export const mediaUrl = (officeId: string, file: string) => `/api/offices/${officeId}/media?path=${encodeURIComponent(file)}`;
 
+/** Print da janela de um app ao vivo; `big` pede prints mais frequentes enquanto alguém assiste. */
+export const liveFrameUrl = (officeId: string, id: string, big: boolean) =>
+  `/api/offices/${officeId}/live/${id}/frame?${big ? 'big=1&' : ''}t=${Date.now()}`;
+
 export const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
 export function fmtDuration(sec: number) {

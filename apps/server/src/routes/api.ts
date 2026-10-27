@@ -14,6 +14,7 @@ import { invalidate, onlineUsers } from '../realtime.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
 import { installTool, listTools } from '../agents/tools.ts';
+import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { renderTimeline } from '../video/service.ts';
 import { probe } from '@office/video-engine';
 
@@ -327,7 +328,7 @@ export async function api(app: FastifyInstance) {
 
     r.patch('/api/offices/:officeId/agents/:id', async (req, reply) => {
       if (!requireMember(req, reply)) return;
-      const b = body(z.object({ name: z.string().optional(), role: z.string().optional(), persona: z.string().optional(), color: z.string().optional(), allowedTools: z.array(z.string()).optional(), skills: z.array(z.string()).optional(), mcp: z.array(z.string().regex(/^!?[a-z0-9-]+$/)).optional() }), req, reply);
+      const b = body(z.object({ name: z.string().optional(), role: z.string().optional(), persona: z.string().optional(), color: z.string().optional(), allowedTools: z.array(z.string()).optional(), skills: z.array(z.string()).optional(), mcp: z.array(z.string().regex(/^!?[a-z0-9-]+$/)).optional(), live: z.array(z.string().regex(/^[a-z0-9-]+$/)).optional() }), req, reply);
       if (!b) return;
       const { officeId, id } = req.params as any;
       update('agents', id, b);
@@ -352,6 +353,46 @@ export async function api(app: FastifyInstance) {
       } catch (e) {
         return reply.code(400).send({ error: (e as Error).message });
       }
+    });
+
+    // ---------------- apps ao vivo ----------------
+    r.get('/api/offices/:officeId/live', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return listLive((req.params as any).officeId);
+    });
+
+    // último print da janela; `?big=1` acelera os prints enquanto alguém assiste em tela grande
+    r.get('/api/offices/:officeId/live/:id/frame', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (getLive(id)?.officeId !== officeId) return reply.code(404).send({ error: 'App fechado' });
+      const f = watchFrame(id, (req.query as any).big === '1');
+      if (!f) return reply.code(204).send();
+      reply.headers({ 'Content-Type': 'image/png', 'Content-Length': f.size, 'Cache-Control': 'no-store' });
+      return reply.send(createReadStream(f.file));
+    });
+
+    r.post('/api/offices/:officeId/live/:id/focus', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (getLive(id)?.officeId !== officeId) return reply.code(404).send({ error: 'Esse app já foi fechado.' });
+      try {
+        await focusLive(id);
+        return { ok: true };
+      } catch (e) {
+        return reply.code(409).send({ error: (e as Error).message });
+      }
+    });
+
+    r.post('/api/offices/:officeId/live/:id/close', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const s = getLive(id);
+      if (!s || s.officeId !== officeId) return { ok: true };
+      if (s.status === 'ativa') return reply.code(409).send({ error: 'O funcionário ainda está usando este app. Cancele a tarefa ou espere ele parar.' });
+      await closeLive(id);
+      logActivity(officeId, `user:${req.user.id}`, 'fechou', s.toolName);
+      return { ok: true };
     });
 
     r.get('/api/offices/:officeId/jobs', async (req, reply) => {

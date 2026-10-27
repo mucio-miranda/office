@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, Member, Office, Presence, RoomId, ServerMsg, ToolInfo, Transaction, User, Vec2,
+  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, LiveSession, Member, Office, Presence, RoomId, ServerMsg, ToolInfo, Transaction, User, Vec2,
 } from '@office/shared';
 import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
@@ -29,6 +29,8 @@ interface State {
   timelines: any[];
   /** Ferramentas criativas (MCP) desta máquina. */
   tools: ToolInfo[];
+  /** Apps criativos abertos ao vivo na máquina do servidor. */
+  live: LiveSession[];
   renders: Record<string, RenderState>;
 
   presences: Record<string, Presence>;
@@ -54,10 +56,12 @@ interface State {
   logout(): void;
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
-  reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members'): Promise<void>;
+  reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live'): Promise<void>;
   loadTools(): Promise<void>;
   /** Liga ou desliga uma ferramenta de um funcionário. */
   toggleAgentTool(agentId: string, toolId: string, on: boolean): Promise<void>;
+  /** Liga ou desliga o modo ao vivo (app aberto na tela) de uma ferramenta do funcionário. */
+  toggleAgentLive(agentId: string, toolId: string, on: boolean): Promise<void>;
   /** Escolhe (ou libera, com null) a sua mesa. */
   claimDesk(desk: string | null): Promise<boolean>;
   loadMessages(jobId: string): Promise<void>;
@@ -71,7 +75,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
-  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], renders: {},
+  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {},
   presences: {}, chat: [], emotes: {},
   panel: null, panelArg: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
@@ -106,7 +110,7 @@ export const useStore = create<State>((set, get) => ({
     const office = me.offices.find((o: OfficeWithRole) => o.id === id) ?? info.office;
     try { localStorage.setItem('office.last', id); } catch { /* ok */ }
     set({ office, offices: me.offices, members: info.members, presences: {}, chat: [], messages: {} });
-    await Promise.all((['demands', 'events', 'transactions', 'clients', 'agents', 'jobs', 'timelines'] as const).map((w) => get().reload(w)));
+    await Promise.all((['demands', 'events', 'transactions', 'clients', 'agents', 'jobs', 'timelines', 'live'] as const).map((w) => get().reload(w)));
     connect(id);
   },
 
@@ -135,6 +139,15 @@ export const useStore = create<State>((set, get) => ({
     if (!o || !a) return;
     const mcp = [...a.mcp.filter((x) => x !== toolId && x !== `!${toolId}`), on ? toolId : `!${toolId}`];
     await api(`/api/offices/${o.id}/agents/${agentId}`, { method: 'PATCH', body: { mcp } });
+    await get().reload('agents');
+  },
+
+  async toggleAgentLive(agentId, toolId, on) {
+    const o = get().office;
+    const a = get().agents.find((x) => x.id === agentId);
+    if (!o || !a) return;
+    const live = [...a.live.filter((x) => x !== toolId), ...(on ? [toolId] : [])];
+    await api(`/api/offices/${o.id}/agents/${agentId}`, { method: 'PATCH', body: { live } });
     await get().reload('agents');
   },
 

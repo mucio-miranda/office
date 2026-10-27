@@ -6,14 +6,14 @@ import { api } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { desktop } from '../lib/desktop';
 import { goToAgent } from '../office/World';
-import { AgentTools } from './Tools';
+import { AgentTools, LiveMirror } from './Tools';
 
 const STATUS_LABEL: Record<AgentJob['status'], string> = {
   fila: 'na fila', rodando: 'trabalhando', aguardando: 'esperando você', concluido: 'concluído', erro: 'erro', cancelado: 'cancelado',
 };
 
 export function AgentPanel() {
-  const { agents, jobs, messages, panelArg, office, demands, loadMessages, user } = useStore();
+  const { agents, jobs, messages, panelArg, office, demands, loadMessages, user, live } = useStore();
   const agent = agents.find((a) => a.id === panelArg) ?? agents[0];
   const myJobs = jobs.filter((j) => j.agentId === agent?.id);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -32,6 +32,8 @@ export function AgentPanel() {
   if (!agent) return <div className="empty">Nenhum funcionário neste escritório.</div>;
 
   const busy = job?.status === 'rodando' || job?.status === 'fila';
+  // apps ao vivo da tarefa aberta (ou, sem tarefa, os que o funcionário ainda tem abertos)
+  const mirrors = live.filter((s) => (job ? s.jobId === job.id : s.agentId === agent.id));
 
   // caminhos citados pelo agente: no app de Windows, clicar abre no Explorer (relativos à pasta do escritório)
   const openPath = (e: React.MouseEvent) => {
@@ -90,6 +92,7 @@ export function AgentPanel() {
       </aside>
 
       <section className="job-chat">
+        {mirrors.length > 0 && <div className="live-strip">{mirrors.map((s) => <LiveMirror key={s.id} s={s} />)}</div>}
         {job ? (
           <div className="messages" ref={list}>
             {msgs.map((m) =>

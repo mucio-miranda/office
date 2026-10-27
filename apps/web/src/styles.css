@@ -559,4 +559,25 @@ button.icon.tiny { width: 22px; height: 22px; }
 .agent-tools { display: flex; flex-direction: column; gap: 4px; }
 .agent-tools .check { display: flex; align-items: center; gap: 8px; }
 .agent-tools .check button.link { font-size: 12px; }
+.agent-tool { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.agent-tools .live-toggle { gap: 4px; color: var(--muted-foreground); white-space: nowrap; flex: none; }
+
+/* modo ao vivo: espelho do app criativo aberto na máquina do servidor */
+.live-strip { display: flex; flex-direction: column; gap: 8px; padding: 12px 24px 0; }
+.live-mirror { border: 1px solid var(--border); border-radius: 8px; background: var(--muted-2); overflow: hidden; }
+.live-mirror.full { position: fixed; inset: 16px; z-index: 60; display: flex; flex-direction: column; box-shadow: var(--shadow); background: var(--background); }
+.live-head { display: flex; align-items: center; gap: 8px; padding: 6px 8px 6px 12px; border-bottom: 1px solid var(--border); min-width: 0; }
+.live-head .muted { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.live-head button { flex: none; }
+.live-dot { width: 8px; height: 8px; border-radius: 50%; flex: none; background: var(--idle); }
+.live-dot.ativa { background: var(--error); animation: live-pulse 1.4s ease-in-out infinite; }
+.live-dot.abrindo { background: var(--waiting); }
+.live-dot.livre { background: var(--review); }
+@keyframes live-pulse { 50% { opacity: 0.35; } }
+.live-screen { display: grid; place-items: center; background: #000; aspect-ratio: 16 / 9; max-height: 320px; }
+.live-mirror.full .live-screen { flex: 1; max-height: none; aspect-ratio: auto; min-height: 0; }
+.live-screen img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.live-screen .muted { color: #a3a3a3; }
+.live-error { padding: 6px 12px; }
+@media (max-width: 640px) { .live-strip { padding: 8px 12px 0; } .live-head { flex-wrap: wrap; } .live-mirror.full { inset: 0; border-radius: 0; } }
 @media (max-width: 640px) { .tool-row { flex-direction: column; } .tool-side { align-items: flex-start; flex-direction: row; } }

@@ -175,21 +175,40 @@ roteirista, atendimento...), copie um arquivo, escreva a persona e liste as skil
 
 ### 🧰 Ferramentas criativas (MCP)
 
-Programas open source que os funcionários operam sem interface, cada um pelo seu servidor MCP:
+Programas open source que os funcionários operam por MCP, sem interface ou **ao vivo**, com o app aberto na tela:
 
-| Ferramenta | No lugar do | Quem usa | O que faz |
-|---|---|---|---|
-| [PhotoCraft](https://github.com/storytold/photocraft) | Photoshop | Duda | Imagens e PSD com camadas, máscaras, ajustes e exportação |
-| [VectorCraft](https://github.com/storytold/vectorcraft) | Illustrator | Duda | SVG, PDF e `.ai`: logos, ícones e layouts |
-| [FilmCraft](https://github.com/storytold/filmcraft) | Premiere | Vic | Projeto de vídeo por comandos: sequência, títulos e exportação |
-| [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) | Word, Excel e PowerPoint | Theo e Rafa | Cria e edita DOCX, XLSX e PPTX |
+| Ferramenta | No lugar do | Quem usa | O que faz | Ao vivo |
+|---|---|---|---|---|
+| [PhotoCraft](https://github.com/storytold/photocraft) | Photoshop | Duda | Imagens e PSD com camadas, máscaras, ajustes e exportação | ✅ |
+| [VectorCraft](https://github.com/storytold/vectorcraft) | Illustrator | Duda | SVG, PDF e `.ai`: logos, ícones e layouts | ✅ |
+| [LightCraft](https://github.com/storytold/lightcraft) | Lightroom | Duda | Tratamento de foto sem tocar no original, presets, exportação em lote | ✅ |
+| [DesignCraft](https://github.com/storytold/designcraft) | InDesign | Duda | Diagramação: carrosséis, materiais e PDF | ✅ |
+| [FilmCraft](https://github.com/storytold/filmcraft) | Premiere | Vic | Edição de vídeo: sequência, cortes, cor, mixagem, legendas e exportação | ✅ |
+| [EffectCraft](https://github.com/storytold/effectcraft) | After Effects | Vic | Motion graphics, títulos e legendas animadas | ✅ |
+| [SoundCraft](https://github.com/storytold/soundcraft) | Pro Tools | Vic | Áudio: limpar voz, mixar trilha, loudness | ✅ |
+| [PdfCraft](https://github.com/storytold/pdfcraft) | Acrobat | Theo e Rafa | Ler, anotar, juntar, dividir e preencher PDF | |
+| [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) | Word, Excel e PowerPoint | Theo e Rafa | Cria e edita DOCX, XLSX e PPTX | |
 
 - Em **Equipe → Ferramentas criativas** o dono do escritório vê o que está instalado e clica em **Instalar**: o Office baixa o
   release oficial do GitHub, **confere o SHA256 publicado** e guarda em `%LOCALAPPDATA%\Office\tools\<ferramenta>\<versão>`
   (outras plataformas: `~/.office/tools`, ou qualquer pasta no `PATH`; `OFFICE_TOOLS_DIR` muda o lugar).
 - Cada tarefa sobe só os servidores do funcionário (`--mcp-config`), com leitura nas pastas do escritório e gravação **só
-  na pasta raiz** (PhotoCraft e VectorCraft). Nada é registrado na configuração global do Claude Code.
+  na pasta raiz**. Nada é registrado na configuração global do Claude Code.
 - No painel do funcionário dá para **ligar e desligar** cada ferramenta. No modelo `.md`, a lista fica em `mcp: [...]`.
+
+#### 🔴 Modo ao vivo: a IA trabalha no app de verdade
+
+Com **ao vivo** ligado (padrão: PhotoCraft da Duda e FilmCraft do Vic), a tarefa abre o app na tela do computador que roda o
+Office, com um canal de controle local e um token novo por sessão, e o servidor MCP vira uma **ponte para a janela**. É o
+diretor de arte e o estagiário: a IA edita, você assiste e pega o mouse quando quiser.
+
+- **Espelho no Office**: o painel do funcionário mostra a tela do app, atualizada a cada segundo, com **Ampliar**,
+  **Assumir** (traz a janela para a frente) e **Fechar app**. Quem está em outra máquina da rede assiste pelo espelho.
+- **No mapa**: o monitor da mesa do funcionário e a TV da ilha de vídeo mostram a edição em andamento; clicar abre o painel.
+- Quando a tarefa para, o app **continua aberto** com o arquivo, esperando a sua revisão. Responder no chat retoma na
+  mesma janela.
+- No máximo `OFFICE_LIVE_MAX` apps abertos ao mesmo tempo (padrão 2). Passou disso, a ferramenta roda sem janela.
+- No modelo `.md`, a lista fica em `live: [...]`.
 
 ## 🖥️ App de Windows
 
@@ -301,8 +320,11 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Mesa própria por pessoa
 - [x] Tour guiado no primeiro acesso
 - [x] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
+- [x] Suíte Craft completa e modo ao vivo (a IA opera o app aberto, a equipe assiste e assume)
+- [ ] Ilha de edição ao vivo, legendas com Whisper e exportação para OTIO, Kdenlive, Premiere e CapCut
+- [ ] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
+- [ ] Mesa do diretor de arte, publicação com Postiz e arquivo de documentos no mapa
 - [ ] Sons do mundo, editor de planta e vários andares
-- [ ] Whisper no estúdio (legenda automática) e exportação para CapCut/Premiere
 - [ ] Voz e vídeo por proximidade
 - [ ] Google Calendar, Notion e Trello
 - [ ] Servidor MCP do Office

@@ -120,10 +120,12 @@ export interface AgentProfile {
   allowedTools: string[];
   /** Ferramentas criativas (servidores MCP) deste funcionário: ids do catálogo; `!id` = desligada pela equipe. */
   mcp: string[];
+  /** Ferramentas que este funcionário usa ao vivo: o app abre na tela e a IA opera a janela. */
+  live: string[];
   status: AgentStatus;
 }
 
-/** Ferramenta criativa com servidor MCP (PhotoCraft, VectorCraft, FilmCraft, OfficeCLI). */
+/** Ferramenta criativa com servidor MCP (PhotoCraft, FilmCraft, OfficeCLI...). */
 export interface ToolInfo {
   id: string;
   name: string;
@@ -136,6 +138,24 @@ export interface ToolInfo {
   version: string | null;
   /** Instalação automática pelo Office (hoje só no Windows). */
   canInstall: boolean;
+  /** Tem modo ao vivo: o app abre na tela e a IA opera a janela pela ponte MCP. */
+  live: boolean;
+}
+
+/** Um app criativo aberto na tela, operado por um funcionário de IA (modo ao vivo). */
+export interface LiveSession {
+  id: ID;
+  officeId: ID;
+  jobId: ID;
+  agentId: ID;
+  toolId: string;
+  toolName: string;
+  /** `abrindo` até o canal de controle responder; `livre` quando a tarefa parou e o app segue aberto. */
+  status: 'abrindo' | 'ativa' | 'livre' | 'erro';
+  error: string | null;
+  startedAt: string;
+  /** Último print da janela (ISO) ou null. */
+  frameAt: string | null;
 }
 
 export type JobStatus = 'fila' | 'rodando' | 'aguardando' | 'concluido' | 'erro' | 'cancelado';
@@ -203,7 +223,7 @@ export type ServerMsg =
   | { t: 'chat'; from: ID; name: string; text: string; room: RoomId | null; at: string }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' }
+  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' }
   | { t: 'job'; job: AgentJob }
   | { t: 'jobMessage'; message: JobMessage }
   | { t: 'render'; timelineId: ID; progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string };

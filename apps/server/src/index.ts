@@ -8,6 +8,7 @@ import './db.ts';
 import { api, syncAgentTools } from './routes/api.ts';
 import { handleSocket } from './realtime.ts';
 import { recoverJobs } from './agents/runtime.ts';
+import { closeAllLive } from './agents/live.ts';
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'warn' }, bodyLimit: 10 * 1024 * 1024 });
 
@@ -27,6 +28,11 @@ if (existsSync(config.webDist)) {
 
 recoverJobs();
 syncAgentTools();
+// os apps abertos ao vivo pertencem a este processo: fecham com ele
+process.on('exit', closeAllLive);
+for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => process.exit(0));
+// o app de desktop pede para fechar antes de matar o processo (no Windows o kill não roda o 'exit')
+(process as any).parentPort?.on('message', (e: { data?: { type?: string } }) => { if (e?.data?.type === 'shutdown') process.exit(0); });
 await app.listen({ port: config.port, host: config.host });
 // avisa o processo pai (app de desktop) que o servidor está pronto
 process.send?.({ type: 'ready', port: config.port });

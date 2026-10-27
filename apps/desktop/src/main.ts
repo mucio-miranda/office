@@ -297,7 +297,11 @@ app.whenReady().then(async () => {
   checkUpdates();
 });
 
-app.on('before-quit', () => { quitting = true; });
+app.on('before-quit', () => {
+  quitting = true;
+  // o servidor fecha os apps criativos abertos ao vivo antes de sair
+  server?.postMessage({ type: 'shutdown' });
+});
 app.on('will-quit', () => {
   globalShortcut.unregisterAll();
   server?.kill();

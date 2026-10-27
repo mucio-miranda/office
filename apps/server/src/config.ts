@@ -21,6 +21,8 @@ export const config = {
   renderCmd: process.env.OFFICE_RENDER_CMD ?? `npx tsx "${path.join(REPO_ROOT, 'packages/video-engine/src/cli.ts')}"`,
   /** Quantos funcionários de IA podem trabalhar ao mesmo tempo. */
   maxConcurrentJobs: Number(process.env.OFFICE_MAX_JOBS ?? 2),
+  /** Quantos apps criativos podem ficar abertos ao vivo ao mesmo tempo (cada um é uma janela pesada). */
+  maxLiveApps: Number(process.env.OFFICE_LIVE_MAX ?? 2),
   version: process.env.OFFICE_VERSION ?? '0.2.0',
 };
 

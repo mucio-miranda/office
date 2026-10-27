@@ -25,40 +25,101 @@ interface ToolDef {
   /** Asset do release para Windows (arch = x64 | arm64); o resto das plataformas instala pelo link. */
   winAsset: (version: string, arch: string) => string;
   sums: string;
-  /** Argumentos do servidor MCP, com as pastas que ele pode ler e gravar. */
+  /** Argumentos do servidor MCP headless, com as pastas que ele pode ler e gravar. */
   args: (office: Office) => string[];
   env?: Record<string, string>;
   /** O que o funcionário lê no prompt de sistema. */
   hint: string;
+  live?: LiveDef;
+}
+
+/** Modo ao vivo: o app de janela abre com o canal de controle e o servidor MCP vira uma ponte para ele. */
+export interface LiveDef {
+  /** Executável do app de janela (sem .exe), na mesma pasta do CLI. */
+  app: string;
+  /** Prefixo das variáveis do canal de controle: <ENV>_CONTROL_PORT e <ENV>_CONTROL_TOKEN. */
+  env: string;
+  /** `frame`: primeira linha {method:"auth"}; `inline`: token em toda requisição. */
+  auth: 'frame' | 'inline';
+  /** Pastas que o app aberto pode ler e gravar (na ponte, quem confina é o app). */
+  appArgs?: (office: Office) => string[];
+  bridge: (port: number) => string[];
+  /** O print só pode ser gravado dentro da pasta de gravação, com caminho relativo a ela. */
+  relativeShot?: boolean;
 }
 
 const craftRoots = (office: Office, multi: boolean) => [
   ...(multi ? [office.rootPath, ...office.extraDirs] : [office.rootPath]).flatMap((d) => ['--automation-read-root', d]),
   '--automation-write-root', office.rootPath,
 ];
+const portable = (id: string) => (v: string, a: string) => `${id}-${v}-windows-${a}-portable.zip`;
 
 const CATALOG: ToolDef[] = [
   {
     id: 'photocraft', name: 'PhotoCraft', replaces: 'Photoshop', repo: 'storytold/photocraft', exe: 'photocraft-cli',
     summary: 'Imagens e PSD com camadas, máscaras, ajustes e exportação.',
-    winAsset: (v, a) => `photocraft-${v}-windows-${a}-portable.zip`, sums: 'SHA256SUMS.txt',
+    winAsset: portable('photocraft'), sums: 'SHA256SUMS.txt',
     // o PhotoCraft aceita uma pasta de leitura só: a raiz do escritório
     args: (o) => ['mcp', ...craftRoots(o, false)],
     hint: 'edição de imagem e PSD (abrir, camadas, máscaras, ajustes, texto, exportar PNG/JPG/PSD). Só lê e grava dentro da pasta raiz do escritório: para usar um arquivo de outra pasta, copie antes para a pasta de trabalho do cliente.',
+    live: { app: 'photocraft', env: 'PHOTOCRAFT', auth: 'frame', appArgs: (o) => craftRoots(o, false), bridge: (p) => ['--bridge', `127.0.0.1:${p}`], relativeShot: true },
   },
   {
     id: 'vectorcraft', name: 'VectorCraft', replaces: 'Illustrator', repo: 'storytold/vectorcraft', exe: 'vectorcraft-cli',
     summary: 'Vetor: SVG, PDF e .ai, logos, ícones e layouts.',
-    winAsset: (v, a) => `vectorcraft-${v}-windows-${a}-portable.zip`, sums: 'SHA256SUMS.txt',
-    args: (o) => ['mcp', ...craftRoots(o, true)],
+    winAsset: portable('vectorcraft'), sums: 'SHA256SUMS.txt',
+    // sem --headless ele tenta antes um app aberto na porta padrão, que pode ser outro Craft
+    args: (o) => ['mcp', '--headless', ...craftRoots(o, true)],
     hint: 'vetor (SVG, PDF, .ai): logos, ícones, layouts e exportação. Lê nas pastas do escritório e grava só na pasta raiz.',
+    live: { app: 'vectorcraft', env: 'VECTORCRAFT', auth: 'inline', appArgs: (o) => craftRoots(o, true), bridge: (p) => ['--connect', `127.0.0.1:${p}`] },
   },
   {
     id: 'filmcraft', name: 'FilmCraft', replaces: 'Premiere', repo: 'storytold/filmcraft', exe: 'filmcraft-cli',
-    summary: 'Edição de vídeo por comandos: sequência, cortes, títulos e exportação.',
-    winAsset: (v, a) => `filmcraft-${v}-windows-${a}-portable.zip`, sums: 'SHA256SUMS.txt',
+    summary: 'Edição de vídeo profissional: sequência, cortes, cor, áudio, legendas e exportação.',
+    winAsset: portable('filmcraft'), sums: 'SHA256SUMS.txt',
     args: () => ['mcp'],
-    hint: 'edição de vídeo em projeto .fcproj (importar mídia, montar a sequência, cortar, títulos, exportar H.264/ProRes). Use junto com a engine de timeline do Office; nunca grave fora da pasta do cliente.',
+    hint: 'edição de vídeo em projeto .fcproj (importar mídia, montar a sequência, cortar, trimar, cor, mixagem, legendas, exportar H.264/ProRes). Use junto com a engine de timeline do Office; nunca grave fora da pasta do cliente.',
+    live: { app: 'filmcraft', env: 'FILMCRAFT', auth: 'inline', appArgs: () => ['--empty'], bridge: (p) => ['--bridge', `127.0.0.1:${p}`] },
+  },
+  {
+    id: 'effectcraft', name: 'EffectCraft', replaces: 'After Effects', repo: 'storytold/effectcraft', exe: 'effectcraft-cli',
+    summary: 'Motion graphics e composição: títulos animados, legendas com movimento e render.',
+    winAsset: portable('effectcraft'), sums: 'SHA256SUMS.txt',
+    args: () => ['mcp', '--autosave'],
+    hint: 'motion graphics em projeto .ecproj (composições, camadas, keyframes, expressões, títulos e legendas animadas, render MP4/WebM/PNG com alfa). Grave projetos e renders só na pasta do cliente.',
+    live: { app: 'effectcraft', env: 'EFFECTCRAFT', auth: 'inline', bridge: (p) => ['--bridge', String(p)] },
+  },
+  {
+    id: 'soundcraft', name: 'SoundCraft', replaces: 'Pro Tools', repo: 'storytold/soundcraft', exe: 'soundcraft-cli',
+    summary: 'Áudio: limpar voz, mixar trilha e efeitos, loudness e exportação.',
+    winAsset: portable('soundcraft'), sums: 'SHA256SUMS.txt',
+    args: (o) => ['mcp', ...craftRoots(o, true)],
+    hint: 'áudio multipista (importar voz e trilha, cortar, ganho, EQ, compressão, redução de ruído, ducking, bounce WAV/MP3). Lê nas pastas do escritório e grava só na pasta raiz.',
+    live: { app: 'soundcraft', env: 'SOUNDCRAFT', auth: 'inline', bridge: (p) => ['--connect', String(p)] },
+  },
+  {
+    id: 'lightcraft', name: 'LightCraft', replaces: 'Lightroom', repo: 'storytold/lightcraft', exe: 'lightcraft-cli',
+    summary: 'Tratamento de fotos sem destruir o original: cor, luz, presets e exportação em lote.',
+    winAsset: portable('lightcraft'), sums: 'SHA256SUMS.txt',
+    // o catálogo fica na pasta de dados do Office dentro da raiz; os originais nunca mudam
+    args: (o) => ['mcp', '--compact', '--library', path.join(o.rootPath, '.office', 'lightcraft')],
+    hint: 'tratamento de foto não destrutivo (importar, balanço de branco, exposição, curvas, HSL, máscaras, presets, exportação em lote). Os originais nunca são alterados; exporte para FOTOS/EDITADAS do cliente. Use `run_command` para os comandos que não aparecem na lista.',
+    live: { app: 'lightcraft', env: 'LIGHTCRAFT', auth: 'inline', bridge: (p) => ['--connect', `127.0.0.1:${p}`, '--compact'] },
+  },
+  {
+    id: 'designcraft', name: 'DesignCraft', replaces: 'InDesign', repo: 'storytold/designcraft', exe: 'designcraft-cli',
+    summary: 'Diagramação: carrosséis, apresentações, materiais impressos e PDF.',
+    winAsset: portable('designcraft'), sums: 'SHA256SUMS.txt',
+    args: (o) => ['mcp', ...craftRoots(o, true)],
+    hint: 'diagramação de páginas (pranchetas, grids, estilos de texto, imagens vinculadas, exportar PDF/PNG): carrosséis, materiais e propostas visuais. Lê nas pastas do escritório e grava só na pasta raiz.',
+    live: { app: 'designcraft', env: 'DESIGNCRAFT', auth: 'inline', bridge: (p) => ['--connect', String(p)] },
+  },
+  {
+    id: 'pdfcraft', name: 'PdfCraft', replaces: 'Acrobat', repo: 'storytold/pdfcraft', exe: 'pdfcraft-cli',
+    summary: 'PDF: ler, anotar, juntar, dividir, preencher e exportar.',
+    winAsset: portable('pdfcraft'), sums: 'SHA256SUMS.txt',
+    args: (o) => ['mcp', '--compact', ...craftRoots(o, true)],
+    hint: 'PDF (ler texto e tabelas, anotar, juntar, dividir, preencher formulários, exportar imagens). Use `tool_search` para achar a ferramenta certa. Lê nas pastas do escritório e grava só na pasta raiz.',
   },
   {
     id: 'officecli', name: 'OfficeCLI', replaces: 'Word, Excel e PowerPoint', repo: 'iOfficeAI/OfficeCLI', exe: 'officecli',
@@ -115,19 +176,41 @@ export function listTools(): ToolInfo[] {
       id: t.id, name: t.name, replaces: t.replaces, summary: t.summary, url: `https://github.com/${t.repo}`,
       installed: !!bin, path: bin, version: bin ? version(t, bin) : null,
       canInstall: process.platform === 'win32',
+      live: !!t.live,
     };
   });
 }
 
-/** Configuração MCP de uma tarefa: só as ferramentas do funcionário que estão instaladas. */
-export function mcpConfig(ids: string[], office: Office) {
+/** O app de janela de uma ferramenta com modo ao vivo (mesma pasta do CLI). */
+export function liveApp(id: string): { def: LiveDef; name: string; exe: string } | null {
+  const t = CATALOG.find((c) => c.id === id);
+  const bin = t?.live && locate(t);
+  if (!t?.live || !bin) return null;
+  const exe = path.join(path.dirname(bin), t.live.app + ext);
+  return existsSync(exe) ? { def: t.live, name: t.name, exe } : null;
+}
+
+/** Ponte de uma ferramenta para o app aberto: porta e token do canal de controle. */
+export interface LiveBridge { port: number; token: string }
+
+/**
+ * Configuração MCP de uma tarefa: só as ferramentas do funcionário que estão instaladas.
+ * As que têm app aberto ao vivo (`bridges`) usam a ponte em vez do motor headless.
+ */
+export function mcpConfig(ids: string[], office: Office, bridges: Record<string, LiveBridge> = {}) {
   const servers: Record<string, { command: string; args: string[]; env?: Record<string, string> }> = {};
   const hints: string[] = [];
   for (const t of CATALOG.filter((c) => ids.includes(c.id))) {
     const bin = locate(t);
     if (!bin) continue;
-    servers[t.id] = { command: bin, args: t.args(office), ...(t.env ? { env: t.env } : {}) };
-    hints.push(`- **${t.name}** (servidor MCP \`${t.id}\`, no lugar do ${t.replaces}): ${t.hint}`);
+    const b = t.live && bridges[t.id];
+    if (b) {
+      servers[t.id] = { command: bin, args: ['mcp', ...t.live!.bridge(b.port)], env: { ...t.env, [`${t.live!.env}_CONTROL_TOKEN`]: b.token } };
+      hints.push(`- **${t.name}** (servidor MCP \`${t.id}\`, no lugar do ${t.replaces}), **aberto ao vivo na tela**: ${t.hint} Uma pessoa pode estar assistindo ou mexendo junto: confira o estado (\`ui_screenshot\` ou inspeção) antes de cada passo, não feche o app e salve o arquivo antes de terminar.`);
+    } else {
+      servers[t.id] = { command: bin, args: t.args(office), ...(t.env ? { env: t.env } : {}) };
+      hints.push(`- **${t.name}** (servidor MCP \`${t.id}\`, no lugar do ${t.replaces}): ${t.hint}`);
+    }
   }
   return { servers, hints };
 }

@@ -33,11 +33,30 @@ Cada etapa sai como um release próprio, testado, e o app instalado se atualiza 
 4. ✅ **Ferramentas criativas por funcionário (v0.3.0)**: servidores MCP por agente, com PhotoCraft/VectorCraft
    (Duda), FilmCraft (Vic) e OfficeCLI (Theo e Rafa), configurados e testados com tarefas reais (arte PNG/PSD,
    ícone SVG, vídeo 1080x1920, proposta DOCX e planilha XLSX); instalação com um clique e SHA256 conferido
-5. **Estúdio de vídeo turbinado (v0.3.1)**: transcrição com Whisper gerando legendas na timeline, prévia rápida
-   em baixa resolução e exportação para CapCut (`draft_content.json`) e Premiere (XML)
-6. **Vida no escritório (v0.3.2)**: sons à moda do Gather, o gerente aplica direto as demandas que sugere
-   (um clique) e o modo Auto (maquete de perto, planta esquemática de longe)
-7. **Editor de planta (v0.4)**: arrastar móveis, criar salas, temas e vários andares
+## 🔜 A agência dentro do Office, por etapas
+A ideia: você passa um cliente novo, a equipe de IA pede o briefing, divide o trabalho entre os funcionários, usa o
+que já está na pasta do cliente (ensaio, IDV, logos), pede aprovação no ponto certo e entrega no calendário, como uma
+agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo com software open source e ligado ao mapa.
+
+5. ✅ **Suíte Craft e modo ao vivo (v0.3.1)**: EffectCraft, SoundCraft (Vic), LightCraft, DesignCraft (Duda) e
+   PdfCraft (Theo e Rafa) no catálogo; **ao vivo**: o app abre na tela, a IA opera a janela pela ponte MCP, o painel
+   do funcionário espelha a tela a cada segundo (Ampliar, Assumir, Fechar app) e o monitor da mesa e a TV da ilha de
+   vídeo mostram a edição no mapa; testado com tarefas reais no PhotoCraft (PSD + PNG) e no FilmCraft (projeto + MP4)
+6. **Ilha de edição ao vivo (v0.3.2)**: FilmCraft, EffectCraft e SoundCraft juntos na edição, legendas com
+   whisper.cpp (modelo large-v3-turbo, Silero VAD) direto na timeline, prévia rápida e exportação para
+   OpenTimelineIO, Kdenlive/Shotcut (MLT), Premiere (XML FCP7) e, como experimental, CapCut
+7. **Cliente e esteira (v0.4)**: cliente novo com entrevista de briefing, pasta no padrão REZZU com índice de
+   arquivos (ensaio, logo, IDV, brutos), demandas em etapas (briefing → pauta → copy → arte/vídeo → aprovação →
+   agendado) passando sozinhas de um funcionário para outro, aprovação humana ou da IA configurável por cliente
+8. **Mesa do diretor de arte (v0.4.1)**: revisão das peças com versões, prompt apontando uma área da imagem e
+   edição ao vivo no PhotoCraft e no LightCraft
+9. **Publicação (v0.5)**: [Postiz](https://github.com/gitroomhq/postiz-app) (AGPL-3.0) rodando junto, posts
+   aprovados agendados e ligados ao calendário; as contas dos clientes são conectadas por vocês no próprio Postiz
+10. **Arquivo no mapa (v0.5.1)**: armário por cliente nas salas, documentos como marcadores no mapa e visualização
+    no Office (PdfCraft para editar)
+11. **Vida no escritório**: sons à moda do Gather, o gerente aplica direto as demandas que sugere (um clique) e o
+    modo Auto (maquete de perto, planta esquemática de longe)
+12. **Editor de planta**: arrastar móveis, criar salas, temas e vários andares
 
 ## 🧭 v0.3: equipe e integrações
 - [ ] Voz e vídeo por proximidade (WebRTC/LiveKit) e salas de reunião com porta
