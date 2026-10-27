@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import type {
-  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, Demand, JobMessage, LiveSession, Member, Office, Presence, RoomId, ServerMsg, ToolInfo, Transaction, User, Vec2,
+  AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, DecorItem, Demand, JobMessage, LiveSession, Member, Office, Presence, RoomId, ServerMsg, ToolInfo, Transaction, User, Vec2,
 } from '@office/shared';
 import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
@@ -34,6 +34,8 @@ interface State {
   renders: Record<string, RenderState>;
   /** Prévias rápidas por timeline (não mexem no status do render final). */
   previews: Record<string, RenderState>;
+  /** Decoração do mapa salva no servidor (null = a padrão). */
+  layout: DecorItem[] | null;
 
   presences: Record<string, Presence>;
   chat: ChatLine[];
@@ -58,7 +60,7 @@ interface State {
   logout(): void;
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
-  reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live'): Promise<void>;
+  reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout'): Promise<void>;
   loadTools(): Promise<void>;
   /** Liga ou desliga uma ferramenta de um funcionário. */
   toggleAgentTool(agentId: string, toolId: string, on: boolean): Promise<void>;
@@ -77,7 +79,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
-  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {},
+  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null,
   presences: {}, chat: [], emotes: {},
   panel: null, panelArg: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
@@ -112,7 +114,7 @@ export const useStore = create<State>((set, get) => ({
     const office = me.offices.find((o: OfficeWithRole) => o.id === id) ?? info.office;
     try { localStorage.setItem('office.last', id); } catch { /* ok */ }
     set({ office, offices: me.offices, members: info.members, presences: {}, chat: [], messages: {} });
-    await Promise.all((['demands', 'events', 'transactions', 'clients', 'agents', 'jobs', 'timelines', 'live'] as const).map((w) => get().reload(w)));
+    await Promise.all((['demands', 'events', 'transactions', 'clients', 'agents', 'jobs', 'timelines', 'live', 'layout'] as const).map((w) => get().reload(w)));
     connect(id);
   },
 

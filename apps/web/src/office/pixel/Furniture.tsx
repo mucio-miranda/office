@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Furniture } from '../layout';
 import { usePixel, type PixelPalette } from '../../lib/theme';
-import { booksTexture, OutlineColor, PBox, PCyl, rugTexture, screenTexture } from './kit';
+import { OutlineColor, PBox, PCyl, screenTexture } from './kit';
 
 /** Contorno de destaque quando o mouse passa por algo que dá para usar. */
 const HOVER = '#ffe066';
@@ -9,7 +9,7 @@ const HOVER = '#ffe066';
 type V3 = [number, number, number];
 
 /** Cadeira de escritório: base de 5 pés, coluna, assento e encosto estofados. */
-function OfficeChair({ p, pos, rot = 0, color }: { p: PixelPalette; pos: V3; rot?: number; color: string }) {
+export function OfficeChair({ p, pos, rot = 0, color }: { p: PixelPalette; pos: V3; rot?: number; color: string }) {
   return (
     <group position={pos} rotation={[0, rot, 0]}>
       <PBox p={p} pos={[0, 0.05, 0]} size={[0.5, 0.06, 0.08]} color={p.metal} />
@@ -22,7 +22,7 @@ function OfficeChair({ p, pos, rot = 0, color }: { p: PixelPalette; pos: V3; rot
 }
 
 /** Planta em vaso: folhagem em camadas de blocos, do escuro (embaixo) ao claro (em cima). */
-function Plant({ p, pos, scale = 1 }: { p: PixelPalette; pos: V3; scale?: number }) {
+export function Plant({ p, pos, scale = 1 }: { p: PixelPalette; pos: V3; scale?: number }) {
   return (
     <group position={pos} scale={scale}>
       <PCyl p={p} pos={[0, 0.22, 0]} r={0.22} rTop={0.27} h={0.44} color={p.pot} sides={8} />
@@ -35,8 +35,8 @@ function Plant({ p, pos, scale = 1 }: { p: PixelPalette; pos: V3; scale?: number
 }
 
 /**
- * Móveis em pixel art, no mesmo lugar e com o mesmo clique da maquete: mesas com monitor, teclado e
- * caneca, cadeiras de escritório, sofás com almofadas, estantes com livros, plantas em camadas.
+ * Móveis fixos em pixel art, no mesmo lugar e com o mesmo clique da maquete: mesas com monitor, teclado e
+ * caneca, cadeiras de escritório, quadros, TVs, balcões e cofre. A decoração editável fica em decor/catalog.
  */
 export function PixelFurniture({ f, onUse }: { f: Furniture; onUse?: (f: Furniture) => void }) {
   const p = usePixel();
@@ -91,20 +91,6 @@ export function PixelFurniture({ f, onUse }: { f: Furniture; onUse?: (f: Furnitu
           </group>
         );
       }
-      case 'sofa':
-        return (
-          <group>
-            <PBox p={p} pos={[0, 0.22, 0]} size={[2.6, 0.3, 1]} color={p.woodDark} />
-            <PBox p={p} pos={[0, 0.44, -0.05]} size={[2.2, 0.16, 0.86]} color={p.fabric} />
-            <PBox p={p} pos={[0, 0.72, 0.38]} size={[2.6, 0.62, 0.24]} color={p.fabric} />
-            <PBox p={p} pos={[-1.2, 0.56, 0]} size={[0.24, 0.42, 1]} color={p.fabric} />
-            <PBox p={p} pos={[1.2, 0.56, 0]} size={[0.24, 0.42, 1]} color={p.fabric} />
-            <PBox p={p} pos={[-0.55, 0.62, 0.18]} size={[0.5, 0.36, 0.14]} color={p.paper} rot={[-0.25, 0, 0]} />
-            <PBox p={p} pos={[0.55, 0.62, 0.18]} size={[0.5, 0.36, 0.14]} color="#f1c40f" rot={[-0.25, 0, 0]} />
-          </group>
-        );
-      case 'planta':
-        return <Plant p={p} pos={[0, 0, 0]} />;
       case 'quadro': {
         const w = f.w ?? 3;
         const notes = ['#ffd166', '#ef476f', '#06d6a0', '#118ab2', '#ffd166', '#f78c6b'];
@@ -168,37 +154,6 @@ export function PixelFurniture({ f, onUse }: { f: Furniture; onUse?: (f: Furnitu
             <PBox p={p} pos={[0, 0.5, 0.455]} size={[0.7, 0.8, 0.02]} color="#4a545e" outline={false} />
             <PCyl p={p} pos={[0.12, 0.55, 0.47]} r={0.1} h={0.03} color="#c9ced4" sides={10} />
             <PBox p={p} pos={[-0.18, 0.55, 0.47]} size={[0.05, 0.22, 0.03]} color="#c9ced4" outline={false} />
-          </group>
-        );
-      case 'estante':
-        return (
-          <group>
-            <PBox p={p} pos={[0, 0.95, 0]} size={[2.4, 1.9, 0.5]} color={p.woodDark} />
-            {[0.18, 0.72, 1.26].map((y, i) => (
-              <group key={i}>
-                <PBox p={p} pos={[0, y + 0.22, 0.2]} size={[2.2, 0.44, 0.12]} color="#ffffff" map={booksTexture()} outline={false} />
-                <PBox p={p} pos={[0, y, 0.18]} size={[2.24, 0.05, 0.22]} color={p.wood} outline={false} />
-              </group>
-            ))}
-            <Plant p={p} pos={[0.8, 1.9, 0]} scale={0.5} />
-          </group>
-        );
-      case 'tapete': {
-        const w = f.w ?? 4, d = f.d ?? 3;
-        return (
-          <mesh position={[0, 0.006, 0]} rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-            <planeGeometry args={[w, d]} />
-            <meshLambertMaterial map={rugTexture(p.fabric, p.wood)} />
-          </mesh>
-        );
-      }
-      case 'luminaria':
-        return (
-          <group>
-            <PBox p={p} pos={[0, 0.03, 0]} size={[0.36, 0.06, 0.36]} color="#22252c" />
-            <PCyl p={p} pos={[0, 0.9, 0]} r={0.03} h={1.7} color="#22252c" sides={6} />
-            <PCyl p={p} pos={[0, 1.8, 0]} r={0.3} rTop={0.18} h={0.3} color="#ffe9a8" glow sides={8} />
-            <pointLight position={[0, 1.6, 0]} intensity={2} distance={4} color="#ffd98a" />
           </group>
         );
       default:

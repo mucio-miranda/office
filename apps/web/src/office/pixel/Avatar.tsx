@@ -34,6 +34,8 @@ export function PixelAvatar({ anchorId, color, getState, ring, pulse, typing, se
   useEffect(() => registerAnchor(anchorId, () => stateRef.current()), [anchorId]);
   const hair = pick(HAIRS, anchorId, 7);
   const skin = pick(SKINS, anchorId, 3);
+  const style = pick(['curto', 'topete', 'longo', 'coque'], anchorId, 11);
+  const glasses = pick(['', '', 'oculos'], anchorId, 5) === 'oculos';
 
   useFrame((_, dt) => {
     const s = stateRef.current();
@@ -99,6 +101,9 @@ export function PixelAvatar({ anchorId, color, getState, ring, pulse, typing, se
         {/* tronco com a camiseta na cor da pessoa */}
         <PBox p={p} out={0.022} pos={[0, 0.86, 0]} size={[0.46, 0.52, 0.26]} color={color} />
         <PBox p={p} out={0.022} pos={[0, 0.63, 0]} size={[0.46, 0.06, 0.27]} color={p.pants} outline={false} />
+        {/* gola e barra da camiseta */}
+        <PBox p={p} out={0.022} pos={[0, 1.105, 0.02]} size={[0.24, 0.04, 0.24]} color={skin} outline={false} cast={false} />
+        <PBox p={p} out={0.022} pos={[0, 1.07, 0.131]} size={[0.16, 0.06, 0.01]} color={skin} outline={false} cast={false} />
         {/* braços (giram no ombro), mãos na cor da pele */}
         <group ref={armL} position={[-0.3, 1.08, 0]}>
           <PBox p={p} out={0.022} pos={[0, -0.2, 0]} size={[0.13, 0.4, 0.15]} color={color} />
@@ -112,6 +117,23 @@ export function PixelAvatar({ anchorId, color, getState, ring, pulse, typing, se
         <PBox p={p} out={0.022} pos={[0, 1.33, 0]} size={[0.4, 0.38, 0.36]} color={skin} />
         <PBox p={p} out={0.022} pos={[0, 1.54, -0.02]} size={[0.44, 0.12, 0.4]} color={hair} />
         <PBox p={p} out={0.022} pos={[0, 1.38, -0.17]} size={[0.44, 0.3, 0.08]} color={hair} />
+        {style === 'topete' && <PBox p={p} out={0.022} pos={[0.04, 1.63, 0.08]} size={[0.3, 0.1, 0.22]} color={hair} rot={[0.3, 0, 0]} />}
+        {style === 'longo' && (
+          <>
+            <PBox p={p} out={0.022} pos={[0, 1.18, -0.19]} size={[0.46, 0.42, 0.08]} color={hair} />
+            <PBox p={p} out={0.022} pos={[-0.215, 1.3, -0.02]} size={[0.06, 0.34, 0.3]} color={hair} />
+            <PBox p={p} out={0.022} pos={[0.215, 1.3, -0.02]} size={[0.06, 0.34, 0.3]} color={hair} />
+          </>
+        )}
+        {style === 'coque' && <PBox p={p} out={0.022} pos={[0, 1.66, -0.12]} size={[0.18, 0.14, 0.16]} color={hair} />}
+        {glasses && (
+          <>
+            <PBox p={p} out={0.022} pos={[-0.09, 1.35, 0.19]} size={[0.13, 0.11, 0.01]} color="#1d1720" outline={false} cast={false} />
+            <PBox p={p} out={0.022} pos={[0.09, 1.35, 0.19]} size={[0.13, 0.11, 0.01]} color="#1d1720" outline={false} cast={false} />
+            <PBox p={p} out={0.022} pos={[-0.09, 1.35, 0.196]} size={[0.07, 0.05, 0.005]} color="#9fd8ff" outline={false} cast={false} />
+            <PBox p={p} out={0.022} pos={[0.09, 1.35, 0.196]} size={[0.07, 0.05, 0.005]} color="#9fd8ff" outline={false} cast={false} />
+          </>
+        )}
         <PBox p={p} out={0.022} pos={[-0.09, 1.35, 0.185]} size={[0.06, 0.08, 0.01]} color="#1d1720" outline={false} cast={false} />
         <PBox p={p} out={0.022} pos={[0.09, 1.35, 0.185]} size={[0.06, 0.08, 0.01]} color="#1d1720" outline={false} cast={false} />
         <PBox p={p} out={0.022} pos={[0, 1.24, 0.185]} size={[0.1, 0.03, 0.01]} color="#a8503c" outline={false} cast={false} />

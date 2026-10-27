@@ -6,7 +6,8 @@ import type { AgentProfile, Presence, Vec2 } from '@office/shared';
 import { useStore, showEmote } from '../lib/store';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/theme';
 import { PixelRoom } from './pixel/Room';
-import { PixelDecor } from './pixel/Decor';
+import { DecorLayer } from './decor/DecorLayer';
+import { useDecor } from './decor/state';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
@@ -51,7 +52,7 @@ const sinElev = () => camHeight() / Math.hypot(1, camHeight());
 const PIXEL_SIZE = 2;
 
 /** Modo drone ligado (Espaço segurado) ou arrastando: cliques não movem o personagem. */
-export const droneBlocksClick = () => useStore.getState().drone || cam.justDragged;
+export const droneBlocksClick = () => useStore.getState().drone || cam.justDragged || useDecor.getState().editing;
 
 /** Volta a câmera para o jogador. */
 export function recenter() {
@@ -518,7 +519,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       {FURNITURE.map((f, i) => (
         <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; player.target = freeSpotNear({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}
-      {pixel && <PixelDecor />}
+      <DecorLayer />
       <DeskMarkers />
       <LiveScreens />
       <Beacon p={p} />

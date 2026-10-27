@@ -190,6 +190,32 @@ export async function api(app: FastifyInstance) {
       return { ok: true };
     });
 
+    // decoração do mapa: null = a decoração padrão do Office
+    r.get('/api/offices/:officeId/layout', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      // a coluna json já sai convertida pelo fromRow
+      const row = one<{ json: unknown[] }>('SELECT json FROM office_layout WHERE office_id = ?', (req.params as any).officeId);
+      return row?.json ?? null;
+    });
+    r.put('/api/offices/:officeId/layout', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as { officeId: string };
+      if (membership(officeId, req.user.id)?.role === 'convidado') return reply.code(403).send({ error: 'Convidados não mudam a decoração.' });
+      const item = z.object({
+        id: z.string().min(1).max(64), kind: z.string().regex(/^[a-z0-9-]{1,40}$/),
+        x: z.number().min(-40).max(40), z: z.number().min(-40).max(40), rot: z.number().int().min(0).max(3),
+        color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), wall: z.enum(['fundo', 'esquerda']).optional(),
+      });
+      const b = body(z.object({ items: z.array(item).max(800).nullable() }), req, reply);
+      if (!b) return;
+      if (b.items === null) db.prepare('DELETE FROM office_layout WHERE office_id = ?').run(officeId);
+      else db.prepare(`INSERT INTO office_layout (office_id, json, updated_by, updated_at) VALUES (?, ?, ?, ?)
+        ON CONFLICT(office_id) DO UPDATE SET json = excluded.json, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
+        .run(officeId, JSON.stringify(b.items), req.user.id, now());
+      invalidate(officeId, 'layout');
+      return { ok: true };
+    });
+
     r.patch('/api/offices/:officeId', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const b = body(z.object({ name: z.string().min(2).optional(), rootPath: z.string().optional(), extraDirs: z.array(z.string()).optional(), theme: z.any().optional() }), req, reply);

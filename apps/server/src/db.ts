@@ -68,6 +68,10 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE agents ADD COLUMN live TEXT NOT NULL DEFAULT '[]';
    UPDATE agents SET live = '["photocraft"]' WHERE slug = 'designer';
    UPDATE agents SET live = '["filmcraft"]' WHERE slug = 'editor-de-video';`,
+  // v0.3.4: decoração do mapa editável (sem linha = decoração padrão)
+  `CREATE TABLE office_layout (
+     office_id TEXT PRIMARY KEY REFERENCES offices(id) ON DELETE CASCADE,
+     json TEXT NOT NULL, updated_by TEXT, updated_at TEXT NOT NULL);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

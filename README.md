@@ -20,6 +20,8 @@ Ela abre os brutos do cliente, monta o corte, renderiza e **levanta a mão ✋**
 
 <img src="docs/img/escritorio-pixel.jpg" alt="Escritório em pixel art isométrica: recepção com piso de tacos e tapete, sala de reunião com carpete vermelho, redação, gerência e funcionários de IA nas mesas" width="100%"/>
 
+<img src="docs/img/modo-decorar.jpg" alt="Modo Decorar: catálogo de móveis na parte de baixo, com a peça escolhida seguindo o cursor sobre a grade do piso" width="100%"/>
+
 </div>
 
 ---
@@ -46,6 +48,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 
 ### 🗺️ Escritório 3D navegável
 - **Pixel art isométrica** (padrão), inspirada nos mundos de pixel do Habbo e do Gather: câmera 2:1, contorno escuro, sombreamento em 3 tons, piso de tacos, carpetes e ladrilhos por sala, paredes com papel de parede e janelas, avatares em blocos que andam, sentam e digitam e etiquetas de nome em pílula. Tudo desenhado por código, sem assets de terceiros
+- **Modo Decorar** (<kbd>X</kbd> ou o botão Decorar), no espírito do catálogo de mobis do Habbo: 69 peças em 10 categorias, inspiradas em escritórios de startup (madeira clara e vidro da Apple Park, cabines acústicas, armários coloridos e bicicletas do Google, arquibancada e neon do Nubank, horta e escada vermelha do iFood, cabanas, tijolinho e bar de cereais da Pixar). Clique para selecionar, arraste para mover, <kbd>R</kbd> gira, troca de cor, duplicar, remover e desfazer (<kbd>Ctrl</kbd>+<kbd>Z</kbd>). A peça fica verde onde cabe e vermelha onde bloquearia uma porta, uma cadeira ou outro móvel; quadros, neons e revestimentos deslizam pelas paredes. A decoração é salva no servidor e aparece na hora para todo mundo do escritório
 - Ou a **maquete isométrica minimalista** (botão ao lado do tema ou `Ctrl+K` → "Mundo em maquete"), em tema claro e escuro, com as mesmas 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
 - **WASD** ou clique para andar, **Shift** para correr, **1–7** para teletransportar
 - **Ctrl+K**: vá para qualquer sala, painel, cliente, demanda ou funcionário
@@ -331,6 +334,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Suíte Craft completa e modo ao vivo (a IA opera o app aberto, a equipe assiste e assume)
 - [x] Ilha de edição ao vivo, legendas com Whisper, prévia rápida e exportação para OTIO, Premiere, Shotcut e SRT
 - [x] Mundo em pixel art isométrica (com a maquete minimalista como opção)
+- [x] Modo Decorar com catálogo de móveis, salvo para o escritório todo
 - [ ] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
 - [ ] Mesa do diretor de arte, publicação com Postiz e arquivo de documentos no mapa
 - [ ] Sons do mundo, editor de planta e vários andares

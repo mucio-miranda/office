@@ -39,6 +39,8 @@ export const DOOR = 2.6;
 export const WALL_T = 0.14;
 export const WALL_H = 0.6;
 
+export interface Box { x0: number; z0: number; x1: number; z1: number }
+
 /** Paredes como segmentos (x1,z1)-(x2,z2) com portas (centro no eixo da parede). */
 interface WallDef { a: Vec2; b: Vec2; doors: number[] }
 const WALL_DEFS: WallDef[] = [
@@ -55,6 +57,11 @@ const WALL_DEFS: WallDef[] = [
 ];
 
 export interface WallSeg { x: number; z: number; w: number; d: number }
+
+/** Vãos das portas, com uma faixa de passagem de cada lado (o modo Decorar não deixa bloquear). */
+export const DOOR_ZONES: Box[] = WALL_DEFS.flatMap(({ a, b, doors }) => doors.map((c) => (a.z === b.z
+  ? { x0: c - DOOR / 2, x1: c + DOOR / 2, z0: a.z - 1.2, z1: a.z + 1.2 }
+  : { x0: a.x - 1.2, x1: a.x + 1.2, z0: c - DOOR / 2, z1: c + DOOR / 2 })));
 
 /** Quebra cada parede em blocos retangulares, deixando os vãos das portas. */
 export const WALLS: WallSeg[] = WALL_DEFS.flatMap(({ a, b, doors }) => {
@@ -90,6 +97,9 @@ export interface Furniture {
 }
 
 /**
+ * Móveis fixos (os que abrem páginas e as mesas onde as pessoas e os funcionários sentam). A decoração
+ * em volta (sofás, plantas, tapetes, quadros…) é editável no modo Decorar e fica em decor/.
+ *
  * Mesas das pessoas: ao lado dos funcionários de IA de cada área e duas na recepção.
  * `x,z` é o centro da mesa; a cadeira fica em `z + 1.1`, de frente para o monitor (como as dos funcionários).
  */
@@ -108,32 +118,20 @@ export const deskSeat = (d: HumanDesk): Vec2 => ({ x: d.x, z: d.z + 1.1 });
 export const FURNITURE: Furniture[] = [
   ...HUMAN_DESKS.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true })),
   // recepção
-  { kind: 'tapete', x: 0, z: 5, w: 7, d: 4 },
-  { kind: 'sofa', x: -3.5, z: 9.6, rot: 0, solid: true },
-  { kind: 'sofa', x: 3.5, z: 9.6, rot: 0, solid: true },
   { kind: 'balcao', x: 0, z: 1.2, w: 5, d: 1.1, solid: true, panel: 'equipe', label: 'Equipe e convites' },
-  { kind: 'planta', x: -5.2, z: 11.2, solid: true },
-  { kind: 'planta', x: 5.2, z: 11.2, solid: true },
   { kind: 'quadro', x: -5.85, z: 2.4, rot: Math.PI / 2, panel: 'atividade', label: 'Mural de atividade' },
   // gerência
   { kind: 'quadro', x: 0, z: -11.85, w: 6, panel: 'demandas', label: 'Quadro de demandas' },
   { kind: 'calendario', x: -4.2, z: -11.85, panel: 'calendario', label: 'Calendário' },
   { kind: 'cofre', x: 4.6, z: -11, solid: true, panel: 'financeiro', label: 'Financeiro e métricas' },
   { kind: 'mesa', x: 2.5, z: -6.5, solid: true },
-  { kind: 'estante', x: -5.4, z: -7, rot: Math.PI / 2, solid: true },
-  { kind: 'planta', x: 5.2, z: -2.8, solid: true },
   // ilha de vídeo
   { kind: 'tv', x: 12, z: -1.85, w: 4, panel: 'video', label: 'Estúdio de vídeo (timeline)' },
   { kind: 'mesa', x: 14.5, z: 2.4, solid: true },
-  { kind: 'luminaria', x: 17, z: -1.2 },
   // design
   { kind: 'mesa', x: 14.5, z: 8.5, solid: true },
-  { kind: 'estante', x: 17.6, z: 8.5, rot: -Math.PI / 2, solid: true },
-  { kind: 'planta', x: 7, z: 11.2, solid: true },
   // redação
   { kind: 'mesa', x: -12, z: -6.5, solid: true },
-  { kind: 'estante', x: -17.6, z: -7, rot: Math.PI / 2, solid: true },
-  { kind: 'planta', x: -7, z: -11.2, solid: true },
   // reunião
   { kind: 'mesa-reuniao', x: -12, z: 5, w: 6, d: 2.6, solid: true },
   { kind: 'tv', x: -17.85, z: 5, rot: Math.PI / 2, w: 3.4, panel: 'calendario', label: 'Agenda da sala' },
@@ -141,7 +139,6 @@ export const FURNITURE: Furniture[] = [
   { kind: 'balcao', x: 12, z: -11.2, w: 8, d: 1.2, solid: true },
   { kind: 'cafeteira', x: 10, z: -11.2, label: 'Tomar um café' },
   { kind: 'mesa', x: 12, z: -6, solid: true },
-  { kind: 'planta', x: 17.2, z: -2.8, solid: true },
 ];
 
 /** Onde cada funcionário de IA senta, por sala. */
@@ -167,21 +164,27 @@ const FURN_SIZE: Partial<Record<FurnitureKind, [number, number]>> = {
   mesa: [2.2, 1.1], sofa: [2.6, 1], planta: [0.7, 0.7], cofre: [1, 1], estante: [2.4, 0.6], 'mesa-reuniao': [6, 2.6], balcao: [5, 1.1],
 };
 
-interface Box { x0: number; z0: number; x1: number; z1: number }
+export const FURN_BOX = (f: Furniture): Box => {
+  const [bw, bd] = FURN_SIZE[f.kind] ?? [1, 1];
+  let w = f.w ?? bw, d = f.d ?? bd;
+  if (f.rot && Math.abs(Math.sin(f.rot)) > 0.5) [w, d] = [d, w];
+  return { x0: f.x - w / 2, z0: f.z - d / 2, x1: f.x + w / 2, z1: f.z + d / 2 };
+};
+
+export const WALL_BOXES: Box[] = WALLS.map((w) => ({ x0: w.x - w.w / 2, z0: w.z - w.d / 2, x1: w.x + w.w / 2, z1: w.z + w.d / 2 }));
 const SOLIDS: Box[] = [
-  ...WALLS.map((w) => ({ x0: w.x - w.w / 2, z0: w.z - w.d / 2, x1: w.x + w.w / 2, z1: w.z + w.d / 2 })),
-  ...FURNITURE.filter((f) => f.solid).map((f) => {
-    const [bw, bd] = FURN_SIZE[f.kind] ?? [1, 1];
-    let w = f.w ?? bw, d = f.d ?? bd;
-    if (f.rot && Math.abs(Math.sin(f.rot)) > 0.5) [w, d] = [d, w];
-    return { x0: f.x - w / 2, z0: f.z - d / 2, x1: f.x + w / 2, z1: f.z + d / 2 };
-  }),
+  ...WALL_BOXES,
+  ...FURNITURE.filter((f) => f.solid).map(FURN_BOX),
 ];
+/** Peças da decoração que bloqueiam a passagem (atualizadas pelo modo Decorar). */
+let decorSolids: Box[] = [];
+export const setDecorSolids = (b: Box[]) => { decorSolids = b; };
 
 const RADIUS = 0.35;
 export function blocked(p: Vec2) {
   if (p.x < BOUNDS.x0 + RADIUS || p.x > BOUNDS.x1 - RADIUS || p.z < BOUNDS.z0 + RADIUS || p.z > BOUNDS.z1 - RADIUS) return true;
-  return SOLIDS.some((b) => p.x > b.x0 - RADIUS && p.x < b.x1 + RADIUS && p.z > b.z0 - RADIUS && p.z < b.z1 + RADIUS);
+  const hit = (b: Box) => p.x > b.x0 - RADIUS && p.x < b.x1 + RADIUS && p.z > b.z0 - RADIUS && p.z < b.z1 + RADIUS;
+  return SOLIDS.some(hit) || decorSolids.some(hit);
 }
 
 /** Move com deslizamento: se o passo diagonal bate, tenta só em x ou só em z. */

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Grid2x2,
+  Paintbrush,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
@@ -10,6 +11,8 @@ import { Tour, startTour, tourSeen } from './office/Tour';
 import { DESKS, HUMAN_DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
 import { ThemeToggle, WorldStyleToggle } from './lib/ui';
+import { DecorUI, enterDecorate } from './office/decor/DecorUI';
+import { canDecorate, useDecor } from './office/decor/state';
 import { useWorldStyle } from './lib/theme';
 import { desktop } from './lib/desktop';
 
@@ -40,6 +43,7 @@ export function OfficeView() {
   const [peek, setPeek] = useState(false);
   const droneDragging = useStore((s) => s.droneDragging);
   const touring = useStore((s) => s.tour !== null);
+  const decorating = useDecor((s) => s.editing);
   const ready = useStore((s) => s.agents.length > 0);
 
   // primeiro acesso: a gerente apresenta o escritório
@@ -70,7 +74,7 @@ export function OfficeView() {
       if (!inWorld) return;
       const room = ROOMS.find((r) => r.key === k);
       if (room) { goTo(roomCenter(room)); return; }
-      if (k === 'e' && nearby) { nearby.action(); return; }
+      if (k === 'e' && nearby && !useDecor.getState().editing) { nearby.action(); return; }
       if (k === 't' || k === 'enter') { e.preventDefault(); chatRef.current?.focus(); return; }
       if (k === '[') cam.angle -= Math.PI / 2;
       if (k === ']') cam.angle += Math.PI / 2;
@@ -100,13 +104,14 @@ export function OfficeView() {
             {inWorld && (
               <>
                 <LabelLayer />
-                <WorldHud />
-                <MiniMap />
-                <Chat inputRef={chatRef} />
-                {nearby && !drone && !touring && <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>}
+                {!decorating && <WorldHud />}
+                {!decorating && <MiniMap />}
+                {!decorating && <Chat inputRef={chatRef} />}
+                {nearby && !drone && !touring && !decorating && <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>}
                 <DroneOverlay />
                 <Tour />
-                {!touring && <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · <kbd>M</kbd> minha mesa · 1–7 salas · roda: zoom</div>}
+                <DecorUI />
+                {!touring && !decorating && <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · <kbd>M</kbd> minha mesa · <kbd>X</kbd> decorar · 1–7 salas · roda: zoom</div>}
               </>
             )}
           </div>
@@ -252,6 +257,7 @@ function WorldHud() {
   return (
     <div className="hud-top">
       <span className="pill"><Circle size={8} fill="currentColor" /> {room ? room.label : 'Área externa'}</span>
+      {canDecorate() && <button className="pill decor-btn" onClick={enterDecorate} title="Decorar o escritório (X)"><Paintbrush size={13} /> Decorar</button>}
       <span className="spacer" />
       <span className="pill stats">
         <span title="Pessoas online"><Users size={13} /><b>{Object.keys(presences).length + 1}</b></span>
@@ -377,6 +383,7 @@ function Palette({ onClose }: { onClose: () => void }) {
       ...NAV.map((d) => ({ icon: d.icon, label: d.label, hint: d.key, run: () => open(d.id) })),
       { icon: Armchair, label: 'Ir para minha mesa', hint: 'M', run: goToMyDesk },
       { icon: Compass, label: 'Tour do escritório', hint: 'ajuda', run: startTour },
+      ...(canDecorate() ? [{ icon: Paintbrush, label: 'Decorar o escritório', hint: 'X', run: enterDecorate }] : []),
       { icon: Grid2x2, label: useWorldStyle.getState().style === 'pixel' ? 'Mundo em maquete minimalista' : 'Mundo em pixel art', hint: 'visual', run: () => useWorldStyle.getState().toggle() },
       ...(myDesk() ? [{ icon: Armchair, label: 'Liberar minha mesa', hint: 'mesa', run: () => { releaseMyDesk(); } }] : []),
       ...members.filter((m) => m.desk && m.id !== user?.id && !presences[m.id]).map((m) => {

@@ -53,6 +53,10 @@ agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo 
    acende no hover), pisos por sala, paredes do fundo altas com janelas, móveis detalhados, decoração (bebedouro,
    geladeira, máquina de lanches, tripé com ring light, cavalete, cabideiro), avatares em blocos e etiquetas em pílula;
    a maquete minimalista continua a um clique
+6c. ✅ **Modo Decorar (v0.3.4)**: catálogo de mobis com miniaturas (69 peças em 10 categorias, inspiradas
+   nos melhores quartos do Habbo e nos escritórios de Google, Nubank, iFood, Apple e Pixar), grade no piso, prévia
+   verde ou vermelha, mover, girar, cores, duplicar, remover, desfazer e refazer, itens de parede que deslizam pelas
+   paredes do fundo e decoração padrão nova; salva no servidor e sincroniza ao vivo; avatares com penteados e óculos
 7. **Cliente e esteira (v0.4)**: cliente novo com entrevista de briefing, pasta no padrão REZZU com índice de
    arquivos (ensaio, logo, IDV, brutos), demandas em etapas (briefing → pauta → copy → arte/vídeo → aprovação →
    agendado) passando sozinhas de um funcionário para outro, aprovação humana ou da IA configurável por cliente

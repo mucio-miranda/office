@@ -192,6 +192,20 @@ export const APPROVAL_MARKER = '[[AGUARDANDO_APROVACAO]]';
 
 export type RoomId = 'recepcao' | 'reuniao' | 'video' | 'design' | 'copy' | 'gerencia' | 'copa';
 
+/**
+ * Item de decoração do mapa (editável no modo Decorar). `rot` é o giro em quartos de volta (0–3), como no Habbo.
+ * Itens de parede guardam a parede em `wall` e ficam rentes a ela.
+ */
+export interface DecorItem {
+  id: ID;
+  kind: string;
+  x: number;
+  z: number;
+  rot: number;
+  color?: string;
+  wall?: 'fundo' | 'esquerda';
+}
+
 export interface Vec2 {
   x: number;
   z: number;
@@ -227,7 +241,7 @@ export type ServerMsg =
   | { t: 'chat'; from: ID; name: string; text: string; room: RoomId | null; at: string }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' }
+  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' }
   | { t: 'job'; job: AgentJob }
   | { t: 'jobMessage'; message: JobMessage }
   /** Progresso de render; `preview` = prévia rápida (não muda o status da timeline). */

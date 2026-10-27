@@ -59,20 +59,23 @@ export function PBox({ p, pos, size, color, rot, map, glow, outline = true, cast
 }
 
 /** Cilindro (vasos, mesas redondas, postes) com o mesmo contorno. */
-export function PCyl({ p, pos, r, h, color, rTop, sides = 10, glow }: {
+export function PCyl({ p, pos, r, h, color, rTop, sides = 10, glow, rot, outline = true }: {
   p: PixelPalette; pos: [number, number, number]; r: number; h: number; color: string; rTop?: number; sides?: number; glow?: boolean;
+  rot?: [number, number, number]; outline?: boolean;
 }) {
   const hover = useContext(OutlineCtx);
   return (
-    <group position={pos}>
+    <group position={pos} rotation={rot}>
       <mesh castShadow receiveShadow>
         <cylinderGeometry args={[rTop ?? r, r, h, sides]} />
         {glow ? <meshBasicMaterial color={color} toneMapped={false} /> : <Toon color={color} />}
       </mesh>
-      <mesh raycast={() => null}>
-        <cylinderGeometry args={[(rTop ?? r) + OUT, r + OUT, h + OUT * 2, sides]} />
-        <meshBasicMaterial color={hover ?? p.outline} side={THREE.BackSide} />
-      </mesh>
+      {outline && (
+        <mesh raycast={() => null}>
+          <cylinderGeometry args={[(rTop ?? r) + OUT, r + OUT, h + OUT * 2, sides]} />
+          <meshBasicMaterial color={hover ?? p.outline} side={THREE.BackSide} />
+        </mesh>
+      )}
     </group>
   );
 }
@@ -82,7 +85,7 @@ export function PCyl({ p, pos, r, h, color, rTop, sides = 10, glow }: {
 const textures = new Map<string, THREE.CanvasTexture>();
 
 /** Textura pequena desenhada à mão em canvas (cache por chave), com pixel duro e repetição. */
-function canvasTexture(key: string, w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
+export function canvasTexture(key: string, w: number, h: number, draw: (g: CanvasRenderingContext2D) => void) {
   let t = textures.get(key);
   if (!t) {
     const c = document.createElement('canvas');
@@ -102,11 +105,36 @@ function canvasTexture(key: string, w: number, h: number, draw: (g: CanvasRender
   return t;
 }
 
-const shade = (hex: string, k: number) => {
+export const shade = (hex: string, k: number) => {
   const c = new THREE.Color(hex);
   c.multiplyScalar(k);
   return `#${c.getHexString()}`;
 };
+
+/** Cópia de uma textura com outra repetição (cache por chave e repetição). */
+export function tiled(base: THREE.CanvasTexture, rx: number, ry: number) {
+  const key = `${base.uuid}@${rx}x${ry}`;
+  let t = textures.get(key);
+  if (!t) {
+    t = base.clone();
+    t.repeat.set(rx, ry);
+    t.needsUpdate = true;
+    textures.set(key, t);
+  }
+  return t;
+}
+
+/** Vidro: caixa translúcida sem contorno (divisórias, cabines, aquário). */
+export function Glass({ pos, size, tint = '#bfe6ff', opacity = 0.32, rot }: {
+  pos: [number, number, number]; size: [number, number, number]; tint?: string; opacity?: number; rot?: [number, number, number];
+}) {
+  return (
+    <mesh position={pos} rotation={rot}>
+      <boxGeometry args={size} />
+      <meshBasicMaterial color={tint} transparent opacity={opacity} depthWrite={false} />
+    </mesh>
+  );
+}
 
 /** Piso de cada sala, 16 px por metro: tacos, carpete, ladrilho, xadrez. */
 export function floorTexture(room: string, [a, b]: [string, string]) {
