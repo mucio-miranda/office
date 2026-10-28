@@ -80,7 +80,17 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - Cliente, tipo, prioridade, prazo e responsável (pessoa **ou** IA)
 - **Cronômetro** por demanda (▶/⏸) que alimenta as horas por cliente
 - **🤖 Delegar**: escolha o funcionário, e o briefing e a pasta do cliente vão juntos
-- Quando a IA termina, a demanda vai sozinha para a coluna **Aprovação**
+- **Esteira**: pauta → copy → arte ou vídeo → aprovação → pronto para agendar. Cada etapa passa sozinha para o
+  próximo funcionário, levando o briefing, o índice da pasta e o resumo das etapas anteriores
+- **Aprovação por cliente**: uma pessoa (Aprovar / Pedir ajustes) ou o gerente de IA, que confere a peça com o
+  briefing e devolve para ajuste até duas vezes antes de chamar alguém
+
+### 🧾 Clientes
+- **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com DOCUMENTOS, FOTOS e VIDEOS); só cria
+  as pastas que faltam, nada é movido nem apagado
+- **Entrevista de briefing**: o gerente de IA lê a pasta, pergunta o que falta pelo chat, grava o `BRIEFING.md`
+  e sugere as primeiras demandas
+- **Índice de arquivos**: ensaio, logos, identidade visual, brutos, referências e editados, com miniaturas
 
 </td>
 <td valign="top">
@@ -274,7 +284,7 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 | `M` | ir para a sua mesa (sem mesa, leva até uma livre) |
 | `E` | interagir com o que está perto |
 | `1`–`7` | teletransportar para uma sala |
-| `B` `C` `F` `V` `G` `H` | demandas · calendário · financeiro · vídeo · equipe · atividade |
+| `K` `B` `C` `F` `V` `G` `H` | clientes · demandas · calendário · financeiro · vídeo · equipe · atividade |
 | `Ctrl+K` | busca rápida |
 | `T` / `Enter` | conversar |
 | `[` `]` | girar a câmera |
@@ -338,7 +348,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Ilha de edição ao vivo, legendas com Whisper, prévia rápida e exportação para OTIO, Premiere, Shotcut e SRT
 - [x] Mundo em pixel art isométrica (com a maquete minimalista como opção)
 - [x] Modo Decorar com catálogo de móveis, salvo para o escritório todo
-- [ ] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
+- [x] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
 - [ ] Mesa do diretor de arte, publicação com Postiz e arquivo de documentos no mapa
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Voz e vídeo por proximidade

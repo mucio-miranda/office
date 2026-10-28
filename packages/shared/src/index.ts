@@ -43,6 +43,61 @@ export interface Client {
   monthlyFee: number;
   status: 'ativo' | 'pausado' | 'encerrado';
   color: string;
+  /** Briefing do cliente (preenchido pela entrevista com o gerente ou à mão). */
+  briefing: Briefing;
+  /** Quem aprova as peças na esteira: uma pessoa ou o gerente de IA. */
+  approvalMode: 'humano' | 'ia';
+}
+
+export interface Briefing {
+  segmento?: string;
+  publico?: string;
+  objetivos?: string;
+  tomDeVoz?: string;
+  cores?: string;
+  concorrentes?: string;
+  redes?: string;
+  frequencia?: string;
+  diferenciais?: string;
+  observacoes?: string;
+  /** Quando a entrevista terminou (ISO). */
+  feitoEm?: string;
+}
+
+export const BRIEFING_FIELDS: { key: Exclude<keyof Briefing, 'feitoEm'>; label: string }[] = [
+  { key: 'segmento', label: 'Segmento e oferta' },
+  { key: 'publico', label: 'Público' },
+  { key: 'objetivos', label: 'Objetivos' },
+  { key: 'tomDeVoz', label: 'Tom de voz' },
+  { key: 'cores', label: 'Cores e identidade' },
+  { key: 'diferenciais', label: 'Diferenciais' },
+  { key: 'concorrentes', label: 'Concorrentes e referências' },
+  { key: 'redes', label: 'Redes e perfis' },
+  { key: 'frequencia', label: 'Frequência de postagem' },
+  { key: 'observacoes', label: 'Observações' },
+];
+
+/**
+ * Etapas da esteira de uma demanda. Cada etapa de produção tem um funcionário de IA (pelo slug);
+ * `aprovacao` é de uma pessoa ou do gerente (conforme o cliente) e `agendado` é o fim (pronto para publicar).
+ */
+export type Stage = 'briefing' | 'pauta' | 'copy' | 'arte' | 'video' | 'aprovacao' | 'agendado';
+export const STAGE_LABEL: Record<Stage, string> = {
+  briefing: 'Briefing', pauta: 'Pauta', copy: 'Copy', arte: 'Arte', video: 'Vídeo', aprovacao: 'Aprovação', agendado: 'Pronto para agendar',
+};
+export const STAGE_AGENT: Partial<Record<Stage, string>> = {
+  briefing: 'gerente', pauta: 'copywriter', copy: 'copywriter', arte: 'designer', video: 'editor-de-video',
+};
+
+export interface StageLogEntry {
+  stage: Stage;
+  /** agent:<id> ou user:<id> */
+  by: string;
+  jobId: string | null;
+  /** Resumo do que foi feito (ou o pedido de ajuste / a aprovação). */
+  text: string;
+  result: 'feito' | 'aprovado' | 'ajustes' | 'erro';
+  at: string;
 }
 
 export const DEMAND_COLUMNS = ['backlog', 'a_fazer', 'em_producao', 'aprovacao', 'entregue'] as const;
@@ -77,6 +132,15 @@ export interface Demand {
   position: number;
   createdAt: string;
   updatedAt: string;
+  /** Etapas da esteira desta demanda (vazio = sem esteira). */
+  pipeline: Stage[];
+  /** Etapa atual (null antes de começar). */
+  stage: Stage | null;
+  /** A esteira está ligada: ao terminar uma etapa, a próxima começa sozinha. */
+  auto: boolean;
+  stageLog: StageLogEntry[];
+  /** Voltas de ajuste já feitas (limita o vai e volta da aprovação por IA). */
+  reviewRounds: number;
 }
 
 export interface CalendarEvent {
@@ -169,6 +233,8 @@ export interface AgentJob {
   officeId: ID;
   agentId: ID;
   demandId: ID | null;
+  /** Etapa da esteira que esta tarefa faz (null = tarefa avulsa). */
+  stage: Stage | null;
   prompt: string;
   status: JobStatus;
   sessionId: string | null;
@@ -242,6 +308,8 @@ export type ServerMsg =
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
   | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' }
+  /** Aviso para todo mundo do escritório (ex.: peça esperando aprovação). */
+  | { t: 'notice'; text: string; demandId?: ID; agentId?: ID }
   | { t: 'job'; job: AgentJob }
   | { t: 'jobMessage'; message: JobMessage }
   /** Progresso de render; `preview` = prévia rápida (não muda o status da timeline). */

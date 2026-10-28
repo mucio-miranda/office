@@ -5,13 +5,13 @@ import type {
 import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
 
-export type PanelId = 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | null;
+export type PanelId = 'clientes' | 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | null;
 
 export interface ChatLine { from: string; name: string; text: string; at: string; room: RoomId | null }
 export interface RenderState { progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string }
 export type OfficeWithRole = Office & { role: string; inviteCode: string };
 /** Aviso no canto da tela; `go` mostra o botão "Ir até" (funcionário ou pessoa). */
-export interface Toast { text: string; go?: { agentId?: string; userId?: string } }
+export interface Toast { text: string; go?: { agentId?: string; userId?: string; demandId?: string } }
 
 interface State {
   user: User | null;
@@ -243,6 +243,10 @@ function handle(m: ServerMsg) {
       break;
     case 'invalidate':
       s.reload(m.what);
+      break;
+    case 'notice':
+      s.notify(m.text, m.demandId || m.agentId ? { demandId: m.demandId, agentId: m.demandId ? undefined : m.agentId } : undefined);
+      desktop?.notify({ title: 'Esteira', body: m.text, panel: m.demandId ? 'demandas' : 'agente', arg: m.demandId ?? m.agentId });
       break;
     case 'job': {
       const prev = s.jobs.find((j) => j.id === m.job.id);

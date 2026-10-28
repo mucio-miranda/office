@@ -5,7 +5,7 @@ import { createReadStream, existsSync, statSync, readdirSync, readFileSync } fro
 import path from 'node:path';
 import { homedir } from 'node:os';
 import {
-  DEMAND_COLUMNS, uid,
+  BRIEFING_FIELDS, DEMAND_COLUMNS, uid,
   type AgentJob, type AgentProfile, type CalendarEvent, type Client, type Demand, type JobMessage, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
@@ -13,6 +13,8 @@ import { checkPin, createSession, hashPin, membership, requireMember, requireUse
 import { invalidate, onlineUsers } from '../realtime.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
+import { approveDemand, defaultPipeline, pausePipeline, requestChanges, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
@@ -229,13 +231,13 @@ export async function api(app: FastifyInstance) {
     // CRUD genérico das coleções do escritório
     const collection = <T extends { id: string }>(
       name: string, table: string, schema: z.ZodObject<z.ZodRawShape>, order: string,
-      what: 'demands' | 'events' | 'transactions' | 'clients', defaults: (b: any) => Partial<T> = () => ({}),
+      what: 'demands' | 'events' | 'transactions' | 'clients', defaults: (b: any) => Partial<T> = () => ({}), withPost = true,
     ) => {
       r.get(`/api/offices/:officeId/${name}`, async (req, reply) => {
         if (!requireMember(req, reply)) return;
         return all<T>(`SELECT * FROM ${table} WHERE office_id = ? ORDER BY ${order}`, (req.params as any).officeId);
       });
-      r.post(`/api/offices/:officeId/${name}`, async (req, reply) => {
+      if (withPost) r.post(`/api/offices/:officeId/${name}`, async (req, reply) => {
         if (!requireMember(req, reply)) return;
         const b = body(schema, req, reply);
         if (!b) return;
@@ -266,17 +268,112 @@ export async function api(app: FastifyInstance) {
       });
     };
 
-    collection<Client>('clients', 'clients', z.object({
+    const briefingSchema = z.object(Object.fromEntries(BRIEFING_FIELDS.map((f) => [f.key, z.string().max(4000).optional()]))).extend({ feitoEm: z.string().optional() });
+    const clientSchema = z.object({
       name: z.string().min(1), folder: z.string().nullable().optional(), monthlyFee: z.number().min(0).default(0),
       status: z.enum(['ativo', 'pausado', 'encerrado']).default('ativo'), color: z.string().optional(),
-    }), 'name', 'clients', (b) => ({ color: b.color ?? pick() }));
+      approvalMode: z.enum(['humano', 'ia']).default('humano'), briefing: briefingSchema.optional(),
+    });
+    collection<Client>('clients', 'clients', clientSchema, 'name', 'clients', undefined, false);
+
+    // cliente novo: cria a pasta no padrão da casa (só pastas que faltam) e, se pedido, abre a entrevista de briefing
+    r.post('/api/offices/:officeId/clients', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const b = body(clientSchema.extend({ createFolder: z.boolean().default(false), interview: z.boolean().default(false) }), req, reply);
+      if (!b) return;
+      const { officeId } = req.params as { officeId: string };
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const { createFolder, interview, ...data } = b;
+      const folder = data.folder || (createFolder ? path.join('CLIENTES', folderName(data.name)) : null);
+      const row = { id: uid(), officeId, ...data, folder, color: data.color ?? pick(), briefing: data.briefing ?? {} } as Client;
+      let created: string[] = [];
+      if (createFolder && folder) {
+        try { created = ensureStructure(clientDir(office, row)!); } catch (e) { return reply.code(400).send({ error: `Não consegui criar a pasta: ${(e as Error).message}` }); }
+      }
+      insert('clients', row as never);
+      logActivity(officeId, `user:${req.user.id}`, 'criou o cliente', row.name);
+      invalidate(officeId, 'clients');
+      const briefing = interview ? startBriefing(row, `user:${req.user.id}`) : null;
+      return { client: row, createdDirs: created, briefing };
+    });
+
+    r.post('/api/offices/:officeId/clients/:id/folder', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      if (!c.folder) {
+        c.folder = path.join('CLIENTES', folderName(c.name));
+        update('clients', c.id, { folder: c.folder });
+        invalidate(officeId, 'clients');
+      }
+      try { return { createdDirs: ensureStructure(clientDir(office, c)!), folder: clientDir(office, c) }; } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+    });
+
+    r.get('/api/offices/:officeId/clients/:id/files', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      const dir = clientDir(office, c);
+      return dir ? indexClient(dir) : { root: null, exists: false, total: 0, truncated: false, groups: [], scannedAt: now() };
+    });
+
+    // miniaturas do índice: só imagens que o navegador abre, de dentro da pasta do cliente
+    r.get('/api/offices/:officeId/clients/:id/file', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const rel = String((req.query as any).rel ?? '');
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      const dir = c && clientDir(office, c);
+      const abs = dir && rel ? insideDir(dir, rel) : null;
+      const types: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif' };
+      const type = abs ? types[path.extname(abs).toLowerCase()] : undefined;
+      if (!abs || !type || !existsSync(abs)) return reply.code(404).send({ error: 'Arquivo não encontrado' });
+      const st = statSync(abs);
+      if (st.size > 25 * 1024 * 1024) return reply.code(413).send({ error: 'Arquivo grande demais para a miniatura' });
+      reply.headers({ 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'private, max-age=300' });
+      return reply.send(createReadStream(abs));
+    });
+
+    r.post('/api/offices/:officeId/clients/:id/briefing', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      const res = startBriefing(c, `user:${req.user.id}`);
+      if (res.error) return reply.code(400).send({ error: res.error });
+      return res;
+    });
 
     collection<Demand>('demands', 'demands', z.object({
       title: z.string().min(1), description: z.string().default(''), clientId: z.string().nullable().optional(),
       kind: z.enum(['video', 'design', 'copy', 'estrategia', 'foto', 'outro']).default('outro'),
       status: z.enum(DEMAND_COLUMNS).default('backlog'), priority: z.enum(['baixa', 'media', 'alta', 'urgente']).default('media'),
       assignee: z.string().nullable().optional(), dueDate: z.string().nullable().optional(), position: z.number().optional(),
-    }), 'status, position, created_at', 'demands', () => ({ createdAt: now(), updatedAt: now(), position: Date.now() }));
+      pipeline: z.array(z.enum(['briefing', 'pauta', 'copy', 'arte', 'video', 'aprovacao', 'agendado'])).optional(),
+    }), 'status, position, created_at', 'demands', (b) => ({
+      createdAt: now(), updatedAt: now(), position: Date.now(), pipeline: defaultPipeline(b.kind ?? 'outro'), stage: null, auto: false, stageLog: [], reviewRounds: 0,
+    }));
+
+    // esteira da demanda: ligar, pausar, aprovar, pedir ajustes
+    const pipelineAction = (name: string, run: (id: string, req: FastifyRequest) => string | null | void, schema?: z.ZodTypeAny) =>
+      r.post(`/api/offices/:officeId/demands/:id/${name}`, async (req, reply) => {
+        if (!requireMember(req, reply)) return;
+        const { officeId, id } = req.params as any;
+        if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
+        if (schema && !body(schema, req, reply)) return;
+        const err = run(id, req);
+        if (err) return reply.code(409).send({ error: err });
+        return { ok: true };
+      });
+    pipelineAction('esteira', (id, req) => startPipeline(id, `user:${req.user.id}`));
+    pipelineAction('pausar', (id) => pausePipeline(id));
+    pipelineAction('aprovar', (id, req) => approveDemand(id, `user:${req.user.id}`));
+    pipelineAction('ajustes', (id, req) => requestChanges(id, String((req.body as any).text), `user:${req.user.id}`), z.object({ text: z.string().trim().min(3).max(4000) }));
 
     collection<CalendarEvent>('events', 'events', z.object({
       title: z.string().min(1), start: z.string(), end: z.string(),

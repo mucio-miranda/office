@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Bot, Pause, Play, Plus, X } from 'lucide-react';
-import { DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, type Demand, type DemandKind, type DemandStatus, type Priority } from '@office/shared';
+import { Bot, Check, Pause, Play, Plus, RotateCcw, Workflow, X } from 'lucide-react';
+import { DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, STAGE_AGENT, STAGE_LABEL, type Demand, type DemandKind, type DemandStatus, type Priority, type Stage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, fmtDuration } from '../lib/api';
 
@@ -8,6 +8,31 @@ const KIND_LABEL: Record<DemandKind, string> = { video: 'Vídeo', design: 'Desig
 const PRIO_LEVEL: Record<Priority, string> = { baixa: 'on1', media: 'on2', alta: 'on3', urgente: 'on3 urgent' };
 /** Que funcionário de IA é o natural para cada tipo de demanda. */
 const KIND_AGENT: Record<DemandKind, string> = { video: 'editor-de-video', design: 'designer', foto: 'designer', copy: 'copywriter', estrategia: 'copywriter', outro: 'gerente' };
+
+/** Situação de cada etapa da esteira: feita, atual, com erro ou por fazer. */
+function stageState(d: Demand, s: Stage): 'feita' | 'atual' | 'erro' | 'falta' {
+  const log = (d.stageLog ?? []).filter((e) => e.stage === s);
+  const last = log.at(-1);
+  if (d.stage === s) {
+    if (last?.result === 'erro') return 'erro';
+    if (s === 'agendado' || (d.status === 'entregue' && last)) return 'feita';
+    return 'atual';
+  }
+  const i = d.pipeline.indexOf(s), cur = d.stage ? d.pipeline.indexOf(d.stage) : -1;
+  return i < cur || (last && last.result !== 'erro') ? 'feita' : 'falta';
+}
+
+/** Trilha das etapas (pauta → copy → arte → aprovação → pronto). */
+export function StageTrack({ d, compact = false }: { d: Demand; compact?: boolean }) {
+  if (!d.pipeline?.length) return null;
+  return (
+    <span className={`stage-track ${compact ? 'compact' : ''}`}>
+      {d.pipeline.map((s) => (
+        <span key={s} className={`stage ${stageState(d, s)}`} title={STAGE_LABEL[s]}>{compact ? '' : STAGE_LABEL[s]}</span>
+      ))}
+    </span>
+  );
+}
 
 const Prio = ({ p }: { p: Priority }) => <span className={`prio ${PRIO_LEVEL[p]}`} title={`Prioridade ${p}`}><i /><i /><i /></span>;
 
@@ -63,6 +88,7 @@ export function Demands() {
                 return (
                   <article key={d.id} className="kcard" draggable onDragStart={(e) => e.dataTransfer.setData('id', d.id)} onClick={() => setEditing(d)}>
                     <div className="kcard-title">{d.title}</div>
+                    {d.stage && <div className="kcard-stage"><StageTrack d={d} compact /><span>{d.auto && d.status !== 'entregue' ? <Workflow size={11} /> : null} {STAGE_LABEL[d.stage]}</span></div>}
                     <div className="kcard-meta">
                       <Prio p={d.priority} />
                       <span className="badge">{KIND_LABEL[d.kind]}</span>
@@ -91,8 +117,77 @@ export function Demands() {
   );
 }
 
+/** Esteira da demanda: etapas, o que cada funcionário fez e as ações (ligar, pausar, aprovar, pedir ajustes). */
+function Pipeline({ d }: { d: Demand }) {
+  const { office, agents, members, jobs, notify, open } = useStore();
+  const [changes, setChanges] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const base = `/api/offices/${office!.id}/demands/${d.id}`;
+  const act = async (name: string, body: object = {}) => {
+    setBusy(true);
+    try { await api(`${base}/${name}`, { body }); } catch (e) { notify((e as Error).message); }
+    setBusy(false);
+  };
+  const who = (by: string) => {
+    const [k, id] = by.split(':');
+    return k === 'agent' ? agents.find((a) => a.id === id)?.name : k === 'user' ? members.find((m) => m.id === id)?.name : 'Office';
+  };
+  const active = jobs.find((j) => j.demandId === d.id && ['fila', 'rodando', 'aguardando'].includes(j.status));
+  const waitingHuman = d.stage === 'aprovacao' && d.status === 'aprovacao' && !active;
+  const finished = d.status === 'entregue' && (d.stage === 'agendado' || d.pipeline?.[0] === 'briefing');
+  const next = (d.stage ? d.pipeline[d.pipeline.indexOf(d.stage)] : d.pipeline?.[0]) as Stage | undefined;
+  const nextAgent = next && STAGE_AGENT[next] ? agents.find((a) => a.slug === STAGE_AGENT[next]) : undefined;
+  if (!d.pipeline?.length) return null;
+  return (
+    <div className="pipeline">
+      <div className="row between">
+        <b className="row gap"><Workflow size={14} /> Esteira</b>
+        <div className="row gap">
+          {active && <button type="button" className="ghost small" onClick={() => open('agente', active.agentId)}><Bot size={13} /> {agents.find((a) => a.id === active.agentId)?.name} {active.status === 'aguardando' ? 'precisa de você' : 'trabalhando'}</button>}
+          {!finished && !active && !waitingHuman && (
+            <button type="button" className="primary small" disabled={busy} onClick={() => act('esteira')} title={nextAgent ? `${nextAgent.name} começa a etapa ${STAGE_LABEL[next!]}` : undefined}>
+              <Play size={13} /> {d.stage ? 'Continuar esteira' : 'Ligar esteira'}
+            </button>
+          )}
+          {d.auto && !finished && <button type="button" className="ghost small" disabled={busy} onClick={() => act('pausar')} title="Termina a etapa atual e não começa a próxima"><Pause size={13} /> Pausar</button>}
+        </div>
+      </div>
+      <StageTrack d={d} />
+      {waitingHuman && (
+        <div className="approval">
+          <span>Esperando a sua aprovação.</span>
+          {changes === null ? (
+            <div className="row gap">
+              <button type="button" className="ghost small" onClick={() => setChanges('')}><RotateCcw size={13} /> Pedir ajustes</button>
+              <button type="button" className="primary small" disabled={busy} onClick={() => act('aprovar')}><Check size={13} /> Aprovar</button>
+            </div>
+          ) : (
+            <div className="col gap-s">
+              <textarea autoFocus rows={3} placeholder="O que precisa mudar?" value={changes} onChange={(e) => setChanges(e.target.value)} />
+              <div className="row gap end">
+                <button type="button" className="ghost small" onClick={() => setChanges(null)}>Cancelar</button>
+                <button type="button" className="primary small" disabled={busy || changes.trim().length < 3} onClick={async () => { await act('ajustes', { text: changes }); setChanges(null); }}>Mandar ajustes</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+      {(d.stageLog ?? []).length > 0 && (
+        <ol className="stage-log">
+          {[...d.stageLog].reverse().map((e, i) => (
+            <li key={i} className={`r-${e.result}`}>
+              <div className="row between"><b>{STAGE_LABEL[e.stage]} · {who(e.by) ?? '—'}</b><span className="muted small">{new Date(e.at).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></div>
+              <p>{e.text}</p>
+            </li>
+          ))}
+        </ol>
+      )}
+    </div>
+  );
+}
+
 function DemandForm({ d, onClose }: { d: Partial<Demand>; onClose: () => void }) {
-  const { clients, members, agents, office } = useStore();
+  const { clients, members, agents, office, demands } = useStore();
   const [f, setF] = useState<Partial<Demand>>(d);
   const set = (k: keyof Demand) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => setF({ ...f, [k]: e.target.value || null });
   const base = `/api/offices/${office!.id}/demands`;
@@ -106,6 +201,7 @@ function DemandForm({ d, onClose }: { d: Partial<Demand>; onClose: () => void })
       }}>
         <header className="modal-head"><h3>{f.id ? 'Editar demanda' : 'Nova demanda'}</h3><button type="button" className="icon" onClick={onClose}><X size={16} /></button></header>
         <div className="modal-body">
+          {f.id && <Pipeline d={demands.find((x) => x.id === f.id) ?? (f as Demand)} />}
           <label>Título<input autoFocus required value={f.title ?? ''} onChange={set('title')} /></label>
           <label>Briefing<textarea rows={4} value={f.description ?? ''} onChange={set('description')} /></label>
           <div className="grid3">

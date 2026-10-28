@@ -72,6 +72,15 @@ const MIGRATIONS: string[] = [
   `CREATE TABLE office_layout (
      office_id TEXT PRIMARY KEY REFERENCES offices(id) ON DELETE CASCADE,
      json TEXT NOT NULL, updated_by TEXT, updated_at TEXT NOT NULL);`,
+  // v0.4: briefing do cliente, modo de aprovação e a esteira das demandas
+  `ALTER TABLE clients ADD COLUMN briefing TEXT NOT NULL DEFAULT '{}';
+   ALTER TABLE clients ADD COLUMN approval_mode TEXT NOT NULL DEFAULT 'humano';
+   ALTER TABLE demands ADD COLUMN pipeline TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE demands ADD COLUMN stage TEXT;
+   ALTER TABLE demands ADD COLUMN auto INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE demands ADD COLUMN stage_log TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE demands ADD COLUMN review_rounds INTEGER NOT NULL DEFAULT 0;
+   ALTER TABLE jobs ADD COLUMN stage TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -95,8 +104,8 @@ const camel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
-const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json']);
-const BOOL_COLS = new Set(['paid']);
+const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log']);
+const BOOL_COLS = new Set(['paid', 'auto']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {
   if (!row) return undefined;

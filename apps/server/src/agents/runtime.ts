@@ -1,13 +1,14 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { APPROVAL_MARKER, uid, type AgentJob, type AgentProfile, type JobMessage, type Office } from '@office/shared';
+import { APPROVAL_MARKER, uid, type AgentJob, type AgentProfile, type JobMessage, type Office, type Stage } from '@office/shared';
 import { config } from '../config.ts';
 import { all, insert, now, one, update, logActivity } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { houseRules } from './templates.ts';
 import { mcpConfig } from './tools.ts';
 import { openLiveForJob, releaseLiveForJob } from './live.ts';
+import { onJobFinished } from './pipeline.ts';
 
 /**
  * Cada funcionário de IA é uma sessão do Claude Code em modo headless (`claude -p`),
@@ -78,9 +79,9 @@ function describeTool(name: string, input: Record<string, unknown>) {
   return name;
 }
 
-export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string }) {
+export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string; stage?: Stage }) {
   const job: AgentJob & { createdBy: string } = {
-    id: uid(), officeId: params.officeId, agentId: params.agentId, demandId: params.demandId,
+    id: uid(), officeId: params.officeId, agentId: params.agentId, demandId: params.demandId, stage: params.stage ?? null,
     prompt: params.prompt, status: 'fila', sessionId: null, costUsd: 0,
     createdBy: params.createdBy, createdAt: now(), updatedAt: now(),
   };
@@ -173,7 +174,9 @@ async function start(jobId: string, input: string, resume: boolean) {
 
   let child: ChildProcess;
   try {
-    child = spawn(config.claudeBin, args, { cwd: office.rootPath, windowsHide: true, env: { ...process.env, OFFICE_JOB_ID: jobId } });
+    // CLAUDE_BIN pode apontar para um script .mjs (um Claude de mentira, nos testes da esteira)
+    const [bin, pre] = /\.m?js$/.test(config.claudeBin) ? [process.execPath, [config.claudeBin]] : [config.claudeBin, []];
+    child = spawn(bin, [...pre, ...args], { cwd: office.rootPath, windowsHide: true, env: { ...process.env, OFFICE_JOB_ID: jobId } });
   } catch (e) {
     addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o Claude Code: ${(e as Error).message}`);
     setJob(jobId, { status: 'erro' });
@@ -225,20 +228,19 @@ async function start(jobId: string, input: string, resume: boolean) {
     if (current.status === 'cancelado') { pump(); return; }
     if (code !== 0 && !finalText) {
       addMessage(jobId, office.id, 'sistema', `O Claude Code saiu com erro (código ${code}). ${stderr.trim().slice(-800)}`);
-      setJob(jobId, { status: 'erro' });
+      const failed = setJob(jobId, { status: 'erro' });
       setAgentStatus(agent.id, office.id, 'erro');
+      onJobFinished(failed, '', false);
     } else if (finalText.includes(APPROVAL_MARKER)) {
       setJob(jobId, { status: 'aguardando' });
       setAgentStatus(agent.id, office.id, 'aguardando');
       logActivity(office.id, `agent:${agent.slug}`, 'pediu aprovação', job.prompt.slice(0, 120));
     } else {
-      setJob(jobId, { status: isError ? 'erro' : 'concluido' });
+      const done = setJob(jobId, { status: isError ? 'erro' : 'concluido' });
       const stillBusy = all<AgentJob>("SELECT id FROM jobs WHERE agent_id = ? AND status IN ('rodando','aguardando')", agent.id).length > 0;
       setAgentStatus(agent.id, office.id, isError ? 'erro' : stillBusy ? 'aguardando' : 'livre');
-      if (!isError && job.demandId) {
-        update('demands', job.demandId, { status: 'aprovacao', updatedAt: now() });
-        invalidate(office.id, 'demands');
-      }
+      // esteira: a próxima etapa começa sozinha (ou o cartão vai para Aprovação, nas tarefas avulsas)
+      try { onJobFinished(done, finalText, !isError); } catch (e) { addMessage(jobId, office.id, 'sistema', `A esteira não conseguiu seguir: ${(e as Error).message}`); }
     }
     pump();
   });

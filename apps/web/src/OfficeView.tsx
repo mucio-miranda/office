@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Grid2x2,
-  Paintbrush,
+  Paintbrush, Briefcase,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
@@ -19,6 +19,7 @@ import { desktop } from './lib/desktop';
 type NavId = Exclude<PanelId, 'agente'>;
 const NAV: { id: NavId; icon: typeof Box; label: string; key: string }[] = [
   { id: null, icon: Box, label: 'Escritório', key: 'O' },
+  { id: 'clientes', icon: Briefcase, label: 'Clientes', key: 'K' },
   { id: 'demandas', icon: KanbanSquare, label: 'Demandas', key: 'B' },
   { id: 'calendario', icon: Calendar, label: 'Calendário', key: 'C' },
   { id: 'financeiro', icon: CircleDollarSign, label: 'Financeiro', key: 'F' },
@@ -139,6 +140,7 @@ function ToastView() {
       {agent && <button className="toast-btn" onClick={() => { goToAgent(agent); close(); }}><Navigation size={12} /> Ir até</button>}
       {agent && <button className="toast-btn ghost" onClick={() => { useStore.getState().open('agente', agent.id); close(); }}>Abrir</button>}
       {person && <button className="toast-btn" onClick={() => { goToPerson(person); close(); }}><Navigation size={12} /> Ir até</button>}
+      {toast.go?.demandId && <button className="toast-btn" onClick={() => { useStore.getState().open('demandas', toast.go!.demandId!); close(); }}><KanbanSquare size={12} /> Abrir</button>}
     </div>
   );
 }
