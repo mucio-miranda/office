@@ -439,9 +439,29 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       keys.delete(e.key.toLowerCase());
     };
     const blur = () => { keys.clear(); setDrone(false); cam.dragging = false; };
+    /**
+     * Como no Figma: dois dedos no touchpad movem a câmera (lateral e vertical), pinça dá zoom (o navegador
+     * manda pinça como roda com Ctrl). A roda do mouse continua dando zoom; Shift + roda move para os lados.
+     */
+    let lastPad = 0;
+    const zoomBy = (k: number) => { cam.zoom = Math.min(110, Math.max(14, cam.zoom * k)); };
     const wheel = (e: WheelEvent) => {
       if ((e.target as HTMLElement)?.tagName !== 'CANVAS') return;
-      cam.zoom = Math.min(110, Math.max(14, cam.zoom * (e.deltaY > 0 ? 0.9 : 1.1)));
+      e.preventDefault();
+      if (e.ctrlKey) return zoomBy(Math.exp(-e.deltaY * 0.01));
+      const k = e.deltaMode === 1 ? 16 : 1;
+      const dx = e.deltaX * k, dy = e.deltaY * k;
+      // roda de mouse: passos inteiros de 120 em wheelDelta, sem componente lateral
+      const wd = (e as WheelEvent & { wheelDeltaY?: number }).wheelDeltaY ?? 0;
+      const now = performance.now();
+      const mouse = e.deltaX === 0 && wd !== 0 && wd % 120 === 0 && now - lastPad > 400;
+      if (!mouse) {
+        lastPad = now;
+        panBy(-dx, -dy);
+        return;
+      }
+      if (e.shiftKey) panBy(-dy, 0);
+      else zoomBy(dy > 0 ? 0.9 : 1.1);
     };
 
     // arrastar: Espaço + botão esquerdo, ou botão do meio a qualquer momento
@@ -476,7 +496,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
     addEventListener('keydown', down);
     addEventListener('keyup', up);
     addEventListener('blur', blur);
-    addEventListener('wheel', wheel, { passive: true });
+    addEventListener('wheel', wheel, { passive: false });
     addEventListener('pointerdown', pdown);
     addEventListener('pointermove', pmove);
     addEventListener('pointerup', pup);

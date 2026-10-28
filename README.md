@@ -267,6 +267,9 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 | `W A S D` / setas | andar (Shift corre) |
 | clique no chão | ir até lá |
 | `Espaço` + arrastar | **modo drone**: sobrevoa o escritório sem mover o personagem (o botão do meio do mouse também arrasta) |
+| dois dedos no touchpad | move a câmera para os lados e para cima/baixo, como no Figma (o personagem fica parado) |
+| pinça no touchpad / roda do mouse | zoom (`Shift` + roda move para os lados) |
+| `X` | modo Decorar |
 | `Esc` | volta a câmera para você (ou fecha o painel) |
 | `M` | ir para a sua mesa (sem mesa, leva até uma livre) |
 | `E` | interagir com o que está perto |

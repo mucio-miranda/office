@@ -111,7 +111,7 @@ export function OfficeView() {
                 <DroneOverlay />
                 <Tour />
                 <DecorUI />
-                {!touring && !decorating && <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · <kbd>M</kbd> minha mesa · <kbd>X</kbd> decorar · 1–7 salas · roda: zoom</div>}
+                {!touring && !decorating && <div className="hint">WASD andar · <kbd>Espaço</kbd> + arrastar: sobrevoar · <kbd>M</kbd> minha mesa · <kbd>X</kbd> decorar · 1–7 salas · dois dedos: mover · pinça ou roda: zoom</div>}
               </>
             )}
           </div>
