@@ -50,7 +50,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - **Pixel art isométrica** (padrão), inspirada nos mundos de pixel do Habbo e do Gather: câmera 2:1, contorno escuro, sombreamento em 3 tons, piso de tacos, carpetes e ladrilhos por sala, paredes com papel de parede e janelas, avatares em blocos que andam, sentam e digitam e etiquetas de nome em pílula. Tudo desenhado por código, sem assets de terceiros
 - **Modo Decorar** (<kbd>X</kbd> ou o botão Decorar), no espírito do catálogo de mobis do Habbo: 69 peças em 10 categorias, inspiradas em escritórios de startup (madeira clara e vidro da Apple Park, cabines acústicas, armários coloridos e bicicletas do Google, arquibancada e neon do Nubank, horta e escada vermelha do iFood, cabanas, tijolinho e bar de cereais da Pixar). Clique para selecionar, arraste para mover, <kbd>R</kbd> gira, troca de cor, duplicar, remover e desfazer (<kbd>Ctrl</kbd>+<kbd>Z</kbd>). A peça fica verde onde cabe e vermelha onde bloquearia uma porta, uma cadeira ou outro móvel; quadros, neons e revestimentos deslizam pelas paredes. A decoração é salva no servidor e aparece na hora para todo mundo do escritório
 - Ou a **maquete isométrica minimalista** (botão ao lado do tema ou `Ctrl+K` → "Mundo em maquete"), em tema claro e escuro, com as mesmas 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
-- **WASD** ou clique para andar, **Shift** para correr, **1–7** para teletransportar
+- **WASD** ou clique para andar (o avatar contorna paredes e móveis até o ponto clicado), **Shift** para correr, **1–7** para teletransportar
 - **Ctrl+K**: vá para qualquer sala, painel, cliente, demanda ou funcionário
 - Minimapa clicável, chat geral ou da sala, status (🎧 foco, ⛔ ocupado, 💤 ausente) e emotes
 - **Ir até**: um clique no aviso, no mapa, na lista de quem está online ou no `Ctrl+K` leva você até a pessoa ou o funcionário que chamou
@@ -275,7 +275,7 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 | Tecla | Ação |
 |---|---|
 | `W A S D` / setas | andar (Shift corre) |
-| clique no chão | ir até lá |
+| clique no chão | ir até lá, desviando dos obstáculos |
 | `Espaço` + arrastar | **modo drone**: sobrevoa o escritório sem mover o personagem (o botão do meio do mouse também arrasta) |
 | dois dedos no touchpad | move a câmera para os lados e para cima/baixo, como no Figma (o personagem fica parado) |
 | pinça no touchpad / roda do mouse | zoom (`Shift` + roda move para os lados) |

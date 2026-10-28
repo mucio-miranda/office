@@ -63,7 +63,7 @@ agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo 
    Feito: página Clientes, entrevista de briefing pelo chat com o gerente (grava o BRIEFING.md e sugere as
    demandas), índice da pasta com miniaturas, esteira com histórico por etapa, Aprovar / Pedir ajustes, revisão
    pela IA com até duas voltas e limite de tarefas por demanda
-8. **Mesa do diretor de arte (v0.4.1)**: revisão das peças com versões, prompt apontando uma área da imagem e
+8. **Mesa do diretor de arte (v0.4.2)**: revisão das peças com versões, prompt apontando uma área da imagem e
    edição ao vivo no PhotoCraft e no LightCraft
 9. **Publicação (v0.5)**: [Postiz](https://github.com/gitroomhq/postiz-app) (AGPL-3.0) rodando junto, posts
    aprovados agendados e ligados ao calendário; as contas dos clientes são conectadas por vocês no próprio Postiz

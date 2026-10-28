@@ -178,7 +178,7 @@ const SOLIDS: Box[] = [
 ];
 /** Peças da decoração que bloqueiam a passagem (atualizadas pelo modo Decorar). */
 let decorSolids: Box[] = [];
-export const setDecorSolids = (b: Box[]) => { decorSolids = b; };
+export const setDecorSolids = (b: Box[]) => { decorSolids = b; grid = new Uint8Array(COLS * ROWS); };
 
 const RADIUS = 0.35;
 export function blocked(p: Vec2) {
@@ -196,6 +196,119 @@ export function step(from: Vec2, dx: number, dz: number): Vec2 {
   const onlyZ = { x: from.x, z: from.z + dz };
   if (dz && !blocked(onlyZ)) return onlyZ;
   return from;
+}
+
+/** O segmento a→b passa por dentro da caixa (aumentada pelo raio do avatar)? Teste exato, por intervalos. */
+function segHits(a: Vec2, b: Vec2, box: Box) {
+  let t0 = 0, t1 = 1;
+  const slab = (p: number, d: number, lo: number, hi: number) => {
+    if (Math.abs(d) < 1e-9) return p > lo && p < hi;
+    let ta = (lo - p) / d, tb = (hi - p) / d;
+    if (ta > tb) [ta, tb] = [tb, ta];
+    t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
+    return t0 < t1;
+  };
+  return slab(a.x, b.x - a.x, box.x0 - RADIUS, box.x1 + RADIUS) && slab(a.z, b.z - a.z, box.z0 - RADIUS, box.z1 + RADIUS);
+}
+
+const inBounds = (p: Vec2) => p.x >= BOUNDS.x0 + RADIUS && p.x <= BOUNDS.x1 - RADIUS && p.z >= BOUNDS.z0 + RADIUS && p.z <= BOUNDS.z1 - RADIUS;
+
+/** Dá para ir em linha reta de `a` até `b` sem encostar em nada? */
+function clearLine(a: Vec2, b: Vec2) {
+  if (!inBounds(a) || !inBounds(b)) return false;
+  return !SOLIDS.some((s) => segHits(a, b, s)) && !decorSolids.some((s) => segHits(a, b, s));
+}
+
+const CELL = 0.25;
+const COLS = Math.round((BOUNDS.x1 - BOUNDS.x0) / CELL);
+const ROWS = Math.round((BOUNDS.z1 - BOUNDS.z0) / CELL);
+const cellOf = (p: Vec2) => [Math.floor((p.x - BOUNDS.x0) / CELL), Math.floor((p.z - BOUNDS.z0) / CELL)] as const;
+const cellCenter = (c: number, r: number): Vec2 => ({ x: BOUNDS.x0 + (c + 0.5) * CELL, z: BOUNDS.z0 + (r + 0.5) * CELL });
+/** Células livres (0 = não testada, 1 = livre, 2 = bloqueada); refeita quando a decoração muda. */
+let grid = new Uint8Array(COLS * ROWS);
+
+/**
+ * Caminho de `from` até `to` desviando de paredes e móveis (A* numa grade de 25 cm, depois cortando os
+ * cantos desnecessários). Devolve os pontos a percorrer, sem o de partida; vazio se não há como chegar.
+ */
+export function findPath(from: Vec2, to: Vec2): Vec2[] {
+  const goal = freeSpotNear(to);
+  if (clearLine(from, goal)) return [goal];
+  const [sc, sr] = cellOf(from), [gc, gr] = cellOf(goal);
+  const idx = (c: number, r: number) => r * COLS + c;
+  const isFree = (c: number, r: number) => {
+    if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return false;
+    if ((c === sc && r === sr) || (c === gc && r === gr)) return true;
+    const k = idx(c, r);
+    if (!grid[k]) grid[k] = blocked(cellCenter(c, r)) ? 2 : 1;
+    return grid[k] === 1;
+  };
+  const g = new Float32Array(COLS * ROWS).fill(Infinity);
+  const prev = new Int32Array(COLS * ROWS).fill(-1);
+  const closed = new Uint8Array(COLS * ROWS);
+  const h = (c: number, r: number) => Math.hypot(c - gc, r - gr);
+  // fila de prioridade simples (heap binário) com [f, índice]
+  const heap: [number, number][] = [];
+  const push = (f: number, i: number) => {
+    heap.push([f, i]);
+    for (let j = heap.length - 1; j > 0;) {
+      const pj = (j - 1) >> 1;
+      if (heap[pj][0] <= heap[j][0]) break;
+      [heap[pj], heap[j]] = [heap[j], heap[pj]]; j = pj;
+    }
+  };
+  const pop = () => {
+    const top = heap[0], last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last;
+      for (let j = 0; ;) {
+        const l = 2 * j + 1, r = l + 1;
+        let m = j;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === j) break;
+        [heap[m], heap[j]] = [heap[j], heap[m]]; j = m;
+      }
+    }
+    return top[1];
+  };
+  const start = idx(sc, sr), end = idx(gc, gr);
+  g[start] = 0;
+  push(h(sc, sr), start);
+  let found = false;
+  while (heap.length) {
+    const cur = pop();
+    if (closed[cur]) continue;
+    closed[cur] = 1;
+    if (cur === end) { found = true; break; }
+    const c = cur % COLS, r = (cur / COLS) | 0;
+    for (let dc = -1; dc <= 1; dc++)
+      for (let dr = -1; dr <= 1; dr++) {
+        if (!dc && !dr) continue;
+        const nc = c + dc, nr = r + dr;
+        if (!isFree(nc, nr)) continue;
+        // diagonal só se as duas laterais estão livres (não corta quina)
+        if (dc && dr && (!isFree(c + dc, r) || !isFree(c, r + dr))) continue;
+        const ni = idx(nc, nr);
+        const ng = g[cur] + (dc && dr ? Math.SQRT2 : 1);
+        if (ng < g[ni]) { g[ni] = ng; prev[ni] = cur; push(ng + h(nc, nr), ni); }
+      }
+  }
+  if (!found) return [];
+  const cells: Vec2[] = [];
+  for (let i = prev[end]; i !== -1 && i !== start; i = prev[i]) cells.unshift(cellCenter(i % COLS, (i / COLS) | 0));
+  cells.push(goal);
+  // corta caminho: de cada ponto, pula para o mais distante que dá para ver em linha reta
+  const out: Vec2[] = [];
+  let at = from;
+  for (let i = 0; i < cells.length;) {
+    let j = i;
+    while (j + 1 < cells.length && clearLine(at, cells[j + 1])) j++;
+    out.push(cells[j]);
+    at = cells[j];
+    i = j + 1;
+  }
+  return out;
 }
 
 /** Acha um ponto livre perto do alvo (para teleporte e cliques em móveis). */

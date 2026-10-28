@@ -12,11 +12,14 @@ import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
 import { LiveScreens } from './LiveScreens';
-import { DESKS, FURNITURE, HUMAN_DESKS, ROOMS, SPAWN, WALLS, WALL_H, deskSeat, freeSpotNear, roomAt, step, type Furniture, type HumanDesk } from './layout';
+import { DESKS, FURNITURE, HUMAN_DESKS, ROOMS, SPAWN, WALLS, WALL_H, deskSeat, findPath, freeSpotNear, roomAt, step, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
-  x: SPAWN.x, z: SPAWN.z, dir: Math.PI, moving: false, target: null as Vec2 | null,
+  x: SPAWN.x, z: SPAWN.z, dir: Math.PI, moving: false,
+  /** próximo ponto do caminho e os que vêm depois (o clique desvia dos móveis) */
+  target: null as Vec2 | null,
+  path: [] as Vec2[],
   /** sentado na própria mesa (andar levanta) */
   seated: false,
   /** força o envio da posição no próximo quadro (sentar, aparecer na mesa) */
@@ -37,6 +40,14 @@ export const cam = {
   /** o soltar do arraste dispara um click no chão; isto impede o personagem de andar até lá */
   justDragged: false,
 };
+
+/** Anda até um ponto contornando paredes e móveis. */
+export function walkTo(p: Vec2) {
+  player.path = findPath(player, p);
+  player.target = player.path.shift() ?? null;
+}
+
+const stopWalking = () => { player.target = null; player.path = []; };
 
 /** Farol pulsando no chão (o tour aponta para onde está falando). */
 export const beacon = { on: false, x: 0, z: 0 };
@@ -64,7 +75,7 @@ export function recenter() {
 export function goTo(target: Vec2, face?: Vec2) {
   const q = freeSpotNear(target);
   if (face) player.dir = Math.atan2(face.x - q.x, face.z - q.z);
-  player.target = null;
+  stopWalking();
   useStore.setState({ panel: null, panelArg: null, teleport: q });
 }
 
@@ -78,7 +89,7 @@ export function goToAgent(a: AgentProfile) {
 function sitAt(d: HumanDesk) {
   const seat = deskSeat(d);
   player.x = seat.x; player.z = seat.z; player.dir = Math.PI;
-  player.target = null;
+  stopWalking();
   player.seated = true;
   player.dirty = true;
   recenter();
@@ -175,7 +186,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
 
     if (st.teleport) {
       const q = freeSpotNear(st.teleport);
-      player.x = q.x; player.z = q.z; player.target = null;
+      player.x = q.x; player.z = q.z; stopWalking();
       player.seated = false;
       player.dirty = true;
       useStore.setState({ teleport: null });
@@ -192,7 +203,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     const speed = 5.2 * (keys.has('shift') ? 1.8 : 1);
     let dx = 0, dz = 0;
     if (ix || iz) {
-      player.target = null;
+      stopWalking();
       const len = Math.hypot(ix, iz);
       // com a câmera no ângulo padrão (45°), "direita" na tela = (1,-1) e "baixo" = (1,1) no mundo
       const bx = (ix + iz) / Math.SQRT2 / len;
@@ -203,7 +214,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     } else if (player.target) {
       const tx = player.target.x - player.x, tz = player.target.z - player.z;
       const dist = Math.hypot(tx, tz);
-      if (dist < 0.08) player.target = null;
+      if (dist < 0.08) player.target = player.path.shift() ?? null;
       else {
         const s = Math.min(dist, speed * dt);
         dx = (tx / dist) * s; dz = (tz / dist) * s;
@@ -212,7 +223,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     const moving = !!(dx || dz);
     if (moving) {
       const next = step(player, dx, dz);
-      if (next.x === player.x && next.z === player.z) player.target = null;
+      if (next.x === player.x && next.z === player.z) stopWalking();
       player.x = next.x; player.z = next.z;
       player.dir = Math.atan2(dx, dz);
     }
@@ -371,7 +382,7 @@ function Beacon({ p }: { p: ScenePalette }) {
 const walk = (e: any) => {
   e.stopPropagation();
   if (droneBlocksClick()) return;
-  player.target = { x: e.point.x, z: e.point.z };
+  walkTo({ x: e.point.x, z: e.point.z });
 };
 
 function Floor({ p }: { p: ScenePalette }) {
@@ -537,7 +548,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       )}
       <Floor p={p} />
       {FURNITURE.map((f, i) => (
-        <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; player.target = freeSpotNear({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
+        <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; walkTo({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}
       <DecorLayer />
       <DeskMarkers />
