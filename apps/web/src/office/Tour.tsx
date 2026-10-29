@@ -63,7 +63,7 @@ function useSteps(): Step[] {
       body: (
         <ul className="tour-keys">
           <li><kbd>Ctrl</kbd><kbd>K</kbd> busca tudo: salas, pessoas, demandas e clientes</li>
-          <li><kbd>Espaço</kbd> + arrastar sobrevoa o escritório (modo drone)</li>
+          <li>Segurar o botão direito (ou <kbd>Espaço</kbd>) e arrastar sobrevoa o escritório sem mexer o avatar</li>
           <li><kbd>B</kbd> demandas · <kbd>C</kbd> calendário · <kbd>F</kbd> financeiro · <kbd>V</kbd> vídeo</li>
           <li><kbd>T</kbd> abre o chat · <kbd>O</kbd> volta para o escritório</li>
         </ul>

@@ -76,7 +76,7 @@ const sinElev = () => camHeight() / Math.hypot(1, camHeight());
 const PIXEL_SIZE = 1;
 
 /** Modo drone ligado (Espaço segurado) ou arrastando: cliques não movem o personagem. */
-export const droneBlocksClick = () => useStore.getState().drone || cam.justDragged || useDecor.getState().editing;
+export const droneBlocksClick = () => useStore.getState().drone || cam.dragging || cam.justDragged || useDecor.getState().editing;
 
 /** Volta a câmera para o jogador. */
 export function recenter() {
@@ -550,12 +550,12 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       else zoomBy(dy > 0 ? 0.9 : 1.1);
     };
 
-    // arrastar: Espaço + botão esquerdo, ou botão do meio a qualquer momento
+    // arrastar: Espaço + botão esquerdo, ou botão direito ou do meio a qualquer momento (o avatar fica parado)
     let last: { x: number; y: number } | null = null;
     let moved = 0;
     const pdown = (e: PointerEvent) => {
       if ((e.target as HTMLElement)?.tagName !== 'CANVAS') return;
-      if (!(e.button === 1 || (e.button === 0 && useStore.getState().drone))) return;
+      if (!(e.button === 1 || e.button === 2 || (e.button === 0 && useStore.getState().drone))) return;
       e.preventDefault();
       last = { x: e.clientX, y: e.clientY };
       moved = 0;
@@ -578,6 +578,8 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
     };
     // o botão do meio no Windows abre a "rolagem automática"; aqui ele é arraste
     const aux = (e: MouseEvent) => { if (e.button === 1 && (e.target as HTMLElement)?.tagName === 'CANVAS') e.preventDefault(); };
+    // o botão direito arrasta o mapa: sem o menu do navegador em cima do mundo
+    const menu = (e: MouseEvent) => { if ((e.target as HTMLElement)?.tagName === 'CANVAS') e.preventDefault(); };
 
     addEventListener('keydown', down);
     addEventListener('keyup', up);
@@ -587,6 +589,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
     addEventListener('pointermove', pmove);
     addEventListener('pointerup', pup);
     addEventListener('mousedown', aux);
+    addEventListener('contextmenu', menu);
     setReady(true);
     return () => {
       removeEventListener('keydown', down);
@@ -597,6 +600,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       removeEventListener('pointermove', pmove);
       removeEventListener('pointerup', pup);
       removeEventListener('mousedown', aux);
+      removeEventListener('contextmenu', menu);
     };
   }, []);
 
