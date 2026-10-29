@@ -203,35 +203,60 @@ function planksTexture(key: string, [a, b]: [string, string]) {
   });
 }
 
-/** Metros cobertos por uma repetição da textura de piso de cada sala. */
-export const FLOOR_TILE_M: Record<string, number> = { recepcao: 2 };
+/** Metros cobertos por uma repetição da textura de piso de qualquer sala. */
+export const FLOOR_TILE_M = 2;
 
-/** Piso de cada sala, 16 px por metro (a recepção, 32): tábuas, carpete, ladrilho, xadrez. */
+/**
+ * Piso padrão de cada sala, 32 px por metro e 2 m por repetição (a mesma densidade dos pisos do modo Decorar):
+ * tábuas na recepção, carpete em placas na gerência, carpete felpudo na reunião, porcelanato na redação,
+ * placas de borracha na ilha de vídeo e ladrilho xadrez na copa e no design.
+ */
 export function floorTexture(room: string, [a, b]: [string, string]) {
   if (room === 'recepcao') return planksTexture(room, [a, b]);
-  return canvasTexture(`floor:${room}:${a}`, 16, 16, (g) => {
-    const px = (x: number, y: number, c: string) => { g.fillStyle = c; g.fillRect(x, y, 1, 1); };
-    g.fillStyle = a;
-    g.fillRect(0, 0, 16, 16);
+  return canvasTexture(`floor32:${room}:${a}`, 64, 64, (g) => {
+    const px = (x: number, y: number, c: string, w = 1, h = 1) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+    const r = rand(room.length * 31 + 5);
+    px(0, 0, a, 64, 64);
     if (room === 'copa' || room === 'design') {
-      // xadrez de ladrilho
-      g.fillStyle = b;
-      g.fillRect(0, 0, 8, 8);
-      g.fillRect(8, 8, 8, 8);
-      g.fillStyle = shade(b, 0.85);
-      g.fillRect(0, 7, 16, 1);
-      g.fillRect(7, 0, 1, 16);
-      g.fillRect(0, 15, 16, 1);
-      g.fillRect(15, 0, 1, 16);
-    } else if (room === 'video' || room === 'copy') {
-      // ladrilho grande com rejunte
-      g.fillStyle = shade(a, 0.8);
-      g.fillRect(0, 15, 16, 1);
-      g.fillRect(15, 0, 1, 16);
-      px(3, 4, b); px(10, 9, b); px(6, 12, b);
+      // ladrilho xadrez de 50 cm com chanfro claro em cima e sombra embaixo
+      for (let ty = 0; ty < 4; ty++) for (let tx = 0; tx < 4; tx++) {
+        const c = (tx + ty) % 2 ? b : a, x = tx * 16, y = ty * 16;
+        px(x, y, c, 16, 16);
+        for (let k = 0; k < 5; k++) px(x + 2 + Math.floor(r() * 12), y + 2 + Math.floor(r() * 12), shade(c, 0.96));
+        px(x, y, shade(c, 1.06), 16, 1);
+        px(x, y, shade(c, 1.03), 1, 16);
+        px(x, y + 15, shade(a, 0.8), 16, 1);
+        px(x + 15, y, shade(a, 0.84), 1, 16);
+      }
+    } else if (room === 'copy') {
+      // porcelanato de 1 m com manchas suaves e rejunte fino
+      for (let i = 0; i < 40; i++) px(Math.floor(r() * 64), Math.floor(r() * 64), r() < 0.5 ? b : shade(a, 1.04), 3 + Math.floor(r() * 6), 2 + Math.floor(r() * 3));
+      for (let i = 0; i < 120; i++) px(Math.floor(r() * 64), Math.floor(r() * 64), shade(a, r() < 0.5 ? 0.95 : 1.05));
+      for (const o of [0, 32]) {
+        px(0, o + 31, shade(a, 0.78), 64, 1); px(o + 31, 0, shade(a, 0.78), 1, 64);
+        px(0, o, shade(a, 1.08), 64, 1); px(o, 0, shade(a, 1.05), 1, 64);
+      }
+    } else if (room === 'video') {
+      // placas de borracha de 50 cm com pastilhas em relevo (piso de estúdio)
+      for (let ty = 0; ty < 4; ty++) for (let tx = 0; tx < 4; tx++) {
+        const x = tx * 16, y = ty * 16;
+        px(x, y, (tx + ty) % 2 ? a : b, 16, 16);
+        for (let dy = 3; dy < 16; dy += 5) for (let dx = 3; dx < 16; dx += 5) { px(x + dx, y + dy, shade(a, 1.25), 2, 1); px(x + dx, y + dy + 1, shade(a, 0.75), 2, 1); }
+        px(x, y + 15, shade(a, 0.7), 16, 1); px(x + 15, y, shade(a, 0.7), 1, 16);
+      }
+    } else if (room === 'gerencia') {
+      // carpete em placas de 50 cm, o fio em direções alternadas
+      for (let ty = 0; ty < 4; ty++) for (let tx = 0; tx < 4; tx++) {
+        const x = tx * 16, y = ty * 16, flat = (tx + ty) % 2 === 0, c = flat ? a : b;
+        px(x, y, c, 16, 16);
+        for (let k = 0; k < 16; k += 2) px(flat ? x : x + k, flat ? y + k : y, shade(c, 1.07), flat ? 16 : 1, flat ? 1 : 16);
+        px(x, y + 15, shade(a, 0.85), 16, 1); px(x + 15, y, shade(a, 0.85), 1, 16);
+      }
+      for (let i = 0; i < 90; i++) px(Math.floor(r() * 64), Math.floor(r() * 64), shade(a, r() < 0.5 ? 0.88 : 1.14));
     } else {
-      // carpete: ruído fino com pontinhos
-      for (let i = 0; i < 26; i++) px((i * 7) % 16, (i * 11 + (i >> 2)) % 16, i % 3 ? b : shade(a, 1.12));
+      // carpete felpudo: trama fina em diagonal e fios soltos
+      for (let y = 0; y < 64; y++) for (let x = (y % 4); x < 64; x += 4) px(x, y, b);
+      for (let i = 0; i < 260; i++) px(Math.floor(r() * 64), Math.floor(r() * 64), shade(a, r() < 0.5 ? 0.86 : 1.12));
     }
   });
 }
@@ -379,8 +404,7 @@ export function screenTexture(glow: string) {
 export const useFloorTextures = (p: PixelPalette, rooms: { id: string; x0: number; x1: number; z0: number; z1: number }[]) =>
   useMemo(() => Object.fromEntries(rooms.map((r) => {
     const t = floorTexture(r.id, p.floors[r.id] ?? ['#bbbbbb', '#aaaaaa']).clone();
-    const m = FLOOR_TILE_M[r.id] ?? 1;
-    t.repeat.set((r.x1 - r.x0) / m, (r.z1 - r.z0) / m);
+    t.repeat.set((r.x1 - r.x0) / FLOOR_TILE_M, (r.z1 - r.z0) / FLOOR_TILE_M);
     t.needsUpdate = true;
     return [r.id, t];
   })), [p, rooms]);

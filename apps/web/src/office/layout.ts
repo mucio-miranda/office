@@ -201,7 +201,11 @@ export function step(from: Vec2, dx: number, dz: number): Vec2 {
   return from;
 }
 
-/** O segmento a→b passa por dentro da caixa (aumentada pelo raio do avatar)? Teste exato, por intervalos. */
+/**
+ * O segmento a→b passa por dentro da caixa (aumentada pelo raio do avatar e mais uma folga)? Teste exato, por
+ * intervalos. A folga evita rotas que raspam a quina: andando, o arredondamento punha o avatar dentro dela e ele parava.
+ */
+const CLEARANCE = RADIUS + 0.06;
 function segHits(a: Vec2, b: Vec2, box: Box) {
   let t0 = 0, t1 = 1;
   const slab = (p: number, d: number, lo: number, hi: number) => {
@@ -211,7 +215,7 @@ function segHits(a: Vec2, b: Vec2, box: Box) {
     t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
     return t0 < t1;
   };
-  return slab(a.x, b.x - a.x, box.x0 - RADIUS, box.x1 + RADIUS) && slab(a.z, b.z - a.z, box.z0 - RADIUS, box.z1 + RADIUS);
+  return slab(a.x, b.x - a.x, box.x0 - CLEARANCE, box.x1 + CLEARANCE) && slab(a.z, b.z - a.z, box.z0 - CLEARANCE, box.z1 + CLEARANCE);
 }
 
 const inBounds = (p: Vec2) => p.x >= BOUNDS.x0 + RADIUS && p.x <= BOUNDS.x1 - RADIUS && p.z >= BOUNDS.z0 + RADIUS && p.z <= BOUNDS.z1 - RADIUS;

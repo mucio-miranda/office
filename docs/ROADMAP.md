@@ -61,18 +61,21 @@ agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo 
    cor de cada material, 4 tons de luz, assoalho de tábuas e lambri ripado a 32 px por metro, folhagem arredondada
    com folhas miúdas e flores, recepção biofílica (árvore no centro, sofás orgânicos, jardineiras, divisória verde,
    plantas suspensas), quadro de musgo e a aba Pisos (12 materiais aplicados por sala). Falta: avatares no mesmo
-   nível de detalhe e os pisos padrão das outras salas em 32 px
+   nível de detalhe
 6e. ✅ **Andar aberto (v0.4.3)**: planta 1,5× maior (54 × 36 m) e sem paredes internas, como nos escritórios
    grandes; só a sala de reunião e a ilha de vídeo continuam fechadas, e divisórias verdes e tapetes marcam as
    áreas. Decorações salvas na planta antiga são convertidas sozinhas. Entrada com animação ASCII nova (objetos
    de escritório que cruzam a tela e deixam rastro), mais perto da proposta do Paperclip
+   Na v0.4.4: pisos padrão de todas as salas a 32 px por metro (carpete em placas, carpete felpudo, porcelanato,
+   borracha de estúdio e ladrilho xadrez) e o clique para andar mais firme (folga nas quinas, rota refeita se o
+   avatar esbarrar e marca no chão no destino)
 7. ✅ **Cliente e esteira (v0.4)**: cliente novo com entrevista de briefing, pasta no padrão REZZU com índice de
    arquivos (ensaio, logo, IDV, brutos), demandas em etapas (briefing → pauta → copy → arte/vídeo → aprovação →
    agendado) passando sozinhas de um funcionário para outro, aprovação humana ou da IA configurável por cliente.
    Feito: página Clientes, entrevista de briefing pelo chat com o gerente (grava o BRIEFING.md e sugere as
    demandas), índice da pasta com miniaturas, esteira com histórico por etapa, Aprovar / Pedir ajustes, revisão
    pela IA com até duas voltas e limite de tarefas por demanda
-8. **Mesa do diretor de arte (v0.4.4)**: revisão das peças com versões, prompt apontando uma área da imagem e
+8. **Mesa do diretor de arte (v0.4.5)**: revisão das peças com versões, prompt apontando uma área da imagem e
    edição ao vivo no PhotoCraft e no LightCraft
 9. **Publicação (v0.5)**: [Postiz](https://github.com/gitroomhq/postiz-app) (AGPL-3.0) rodando junto, posts
    aprovados agendados e ligados ao calendário; as contas dos clientes são conectadas por vocês no próprio Postiz

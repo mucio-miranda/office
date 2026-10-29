@@ -20,6 +20,9 @@ export const player = {
   /** próximo ponto do caminho e os que vêm depois (o clique desvia dos móveis) */
   target: null as Vec2 | null,
   path: [] as Vec2[],
+  /** destino do clique (para refazer a rota se o avatar esbarrar no caminho) */
+  goal: null as Vec2 | null,
+  replans: 0,
   /** sentado na própria mesa (andar levanta) */
   seated: false,
   /** força o envio da posição no próximo quadro (sentar, aparecer na mesa) */
@@ -45,9 +48,15 @@ export const cam = {
 export function walkTo(p: Vec2) {
   player.path = findPath(player, p);
   player.target = player.path.shift() ?? null;
+  player.goal = player.target ? p : null;
+  player.replans = 0;
+  if (player.target) walkMark.show(player.path.at(-1) ?? player.target);
 }
 
-const stopWalking = () => { player.target = null; player.path = []; };
+const stopWalking = () => { player.target = null; player.path = []; player.goal = null; walkMark.on = false; };
+
+/** Marca no chão onde o clique vai levar o avatar (some ao chegar). */
+export const walkMark = { on: false, x: 0, z: 0, t: 0, show(p: Vec2) { this.on = true; this.x = p.x; this.z = p.z; this.t = performance.now(); } };
 
 /** Farol pulsando no chão (o tour aponta para onde está falando). */
 export const beacon = { on: false, x: 0, z: 0 };
@@ -214,8 +223,10 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     } else if (player.target) {
       const tx = player.target.x - player.x, tz = player.target.z - player.z;
       const dist = Math.hypot(tx, tz);
-      if (dist < 0.08) player.target = player.path.shift() ?? null;
-      else {
+      if (dist < 0.08) {
+        player.target = player.path.shift() ?? null;
+        if (!player.target) stopWalking();
+      } else {
         const s = Math.min(dist, speed * dt);
         dx = (tx / dist) * s; dz = (tz / dist) * s;
       }
@@ -223,7 +234,15 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     const moving = !!(dx || dz);
     if (moving) {
       const next = step(player, dx, dz);
-      if (next.x === player.x && next.z === player.z) stopWalking();
+      if (next.x === player.x && next.z === player.z) {
+        // esbarrou (outra pessoa mexeu na decoração, ou a rota raspou uma quina): refaz o caminho algumas vezes antes de desistir
+        const goal = player.goal;
+        if (goal && player.replans < 3) {
+          const replans = player.replans + 1;
+          walkTo(goal);
+          player.replans = replans;
+        } else stopWalking();
+      }
       player.x = next.x; player.z = next.z;
       player.dir = Math.atan2(dx, dz);
     }
@@ -355,6 +374,28 @@ function DeskMarkers() {
         );
       })}
     </>
+  );
+}
+
+/** Anel que encolhe no destino do clique, para mostrar que o clique foi aceito. */
+function WalkMark({ p }: { p: ScenePalette }) {
+  const ref = useRef<THREE.Mesh>(null);
+  const mat = useRef<THREE.MeshBasicMaterial>(null);
+  useFrame(() => {
+    const m = ref.current;
+    if (!m) return;
+    m.visible = walkMark.on;
+    if (!walkMark.on) return;
+    const t = Math.min(1, (performance.now() - walkMark.t) / 450);
+    m.position.set(walkMark.x, 0.025, walkMark.z);
+    m.scale.setScalar(0.55 - 0.25 * t);
+    mat.current!.opacity = 0.9 - 0.35 * t;
+  });
+  return (
+    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} visible={false} raycast={() => null}>
+      <ringGeometry args={[0.5, 1, 32]} />
+      <meshBasicMaterial ref={mat} color={p.screen} transparent depthWrite={false} />
+    </mesh>
   );
 }
 
@@ -554,6 +595,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       <DeskMarkers />
       <LiveScreens />
       <Beacon p={p} />
+      <WalkMark p={p} />
       {agents.map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
       {Object.values(presences).map((pr) => <Remote key={pr.userId} pr={pr} p={p} />)}
       {ready && <Player onNearby={onNearby} p={p} active={active} />}
