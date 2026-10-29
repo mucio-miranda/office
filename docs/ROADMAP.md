@@ -69,13 +69,15 @@ agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo 
    Na v0.4.4: pisos padrão de todas as salas a 32 px por metro (carpete em placas, carpete felpudo, porcelanato,
    borracha de estúdio e ladrilho xadrez) e o clique para andar mais firme (folga nas quinas, rota refeita se o
    avatar esbarrar e marca no chão no destino)
+   Na v0.4.5: clique como no Habbo, com o cursor quadrado de 1 m seguindo o mouse pelo chão, o ladrilho do
+   destino marcado até a chegada e o avatar andando só reto ou na diagonal da grade
 7. ✅ **Cliente e esteira (v0.4)**: cliente novo com entrevista de briefing, pasta no padrão REZZU com índice de
    arquivos (ensaio, logo, IDV, brutos), demandas em etapas (briefing → pauta → copy → arte/vídeo → aprovação →
    agendado) passando sozinhas de um funcionário para outro, aprovação humana ou da IA configurável por cliente.
    Feito: página Clientes, entrevista de briefing pelo chat com o gerente (grava o BRIEFING.md e sugere as
    demandas), índice da pasta com miniaturas, esteira com histórico por etapa, Aprovar / Pedir ajustes, revisão
    pela IA com até duas voltas e limite de tarefas por demanda
-8. **Mesa do diretor de arte (v0.4.5)**: revisão das peças com versões, prompt apontando uma área da imagem e
+8. **Mesa do diretor de arte (v0.4.6)**: revisão das peças com versões, prompt apontando uma área da imagem e
    edição ao vivo no PhotoCraft e no LightCraft
 9. **Publicação (v0.5)**: [Postiz](https://github.com/gitroomhq/postiz-app) (AGPL-3.0) rodando junto, posts
    aprovados agendados e ligados ao calendário; as contas dos clientes são conectadas por vocês no próprio Postiz

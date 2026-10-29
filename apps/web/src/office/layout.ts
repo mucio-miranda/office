@@ -181,7 +181,7 @@ const SOLIDS: Box[] = [
 ];
 /** Peças da decoração que bloqueiam a passagem (atualizadas pelo modo Decorar). */
 let decorSolids: Box[] = [];
-export const setDecorSolids = (b: Box[]) => { decorSolids = b; grid = new Uint8Array(COLS * ROWS); };
+export const setDecorSolids = (b: Box[]) => { decorSolids = b; grid = new Uint8Array(COLS * ROWS); corners = new Uint8Array((COLS + 1) * (ROWS + 1)); };
 
 const RADIUS = 0.35;
 export function blocked(p: Vec2) {
@@ -206,7 +206,7 @@ export function step(from: Vec2, dx: number, dz: number): Vec2 {
  * intervalos. A folga evita rotas que raspam a quina: andando, o arredondamento punha o avatar dentro dela e ele parava.
  */
 const CLEARANCE = RADIUS + 0.06;
-function segHits(a: Vec2, b: Vec2, box: Box) {
+function segHits(a: Vec2, b: Vec2, box: Box, pad = CLEARANCE) {
   let t0 = 0, t1 = 1;
   const slab = (p: number, d: number, lo: number, hi: number) => {
     if (Math.abs(d) < 1e-9) return p > lo && p < hi;
@@ -215,15 +215,15 @@ function segHits(a: Vec2, b: Vec2, box: Box) {
     t0 = Math.max(t0, ta); t1 = Math.min(t1, tb);
     return t0 < t1;
   };
-  return slab(a.x, b.x - a.x, box.x0 - CLEARANCE, box.x1 + CLEARANCE) && slab(a.z, b.z - a.z, box.z0 - CLEARANCE, box.z1 + CLEARANCE);
+  return slab(a.x, b.x - a.x, box.x0 - pad, box.x1 + pad) && slab(a.z, b.z - a.z, box.z0 - pad, box.z1 + pad);
 }
 
 const inBounds = (p: Vec2) => p.x >= BOUNDS.x0 + RADIUS && p.x <= BOUNDS.x1 - RADIUS && p.z >= BOUNDS.z0 + RADIUS && p.z <= BOUNDS.z1 - RADIUS;
 
 /** Dá para ir em linha reta de `a` até `b` sem encostar em nada? */
-function clearLine(a: Vec2, b: Vec2) {
+function clearLine(a: Vec2, b: Vec2, pad = CLEARANCE) {
   if (!inBounds(a) || !inBounds(b)) return false;
-  return !SOLIDS.some((s) => segHits(a, b, s)) && !decorSolids.some((s) => segHits(a, b, s));
+  return !SOLIDS.some((s) => segHits(a, b, s, pad)) && !decorSolids.some((s) => segHits(a, b, s, pad));
 }
 
 const CELL = 0.25;
@@ -233,15 +233,45 @@ const cellOf = (p: Vec2) => [Math.floor((p.x - BOUNDS.x0) / CELL), Math.floor((p
 const cellCenter = (c: number, r: number): Vec2 => ({ x: BOUNDS.x0 + (c + 0.5) * CELL, z: BOUNDS.z0 + (r + 0.5) * CELL });
 /** Células livres (0 = não testada, 1 = livre, 2 = bloqueada); refeita quando a decoração muda. */
 let grid = new Uint8Array(COLS * ROWS);
+/** O mesmo para os cantos entre as células: a diagonal passa por eles e não pode cortar a quina de um móvel. */
+let corners = new Uint8Array((COLS + 1) * (ROWS + 1));
+const cornerFree = (c: number, r: number) => {
+  const k = r * (COLS + 1) + c;
+  if (!corners[k]) corners[k] = blocked({ x: BOUNDS.x0 + c * CELL, z: BOUNDS.z0 + r * CELL }) ? 2 : 1;
+  return corners[k] === 1;
+};
+
+/** Ladrilho de 1 m do chão (o cursor e o destino do clique, como no Habbo): devolve o centro dele. */
+export const TILE = 1;
+export const tileAt = (p: Vec2): Vec2 => ({
+  x: BOUNDS.x0 + (Math.floor((p.x - BOUNDS.x0) / TILE) + 0.5) * TILE,
+  z: BOUNDS.z0 + (Math.floor((p.z - BOUNDS.z0) / TILE) + 0.5) * TILE,
+});
+
+/** O trecho a→b segue uma das 8 direções da grade (reto ou na diagonal exata)? */
+const gridDir = (a: Vec2, b: Vec2) => {
+  const dx = Math.abs(b.x - a.x), dz = Math.abs(b.z - a.z);
+  return dx < 1e-6 || dz < 1e-6 || Math.abs(dx - dz) < 1e-6;
+};
 
 /**
- * Caminho de `from` até `to` desviando de paredes e móveis (A* numa grade de 25 cm, depois cortando os
- * cantos desnecessários). Devolve os pontos a percorrer, sem o de partida; vazio se não há como chegar.
+ * Caminho de `from` até `to` desviando de paredes e móveis (A* numa grade de 25 cm). Como no Habbo, o avatar
+ * anda só reto ou na diagonal da grade: os pontos são juntados em trechos longos, mas sem sair dessas 8 direções.
+ * Devolve os pontos a percorrer, sem o de partida; vazio se não há como chegar.
  */
 export function findPath(from: Vec2, to: Vec2): Vec2[] {
   const goal = freeSpotNear(to);
-  if (clearLine(from, goal)) return [goal];
   const [sc, sr] = cellOf(from), [gc, gr] = cellOf(goal);
+  const first = cellCenter(sc, sr);
+  const lead: Vec2[] = Math.hypot(first.x - from.x, first.z - from.z) > 0.02 ? [first] : [];
+  // atalho para o caminho livre: uma diagonal e depois uma reta (ou o contrário), sem rodar o A*
+  {
+    const dx = goal.x - first.x, dz = goal.z - first.z, d = Math.min(Math.abs(dx), Math.abs(dz));
+    const diagFirst = { x: first.x + Math.sign(dx) * d, z: first.z + Math.sign(dz) * d };
+    const straightFirst = { x: goal.x - Math.sign(dx) * d, z: goal.z - Math.sign(dz) * d };
+    for (const mid of [diagFirst, straightFirst])
+      if (clearLine(first, mid) && clearLine(mid, goal)) return [...lead, mid, goal].filter((q, i, a) => i === 0 || Math.hypot(q.x - a[i - 1].x, q.z - a[i - 1].z) > 0.02);
+  }
   const idx = (c: number, r: number) => r * COLS + c;
   const isFree = (c: number, r: number) => {
     if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return false;
@@ -295,7 +325,7 @@ export function findPath(from: Vec2, to: Vec2): Vec2[] {
         const nc = c + dc, nr = r + dr;
         if (!isFree(nc, nr)) continue;
         // diagonal só se as duas laterais estão livres (não corta quina)
-        if (dc && dr && (!isFree(c + dc, r) || !isFree(c, r + dr))) continue;
+        if (dc && dr && (!isFree(c + dc, r) || !isFree(c, r + dr) || !cornerFree(c + (dc > 0 ? 1 : 0), r + (dr > 0 ? 1 : 0)))) continue;
         const ni = idx(nc, nr);
         const ng = g[cur] + (dc && dr ? Math.SQRT2 : 1);
         if (ng < g[ni]) { g[ni] = ng; prev[ni] = cur; push(ng + h(nc, nr), ni); }
@@ -305,12 +335,13 @@ export function findPath(from: Vec2, to: Vec2): Vec2[] {
   const cells: Vec2[] = [];
   for (let i = prev[end]; i !== -1 && i !== start; i = prev[i]) cells.unshift(cellCenter(i % COLS, (i / COLS) | 0));
   cells.push(goal);
-  // corta caminho: de cada ponto, pula para o mais distante que dá para ver em linha reta
-  const out: Vec2[] = [];
-  let at = from;
+  // primeiro encaixa no centro da célula de partida; depois, de cada ponto, pula para o mais distante que dá
+  // para alcançar em linha reta numa das 8 direções
+  const out: Vec2[] = [...lead];
+  let at = out[0] ?? from;
   for (let i = 0; i < cells.length;) {
     let j = i;
-    while (j + 1 < cells.length && clearLine(at, cells[j + 1])) j++;
+    while (j + 1 < cells.length && gridDir(at, cells[j + 1]) && clearLine(at, cells[j + 1])) j++;
     out.push(cells[j]);
     at = cells[j];
     i = j + 1;

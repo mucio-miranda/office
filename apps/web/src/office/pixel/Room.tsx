@@ -15,7 +15,7 @@ const isBack = (w: { x: number; z: number; w: number; d: number }) =>
  * Chão e paredes em pixel art: a laje do prédio com borda grossa (como a base dos quartos do Habbo),
  * o piso de cada sala com a sua textura e as paredes com papel de parede, lambri e acabamento no topo.
  */
-export function PixelRoom({ p, onWalk }: { p: PixelPalette; onWalk: (e: any) => void }) {
+export function PixelRoom({ p, onWalk, onHover, onLeave }: { p: PixelPalette; onWalk: (e: any) => void; onHover: (e: any) => void; onLeave: () => void }) {
   const floors = useFloorTextures(p, ROOMS);
   const items = useDecor((s) => s.items);
   const ghost = useDecor((s) => s.ghost);
@@ -47,7 +47,7 @@ export function PixelRoom({ p, onWalk }: { p: PixelPalette; onWalk: (e: any) => 
         const mat = chosen[r.id] ? floorMaterialTexture(chosen[r.id]) : null;
         const map = mat ? tiled(mat, (r.x1 - r.x0) / FLOOR_MATERIAL_M, (r.z1 - r.z0) / FLOOR_MATERIAL_M) : floors[r.id];
         return (
-          <mesh key={r.id} rotation={[-Math.PI / 2, 0, 0]} position={[(r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2]} receiveShadow onClick={onWalk}>
+          <mesh key={r.id} rotation={[-Math.PI / 2, 0, 0]} position={[(r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2]} receiveShadow onClick={onWalk} onPointerMove={onHover} onPointerOut={onLeave}>
             <planeGeometry args={[r.x1 - r.x0, r.z1 - r.z0]} />
             {/* os pisos escolhidos têm cores fixas: à noite o material escurece */}
             <meshLambertMaterial map={map} color={mat && night ? '#8a8a96' : '#ffffff'} />

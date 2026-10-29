@@ -12,7 +12,7 @@ import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
 import { LiveScreens } from './LiveScreens';
-import { DESKS, FURNITURE, HUMAN_DESKS, ROOMS, SPAWN, WALLS, WALL_H, deskSeat, findPath, freeSpotNear, roomAt, step, type Furniture, type HumanDesk } from './layout';
+import { DESKS, FURNITURE, HUMAN_DESKS, ROOMS, SPAWN, WALLS, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -53,10 +53,13 @@ export function walkTo(p: Vec2) {
   if (player.target) walkMark.show(player.path.at(-1) ?? player.target);
 }
 
+/** Ladrilho sob o mouse (o cursor quadrado do Habbo); `on` só enquanto o mouse está sobre o chão. */
+export const tileHover = { on: false, x: 0, z: 0 };
+
 const stopWalking = () => { player.target = null; player.path = []; player.goal = null; walkMark.on = false; };
 
 /** Marca no chão onde o clique vai levar o avatar (some ao chegar). */
-export const walkMark = { on: false, x: 0, z: 0, t: 0, show(p: Vec2) { this.on = true; this.x = p.x; this.z = p.z; this.t = performance.now(); } };
+export const walkMark = { on: false, x: 0, z: 0, show(p: Vec2) { const t = tileAt(p); this.on = true; this.x = t.x; this.z = t.z; } };
 
 /** Farol pulsando no chão (o tour aponta para onde está falando). */
 export const beacon = { on: false, x: 0, z: 0 };
@@ -377,25 +380,44 @@ function DeskMarkers() {
   );
 }
 
-/** Anel que encolhe no destino do clique, para mostrar que o clique foi aceito. */
-function WalkMark({ p }: { p: ScenePalette }) {
-  const ref = useRef<THREE.Mesh>(null);
-  const mat = useRef<THREE.MeshBasicMaterial>(null);
+/** Contorno de um ladrilho: linha clara por fora e escura por dentro, para aparecer em qualquer piso. */
+const squareLine = (half: number) => new THREE.BufferGeometry().setFromPoints(
+  [[-half, -half], [half, -half], [half, half], [-half, half]].map(([x, z]) => new THREE.Vector3(x, 0, z)),
+);
+const SQ_OUT = squareLine(0.48), SQ_IN = squareLine(0.43);
+
+/**
+ * Cursor quadrado do Habbo: um ladrilho de 1 m contornado segue o mouse pelo chão (só onde dá para pisar) e o
+ * ladrilho do destino fica marcado, com um preenchimento claro, até o avatar chegar.
+ */
+function TileCursor() {
+  const hover = useRef<THREE.Group>(null);
+  const dest = useRef<THREE.Group>(null);
   useFrame(() => {
-    const m = ref.current;
-    if (!m) return;
-    m.visible = walkMark.on;
-    if (!walkMark.on) return;
-    const t = Math.min(1, (performance.now() - walkMark.t) / 450);
-    m.position.set(walkMark.x, 0.025, walkMark.z);
-    m.scale.setScalar(0.55 - 0.25 * t);
-    mat.current!.opacity = 0.9 - 0.35 * t;
+    const h = hover.current, d = dest.current;
+    if (!h || !d) return;
+    h.visible = tileHover.on && !droneBlocksClick() && !blocked(tileHover);
+    if (h.visible) h.position.set(tileHover.x, 0.02, tileHover.z);
+    d.visible = walkMark.on;
+    if (d.visible) d.position.set(walkMark.x, 0.018, walkMark.z);
   });
+  const outline = (
+    <>
+      <lineLoop geometry={SQ_OUT}><lineBasicMaterial color="#ffffff" transparent opacity={0.95} depthWrite={false} /></lineLoop>
+      <lineLoop geometry={SQ_IN}><lineBasicMaterial color="#1d1720" transparent opacity={0.35} depthWrite={false} /></lineLoop>
+    </>
+  );
   return (
-    <mesh ref={ref} rotation={[-Math.PI / 2, 0, 0]} visible={false} raycast={() => null}>
-      <ringGeometry args={[0.5, 1, 32]} />
-      <meshBasicMaterial ref={mat} color={p.screen} transparent depthWrite={false} />
-    </mesh>
+    <>
+      <group ref={hover} visible={false}>{outline}</group>
+      <group ref={dest} visible={false}>
+        {outline}
+        <mesh rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+          <planeGeometry args={[0.96, 0.96]} />
+          <meshBasicMaterial color="#ffffff" transparent opacity={0.28} depthWrite={false} />
+        </mesh>
+      </group>
+    </>
   );
 }
 
@@ -423,13 +445,18 @@ function Beacon({ p }: { p: ScenePalette }) {
 const walk = (e: any) => {
   e.stopPropagation();
   if (droneBlocksClick()) return;
-  walkTo({ x: e.point.x, z: e.point.z });
+  walkTo(tileAt({ x: e.point.x, z: e.point.z }));
 };
+const hoverFloor = (e: any) => {
+  const t = tileAt({ x: e.point.x, z: e.point.z });
+  tileHover.on = true; tileHover.x = t.x; tileHover.z = t.z;
+};
+const leaveFloor = () => { tileHover.on = false; };
 
 function Floor({ p }: { p: ScenePalette }) {
   const pixel = useWorldStyle((s) => s.style) === 'pixel';
   const px = usePixel();
-  if (pixel) return <PixelRoom p={px} onWalk={walk} />;
+  if (pixel) return <PixelRoom p={px} onWalk={walk} onHover={hoverFloor} onLeave={leaveFloor} />;
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]} onClick={walk}>
@@ -442,7 +469,7 @@ function Floor({ p }: { p: ScenePalette }) {
         <meshBasicMaterial color={p.wallTop} />
       </mesh>
       {ROOMS.map((r) => (
-        <mesh key={r.id} rotation={[-Math.PI / 2, 0, 0]} position={[(r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2]} receiveShadow onClick={walk}>
+        <mesh key={r.id} rotation={[-Math.PI / 2, 0, 0]} position={[(r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2]} receiveShadow onClick={walk} onPointerMove={hoverFloor} onPointerOut={leaveFloor}>
           <planeGeometry args={[r.x1 - r.x0, r.z1 - r.z0]} />
           <meshBasicMaterial color={r.id === 'video' || r.id === 'reuniao' ? p.floorAlt : p.floor} />
         </mesh>
@@ -595,7 +622,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       <DeskMarkers />
       <LiveScreens />
       <Beacon p={p} />
-      <WalkMark p={p} />
+      <TileCursor />
       {agents.map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
       {Object.values(presences).map((pr) => <Remote key={pr.userId} pr={pr} p={p} />)}
       {ready && <Player onNearby={onNearby} p={p} active={active} />}
