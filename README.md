@@ -84,6 +84,12 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   próximo funcionário, levando o briefing, o índice da pasta e o resumo das etapas anteriores
 - **Aprovação por cliente**: uma pessoa (Aprovar / Pedir ajustes) ou o gerente de IA, que confere a peça com o
   briefing e devolve para ajuste até duas vezes antes de chamar alguém
+- **Mesa do diretor de arte**: as peças de cada etapa e versão (pauta, copy, arte v1, v2…) com prévia de imagem,
+  vídeo e texto; arraste sobre a imagem para marcar uma área e dizer o que mudar ali. Cada ajuste vira uma versão
+  nova, gravada ao lado da anterior (`-v2`, `-v3`), sem sobrescrever nada
+- **Publicação**: a peça aprovada ganha data, redes e legenda (puxada da seção "Legenda" da copy). O Office põe o
+  post no calendário, grava o pacote em `PUBLICAR\<data> <peça>\POST.md` na pasta do cliente, avisa na hora de
+  postar e fecha o ciclo com "Marcar como publicado"
 
 ### 🧾 Clientes
 - **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com DOCUMENTOS, FOTOS e VIDEOS); só cria
@@ -350,7 +356,8 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Modo Decorar com catálogo de móveis, salvo para o escritório todo
 - [x] Visual detalhado em pixel art 1:1 (contorno na cor do material, assoalho e lambri de 32 px por metro, folhagem arredondada) e pisos por sala
 - [x] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
-- [ ] Mesa do diretor de arte, publicação com Postiz e arquivo de documentos no mapa
+- [x] Mesa do diretor de arte (versões e ajustes marcados na imagem) e agendamento da publicação com pacote e calendário
+- [ ] Publicação automática com Postiz e arquivo de documentos no mapa
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Voz e vídeo por proximidade
 - [ ] Google Calendar, Notion e Trello

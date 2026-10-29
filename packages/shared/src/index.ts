@@ -98,6 +98,46 @@ export interface StageLogEntry {
   text: string;
   result: 'feito' | 'aprovado' | 'ajustes' | 'erro';
   at: string;
+  /** Arquivos que a etapa produziu (caminhos completos), para a mesa do diretor de arte. */
+  files?: string[];
+  /** Versão das peças desta etapa (1 na primeira vez, 2 depois do primeiro ajuste...). */
+  version?: number;
+  /** Áreas marcadas nas peças junto com o pedido de ajuste. */
+  marks?: ReviewMark[];
+}
+
+/**
+ * Área marcada numa peça pelo diretor de arte: retângulo em frações da imagem (0 a 1, a partir do canto
+ * superior esquerdo) e o que mudar ali.
+ */
+export interface ReviewMark {
+  file: string;
+  x: number; y: number; w: number; h: number;
+  note: string;
+}
+
+/** Redes em que um post pode sair. */
+export const NETWORKS = ['instagram-feed', 'instagram-reels', 'instagram-stories', 'tiktok', 'facebook', 'linkedin', 'youtube-shorts'] as const;
+export type Network = (typeof NETWORKS)[number];
+export const NETWORK_LABEL: Record<Network, string> = {
+  'instagram-feed': 'Instagram (feed)', 'instagram-reels': 'Instagram (Reels)', 'instagram-stories': 'Instagram (stories)',
+  tiktok: 'TikTok', facebook: 'Facebook', linkedin: 'LinkedIn', 'youtube-shorts': 'YouTube Shorts',
+};
+
+/** Publicação agendada de uma demanda pronta: data, redes, legenda e o pacote gravado na pasta do cliente. */
+export interface Publish {
+  /** Data e hora locais (AAAA-MM-DDTHH:MM). */
+  at: string;
+  networks: Network[];
+  caption: string;
+  files: string[];
+  /** Pasta do pacote (PUBLICAR/...) com o POST.md. */
+  folder: string | null;
+  eventId: string | null;
+  status: 'agendado' | 'publicado';
+  publishedAt?: string;
+  /** O lembrete de "hora de publicar" já foi dado. */
+  reminded?: boolean;
 }
 
 export const DEMAND_COLUMNS = ['backlog', 'a_fazer', 'em_producao', 'aprovacao', 'entregue'] as const;
@@ -141,6 +181,8 @@ export interface Demand {
   stageLog: StageLogEntry[];
   /** Voltas de ajuste já feitas (limita o vai e volta da aprovação por IA). */
   reviewRounds: number;
+  /** Publicação agendada (depois da aprovação). */
+  publish: Publish | null;
 }
 
 export interface CalendarEvent {
@@ -149,7 +191,7 @@ export interface CalendarEvent {
   title: string;
   start: string;
   end: string;
-  kind: 'reuniao' | 'gravacao' | 'entrega' | 'pessoal' | 'outro';
+  kind: 'reuniao' | 'gravacao' | 'entrega' | 'publicacao' | 'pessoal' | 'outro';
   clientId: ID | null;
   demandId: ID | null;
   room: string | null;

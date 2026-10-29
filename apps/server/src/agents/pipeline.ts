@@ -1,12 +1,15 @@
+import { mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
-  APPROVAL_MARKER, BRIEFING_FIELDS, STAGE_AGENT, STAGE_LABEL, uid,
-  type AgentJob, type AgentProfile, type Briefing, type Client, type Demand, type DemandKind, type Office, type Stage, type StageLogEntry,
+  APPROVAL_MARKER, BRIEFING_FIELDS, NETWORK_LABEL, STAGE_AGENT, STAGE_LABEL, uid,
+  type AgentJob, type AgentProfile, type Briefing, type CalendarEvent, type Client, type Demand, type DemandKind, type Network, type Office,
+  type Publish, type ReviewMark, type Stage, type StageLogEntry,
 } from '@office/shared';
 import { all, insert, logActivity, now, one, update } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { clientDir, folderName, indexClient, indexSummary, writeNew } from '../clients/folder.ts';
 import { enqueueJob } from './runtime.ts';
+import { captionFrom, isInsideAny, latestFiles, marksText, producedFiles, slug, stageOutput } from './outputs.ts';
 
 /**
  * Esteira de produção: cada demanda passa por etapas (pauta → copy → arte/vídeo → aprovação → pronto para
@@ -30,7 +33,6 @@ export function defaultPipeline(kind: DemandKind): Stage[] {
 }
 
 const statusFor = (stage: Stage) => (stage === 'aprovacao' ? 'aprovacao' : stage === 'agendado' ? 'entregue' : 'em_producao');
-const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'peca';
 
 function notice(officeId: string, text: string, extra: { demandId?: string; agentId?: string } = {}) {
   broadcast(officeId, { t: 'notice', text, ...extra });
@@ -84,24 +86,29 @@ ${idx}
 ${done || 'Nada ainda: esta é a primeira etapa.'}`;
 }
 
-function stageTask(stage: Stage, d: Demand, dir: string) {
-  const name = slug(d.title);
-  const p = (rel: string) => path.join(dir, ...rel.split('/'));
+function stageTask(stage: Stage, d: Demand, dir: string, version: number) {
+  const out = stageOutput(stage, d, dir)?.path ?? dir;
+  const v = version > 1
+    ? `\nEsta é a **versão ${version}**: grave os arquivos novos com o sufixo \`-v${version}\` no nome (por exemplo \`${path.basename(out, path.extname(out))}-v${version}${path.extname(out) || '.png'}\`), na mesma pasta, sem apagar nem sobrescrever as versões anteriores.`
+    : '';
   switch (stage) {
     case 'pauta':
-      return `Crie a **pauta** da peça: objetivo, ideia central, formato (Reels, carrossel, post, story), gancho, mensagem principal e referências da pasta que vale usar. Salve em \`${p(`DOCUMENTOS/PAUTAS/${name}.md`)}\`.`;
+      return `Crie a **pauta** da peça: objetivo, ideia central, formato (Reels, carrossel, post, story), gancho, mensagem principal e referências da pasta que vale usar. Salve em \`${out}\`.${v}`;
     case 'copy':
       return d.kind === 'video'
-        ? `Escreva o **roteiro** a partir da pauta (falas, takes e textos na tela), seguindo o guia de roteiro da casa, e a legenda do post com CTA. Salve em \`${p(`DOCUMENTOS/COPYS/${name}.md`)}\`.`
-        : `Escreva a **copy** a partir da pauta: os textos que vão na arte (título, apoio, CTA) e a legenda do post com CTA e hashtags. Salve em \`${p(`DOCUMENTOS/COPYS/${name}.md`)}\`.`;
+        ? `Escreva o **roteiro** a partir da pauta (falas, takes e textos na tela), seguindo o guia de roteiro da casa, e a legenda do post com CTA numa seção \`## Legenda\`. Salve em \`${out}\`.${v}`
+        : `Escreva a **copy** a partir da pauta: os textos que vão na arte (título, apoio, CTA) e a legenda do post com CTA e hashtags numa seção \`## Legenda\`. Salve em \`${out}\`.${v}`;
     case 'arte':
-      return `Produza a **arte** a partir da copy, na identidade do cliente, usando as skills de arte da casa e as suas ferramentas criativas. Use fotos do ensaio da pasta quando fizer sentido, sem alterar os originais. Salve os arquivos (PSD com camadas e PNG, ou equivalentes) em \`${p(`DOCUMENTOS/ARTES/${name}`)}\`.`;
+      return `Produza a **arte** a partir da copy, na identidade do cliente, usando as skills de arte da casa e as suas ferramentas criativas. Use fotos do ensaio da pasta quando fizer sentido, sem alterar os originais. Salve os arquivos (PNG para a prévia e o PSD com camadas, ou equivalentes) em \`${out}\`.${v}`;
     case 'video':
-      return `**Edite o vídeo** a partir do roteiro, com os brutos da pasta (skill editar-video e as suas ferramentas). Resultado em \`${p(`VIDEOS/EDITADOS/${name}`)}\`.`;
+      return `**Edite o vídeo** a partir do roteiro, com os brutos da pasta (skill editar-video e as suas ferramentas). Resultado em \`${out}\`.${v}`;
     default:
       return '';
   }
 }
+
+/** Versão que a próxima tarefa desta etapa vai produzir. */
+const nextVersion = (d: Demand, stage: Stage) => (d.stageLog ?? []).filter((e) => e.stage === stage && e.result === 'feito').length + 1;
 
 const AUTO_RULES = `Esta tarefa está na **esteira automática**: não pare nos checkpoints intermediários das skills. Decida pelo briefing e pelas etapas anteriores, e só pare (com a linha \`${APPROVAL_MARKER}\`) se faltar algo essencial, como um arquivo que não existe. Ao terminar, responda com um resumo curto: o que fez e os caminhos completos dos arquivos.`;
 
@@ -163,7 +170,7 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
     : `${context(fresh, stage, office, client)}
 
 ## Sua tarefa nesta etapa (${STAGE_LABEL[stage]})
-${stageTask(stage, fresh, outDir(office, client))}
+${stageTask(stage, fresh, outDir(office, client), nextVersion(fresh, stage))}
 ${feedback ? `\n## Ajustes pedidos\n${feedback}\nRefaça só o que foi pedido, mantendo o resto.\n` : ''}
 ${AUTO_RULES}`;
   enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, prompt, createdBy: by, stage });
@@ -232,7 +239,7 @@ export function approveDemand(demandId: string, by: string) {
   return runStage(fresh, nextAfter(fresh, 'aprovacao') ?? 'agendado', by);
 }
 
-export function requestChanges(demandId: string, text: string, by: string) {
+export function requestChanges(demandId: string, text: string, by: string, marks: ReviewMark[] = []) {
   const d = getDemand(demandId);
   if (!d) return 'Demanda não encontrada.';
   if (d.stage !== 'aprovacao') return 'Esta demanda não está esperando aprovação.';
@@ -240,8 +247,8 @@ export function requestChanges(demandId: string, text: string, by: string) {
     return 'Um funcionário ainda está nesta demanda. Espere ele terminar.';
   const back = productionStage(d);
   if (!back) return 'Não há etapa de produção para refazer.';
-  const fresh = addLog(d, { stage: 'aprovacao', by, jobId: null, text, result: 'ajustes' }, { reviewRounds: d.reviewRounds + 1 });
-  return runStage(fresh, back, by, text);
+  const fresh = addLog(d, { stage: 'aprovacao', by, jobId: null, text, result: 'ajustes', ...(marks.length ? { marks } : {}) }, { reviewRounds: d.reviewRounds + 1 });
+  return runStage(fresh, back, by, [text, marksText(marks)].filter(Boolean).join('\n\n'));
 }
 
 /** Cliente novo: abre a demanda de briefing e o gerente começa a entrevista. */
@@ -250,7 +257,7 @@ export function startBriefing(client: Client, by: string) {
     id: uid(), officeId: client.officeId, clientId: client.id, title: `Briefing: ${client.name}`,
     description: 'Entrevista de briefing com a equipe. As respostas vão para o BRIEFING.md da pasta do cliente.',
     kind: 'estrategia', status: 'em_producao', priority: 'alta', assignee: null, dueDate: null, trackedSeconds: 0, timerStartedAt: null,
-    position: Date.now(), createdAt: now(), updatedAt: now(), pipeline: ['briefing'], stage: null, auto: true, stageLog: [], reviewRounds: 0,
+    position: Date.now(), createdAt: now(), updatedAt: now(), pipeline: ['briefing'], stage: null, auto: true, stageLog: [], reviewRounds: 0, publish: null,
   };
   insert('demands', d as never);
   invalidate(client.officeId, 'demands');
@@ -296,7 +303,9 @@ export function onJobFinished(job: AgentJob, finalText: string, ok: boolean) {
     notice(d.officeId, `"${d.title}" precisa da sua aprovação (a revisão da IA não fechou)`, { demandId: d.id });
     return;
   }
-  const fresh = addLog(d, { stage: job.stage, by, jobId: job.id, text: summary, result: 'feito' });
+  const office = getOffice(d.officeId);
+  const files = producedFiles({ finalText, since: job.createdAt, stage: job.stage, d, clientDir: outDir(office, getClient(d.clientId)), inside: isInsideAny(office) });
+  const fresh = addLog(d, { stage: job.stage, by, jobId: job.id, text: summary, result: 'feito', files, version: nextVersion(d, job.stage) });
   if (!fresh.auto) return;
   const next = nextAfter(fresh, job.stage);
   if (next) runStage(fresh, next, by);
@@ -335,11 +344,100 @@ function finishBriefing(job: AgentJob, d: Demand, finalText: string) {
     insert('demands', {
       id: uid(), officeId: d.officeId, clientId: client.id, title: String(s.titulo).slice(0, 140), description: String(s.descricao ?? ''),
       kind, status: 'backlog', priority: 'media', assignee: null, dueDate: null, trackedSeconds: 0, timerStartedAt: null,
-      position: Date.now() + i, createdAt: now(), updatedAt: now(), pipeline: defaultPipeline(kind), stage: null, auto: false, stageLog: [], reviewRounds: 0,
+      position: Date.now() + i, createdAt: now(), updatedAt: now(), pipeline: defaultPipeline(kind), stage: null, auto: false, stageLog: [], reviewRounds: 0, publish: null,
     } as never);
   }
   addLog(d, { stage: 'briefing', by, jobId: job.id, text: `Briefing gravado em ${file}. ${sugg.length} demanda(s) sugerida(s) no Backlog.`, result: 'feito' },
     { status: 'entregue', auto: false });
   logActivity(d.officeId, by, 'fechou o briefing de', client.name);
   notice(d.officeId, `Briefing de ${client.name} pronto: ${sugg.length} demanda(s) sugerida(s) no Backlog`, { demandId: d.id });
+}
+
+// ---------------------------------------------------------------- publicação
+
+/** Peças finais e legenda sugerida para o pacote de publicação (a legenda sai da seção "Legenda" da copy). */
+export function publishDraft(demandId: string) {
+  const d = getDemand(demandId);
+  if (!d) return null;
+  const { byStage, final } = latestFiles(d);
+  const copy = byStage.copy?.find((f) => f.toLowerCase().endsWith('.md'));
+  return { files: final, caption: d.publish?.caption ?? captionFrom(copy) };
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+const localStamp = (t: Date) => `${t.getFullYear()}-${pad(t.getMonth() + 1)}-${pad(t.getDate())}T${pad(t.getHours())}:${pad(t.getMinutes())}`;
+
+/**
+ * Agenda a publicação de uma demanda pronta: evento no calendário e pacote na pasta do cliente
+ * (PUBLICAR/<data> <peça>/POST.md com a legenda, as redes, o horário e os caminhos das peças).
+ */
+export function schedulePublish(demandId: string, input: { at: string; networks: Network[]; caption: string; files?: string[] }, by: string): string | null {
+  const d = getDemand(demandId);
+  if (!d) return 'Demanda não encontrada.';
+  if (d.stage !== 'agendado' || d.status !== 'entregue') return 'A demanda ainda não foi aprovada.';
+  if (d.publish?.status === 'publicado') return 'Esta peça já foi publicada.';
+  const when = new Date(input.at);
+  if (Number.isNaN(when.getTime())) return 'Data inválida.';
+  const office = getOffice(d.officeId);
+  const client = getClient(d.clientId);
+  const files = input.files?.length ? input.files : latestFiles(d).final;
+
+  // evento no calendário (o mesmo, se for um reagendamento)
+  const ev: CalendarEvent = {
+    id: d.publish?.eventId ?? uid(), officeId: d.officeId, title: `Publicar: ${d.title}`, start: localStamp(when),
+    end: localStamp(new Date(when.getTime() + 30 * 60_000)), kind: 'publicacao', clientId: d.clientId, demandId: d.id, room: null,
+  };
+  if (d.publish?.eventId && one('SELECT id FROM events WHERE id = ?', d.publish.eventId)) update('events', ev.id, { title: ev.title, start: ev.start, end: ev.end });
+  else insert('events', ev as never);
+  invalidate(d.officeId, 'events');
+
+  // pacote na pasta do cliente (o mesmo POST.md é reescrito ao reagendar)
+  let folder = d.publish?.folder ?? null;
+  try {
+    folder ??= path.join(outDir(office, client), 'PUBLICAR', `${ev.start.slice(0, 10)} ${slug(d.title)}`);
+    const md = `# ${d.title}
+
+- **Cliente**: ${client?.name ?? '—'}
+- **Quando**: ${when.toLocaleString('pt-BR', { dateStyle: 'full', timeStyle: 'short' })}
+- **Onde**: ${input.networks.map((n) => NETWORK_LABEL[n]).join(', ') || '—'}
+
+## Legenda
+${input.caption.trim() || '(sem legenda)'}
+
+## Peças
+${files.map((f) => `- ${f}`).join('\n') || '- (nenhum arquivo registrado)'}
+
+Pacote gerado pelo Office. Depois de postar, marque como publicado na demanda.
+`;
+    mkdirSync(folder, { recursive: true });
+    writeFileSync(path.join(folder, 'POST.md'), md, 'utf8');
+  } catch (e) {
+    folder = null;
+    notice(d.officeId, `Agendei "${d.title}", mas não consegui gravar o pacote: ${(e as Error).message}`, { demandId: d.id });
+  }
+
+  const publish: Publish = { at: ev.start, networks: input.networks, caption: input.caption, files, folder, eventId: ev.id, status: 'agendado', reminded: false };
+  addLog(d, { stage: 'agendado', by, jobId: null, text: `Publicação agendada para ${when.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} (${input.networks.map((n) => NETWORK_LABEL[n]).join(', ')}).`, result: 'feito' }, { publish });
+  logActivity(d.officeId, by, 'agendou a publicação de', d.title);
+  return null;
+}
+
+export function markPublished(demandId: string, by: string): string | null {
+  const d = getDemand(demandId);
+  if (!d?.publish) return 'Esta demanda não tem publicação agendada.';
+  if (d.publish.status === 'publicado') return null;
+  addLog(d, { stage: 'agendado', by, jobId: null, text: 'Publicado.', result: 'feito' }, { publish: { ...d.publish, status: 'publicado', publishedAt: now() } });
+  logActivity(d.officeId, by, 'publicou', d.title);
+  return null;
+}
+
+/** Avisa no escritório quando chega a hora de uma publicação agendada (roda a cada minuto). */
+export function publishReminders() {
+  const stamp = localStamp(new Date());
+  for (const d of all<Demand>("SELECT * FROM demands WHERE publish IS NOT NULL")) {
+    const p = d.publish;
+    if (!p || p.status !== 'agendado' || p.reminded || p.at > stamp) continue;
+    patchDemand(d, { publish: { ...p, reminded: true } });
+    notice(d.officeId, `Hora de publicar "${d.title}" (${p.networks.map((n) => NETWORK_LABEL[n]).join(', ')}). O pacote está na pasta do cliente.`, { demandId: d.id });
+  }
 }

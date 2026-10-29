@@ -4,12 +4,14 @@ import type { CalendarEvent } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 
-const KIND_COLOR: Record<CalendarEvent['kind'], string> = { reuniao: 'var(--running)', gravacao: 'var(--review)', entrega: 'var(--done)', pessoal: 'var(--idle)', outro: 'var(--waiting)' };
+const KIND_COLOR: Record<CalendarEvent['kind'], string> = { reuniao: 'var(--running)', gravacao: 'var(--review)', entrega: 'var(--done)', publicacao: 'var(--waiting)', pessoal: 'var(--idle)', outro: 'var(--waiting)' };
 const WEEK = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export function CalendarPanel() {
-  const { events, demands, clients, office } = useStore();
+  const { events, demands, clients, office, open } = useStore();
+  // publicação agendada: abre a demanda (é lá que se reagenda e marca como publicado)
+  const pick = (e: CalendarEvent) => (e.kind === 'publicacao' && e.demandId ? open('demandas', e.demandId) : setForm(e));
   const [cursor, setCursor] = useState(() => { const d = new Date(); d.setDate(1); return d; });
   const [form, setForm] = useState<Partial<CalendarEvent> | null>(null);
   const first = new Date(cursor);
@@ -45,7 +47,7 @@ export function CalendarPanel() {
                 onDoubleClick={() => setForm({ kind: 'reuniao', start: `${key}T10:00`, end: `${key}T11:00` })}>
                 <span className="num">{d.getDate()}</span>
                 {dayEvents.map((e) => (
-                  <div key={e.id} className="cal-ev" style={{ ['--st' as any]: KIND_COLOR[e.kind] }} onClick={() => setForm(e)}>
+                  <div key={e.id} className="cal-ev" style={{ ['--st' as any]: KIND_COLOR[e.kind] }} onClick={() => pick(e)}>
                     {e.start.slice(11, 16)} {e.title}
                   </div>
                 ))}
@@ -60,7 +62,7 @@ export function CalendarPanel() {
         <div className="section-label" style={{ padding: 0 }}>Próximos</div>
         {upcoming.length === 0 && <p className="muted small">Nada marcado.</p>}
         {upcoming.map((e) => (
-          <div key={e.id} className="up-item" onClick={() => setForm(e)}>
+          <div key={e.id} className="up-item" onClick={() => pick(e)}>
             <span className="dot" style={{ background: KIND_COLOR[e.kind] }} />
             <div><b>{e.title}</b><small>{new Date(e.start).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}</small></div>
           </div>

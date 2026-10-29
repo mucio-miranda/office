@@ -77,11 +77,16 @@ agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo 
    Feito: página Clientes, entrevista de briefing pelo chat com o gerente (grava o BRIEFING.md e sugere as
    demandas), índice da pasta com miniaturas, esteira com histórico por etapa, Aprovar / Pedir ajustes, revisão
    pela IA com até duas voltas e limite de tarefas por demanda
-8. **Mesa do diretor de arte (v0.4.6)**: revisão das peças com versões, prompt apontando uma área da imagem e
-   edição ao vivo no PhotoCraft e no LightCraft
-9. **Publicação (v0.5)**: [Postiz](https://github.com/gitroomhq/postiz-app) (AGPL-3.0) rodando junto, posts
-   aprovados agendados e ligados ao calendário; as contas dos clientes são conectadas por vocês no próprio Postiz
-10. **Arquivo no mapa (v0.5.1)**: armário por cliente nas salas, documentos como marcadores no mapa e visualização
+8. ✅ **Mesa do diretor de arte e agendamento: o MVP (v0.5.0)**: cada etapa registra os arquivos que produziu e a
+   versão; a mesa mostra as peças por etapa e versão (imagem, vídeo e texto), e o pedido de ajuste leva áreas
+   marcadas na imagem (em porcentagem, que o funcionário lê) para uma versão nova gravada ao lado da anterior.
+   A peça aprovada é agendada (data, redes, legenda puxada da copy): evento no calendário, pacote `PUBLICAR/…/POST.md`
+   na pasta do cliente, aviso na hora de postar e "Marcar como publicado". Com isso o ciclo da agência fecha de
+   ponta a ponta: cliente → briefing → demandas → esteira → revisão → agendamento → publicado.
+   Falta: edição ao vivo da área marcada no PhotoCraft e no LightCraft
+9. **Publicação automática (v0.5.1)**: [Postiz](https://github.com/gitroomhq/postiz-app) (AGPL-3.0) rodando junto,
+   recebendo os posts agendados pelo Office; as contas dos clientes são conectadas por vocês no próprio Postiz
+10. **Arquivo no mapa (v0.5.2)**: armário por cliente nas salas, documentos como marcadores no mapa e visualização
     no Office (PdfCraft para editar)
 11. **Vida no escritório**: sons à moda do Gather, o gerente aplica direto as demandas que sugere (um clique) e o
     modo Auto (maquete de perto, planta esquemática de longe)

@@ -83,6 +83,8 @@ const MIGRATIONS: string[] = [
    ALTER TABLE jobs ADD COLUMN stage TEXT;`,
   // v0.4.3: planta 1,5× maior e aberta (plan 2); as decorações salvas na planta antiga são convertidas abaixo
   `ALTER TABLE office_layout ADD COLUMN plan INTEGER NOT NULL DEFAULT 1;`,
+  // v0.5: publicação agendada das demandas prontas
+  `ALTER TABLE demands ADD COLUMN publish TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -125,7 +127,7 @@ const camel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
-const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log']);
+const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish']);
 const BOOL_COLS = new Set(['paid', 'auto']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {

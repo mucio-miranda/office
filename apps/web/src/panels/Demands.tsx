@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Bot, Check, Pause, Play, Plus, RotateCcw, Workflow, X } from 'lucide-react';
+import { Bot, Check, Eye, Megaphone, Pause, Play, Plus, RotateCcw, Workflow, X } from 'lucide-react';
 import { DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, STAGE_AGENT, STAGE_LABEL, type Demand, type DemandKind, type DemandStatus, type Priority, type Stage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, fmtDuration } from '../lib/api';
+import { PublishBox, ReviewDesk, versionsOf } from './ReviewDesk';
 
 const KIND_LABEL: Record<DemandKind, string> = { video: 'Vídeo', design: 'Design', copy: 'Copy', estrategia: 'Estratégia', foto: 'Foto', outro: 'Outro' };
 const PRIO_LEVEL: Record<Priority, string> = { baixa: 'on1', media: 'on2', alta: 'on3', urgente: 'on3 urgent' };
@@ -94,6 +95,8 @@ export function Demands() {
                       <span className="badge">{KIND_LABEL[d.kind]}</span>
                       {client && <span className="badge outline"><span className="dot" style={{ background: client.color }} />{client.name}</span>}
                       {d.dueDate && <span className={`badge outline due ${late ? 'late' : ''}`}>{d.dueDate.slice(8, 10)}/{d.dueDate.slice(5, 7)}</span>}
+                      {d.publish && <span className={`badge outline pub ${d.publish.status}`} title={d.publish.status === 'publicado' ? 'Publicado' : 'Publicação agendada'}>
+                        <Megaphone size={10} /> {d.publish.status === 'publicado' ? 'publicado' : `${d.publish.at.slice(8, 10)}/${d.publish.at.slice(5, 7)} ${d.publish.at.slice(11, 16)}`}</span>}
                     </div>
                     <div className="kcard-foot" onClick={(e) => e.stopPropagation()}>
                       <span className="who truncate">
@@ -122,6 +125,8 @@ function Pipeline({ d }: { d: Demand }) {
   const { office, agents, members, jobs, notify, open } = useStore();
   const [changes, setChanges] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [desk, setDesk] = useState(false);
+  const versions = versionsOf(d);
   const base = `/api/offices/${office!.id}/demands/${d.id}`;
   const act = async (name: string, body: object = {}) => {
     setBusy(true);
@@ -153,13 +158,17 @@ function Pipeline({ d }: { d: Demand }) {
         </div>
       </div>
       <StageTrack d={d} />
+      {versions.length > 0 && !waitingHuman && (
+        <button type="button" className="ghost small self-start" onClick={() => setDesk(true)}><Eye size={13} /> Ver peças ({versions.length} {versions.length === 1 ? 'versão' : 'versões'})</button>
+      )}
       {waitingHuman && (
         <div className="approval">
           <span>Esperando a sua aprovação.</span>
           {changes === null ? (
             <div className="row gap">
+              {versions.length > 0 && <button type="button" className="primary small" onClick={() => setDesk(true)}><Eye size={13} /> Revisar peças</button>}
               <button type="button" className="ghost small" onClick={() => setChanges('')}><RotateCcw size={13} /> Pedir ajustes</button>
-              <button type="button" className="primary small" disabled={busy} onClick={() => act('aprovar')}><Check size={13} /> Aprovar</button>
+              <button type="button" className={versions.length ? 'ghost small' : 'primary small'} disabled={busy} onClick={() => act('aprovar')}><Check size={13} /> Aprovar</button>
             </div>
           ) : (
             <div className="col gap-s">
@@ -172,6 +181,8 @@ function Pipeline({ d }: { d: Demand }) {
           )}
         </div>
       )}
+      {finished && d.stage === 'agendado' && <PublishBox d={d} />}
+      {desk && <ReviewDesk d={d} onClose={() => setDesk(false)} />}
       {(d.stageLog ?? []).length > 0 && (
         <ol className="stage-log">
           {[...d.stageLog].reverse().map((e, i) => (

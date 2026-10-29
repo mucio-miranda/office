@@ -711,3 +711,40 @@ label.check input { width: auto; height: auto; }
   .clients-list { position: static; }
   .client-grid { grid-template-columns: 1fr; }
 }
+
+/* ---------- mesa do diretor de arte e publicação ---------- */
+.self-start { align-self: flex-start; }
+.modal.review { width: min(1280px, 100%); height: min(860px, 92vh); }
+.review-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 0; border-top: 1px solid var(--border); margin-top: 12px; }
+.review-stage { min-height: 0; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 12px; background: var(--muted-2); }
+.review-side { min-height: 0; overflow: auto; padding: 16px; border-left: 1px solid var(--border); display: flex; flex-direction: column; gap: 14px; font-size: 13px; }
+.review-tabs { display: flex; gap: 6px; flex-wrap: wrap; }
+.review-tabs button { height: 28px; font-size: 12px; }
+.review-tabs button.on { background: var(--foreground); color: var(--background); border-color: var(--foreground); }
+.review-files { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 14px; align-items: start; }
+.review-file { margin: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--background); overflow: hidden; display: flex; flex-direction: column; }
+.review-file video { width: 100%; max-height: 520px; background: #000; }
+.review-file figcaption { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 6px 6px 6px 10px; font-size: 12px; border-top: 1px solid var(--border); }
+.review-img { position: relative; line-height: 0; user-select: none; }
+.review-img img { width: 100%; height: auto; display: block; }
+.review-img.markable { cursor: crosshair; touch-action: none; }
+.review-mark { position: absolute; border: 2px solid var(--waiting); background: color-mix(in srgb, var(--waiting) 14%, transparent); border-radius: 3px; pointer-events: none; }
+.review-mark b { position: absolute; top: -10px; left: -10px; width: 20px; height: 20px; border-radius: 50%; background: var(--waiting); color: #000; font-size: 11px; line-height: 20px; text-align: center; }
+.review-mark.draft { border-style: dashed; }
+.review-text { padding: 12px 14px; font-size: 13px; line-height: 1.5; max-height: 520px; overflow: auto; }
+.review-other { display: flex; flex-direction: column; align-items: center; gap: 8px; padding: 32px 12px; color: var(--muted-foreground); font-size: 12px; }
+.review-summary { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; color: var(--muted-foreground); }
+.modal-bg.top { z-index: 200; }
+.stage-log p { overflow-wrap: anywhere; }
+.review-pending { display: flex; gap: 6px; }
+.review-pending input { flex: 1; }
+.review-marks { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; }
+.review-marks li { display: flex; align-items: center; justify-content: space-between; gap: 6px; }
+.review-marks li b { display: inline-block; width: 18px; height: 18px; border-radius: 50%; background: var(--waiting); color: #000; font-size: 11px; line-height: 18px; text-align: center; margin-right: 4px; }
+.publish { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--background); font-size: 13px; }
+.publish-nets { display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.publish-nets .check { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
+.approval.done { background: color-mix(in srgb, var(--done) 12%, var(--background)); }
+.badge.pub { gap: 4px; }
+.badge.pub.publicado { color: var(--done); }
+@media (max-width: 860px) { .review-body { grid-template-columns: 1fr; } .review-side { border-left: none; border-top: 1px solid var(--border); } }

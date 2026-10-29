@@ -5,7 +5,7 @@ import { createReadStream, existsSync, statSync, readdirSync, readFileSync } fro
 import path from 'node:path';
 import { homedir } from 'node:os';
 import {
-  BRIEFING_FIELDS, DEMAND_COLUMNS, uid,
+  BRIEFING_FIELDS, DEMAND_COLUMNS, NETWORKS, uid,
   type AgentJob, type AgentProfile, type CalendarEvent, type Client, type Demand, type JobMessage, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
@@ -13,7 +13,7 @@ import { checkPin, createSession, hashPin, membership, requireMember, requireUse
 import { invalidate, onlineUsers } from '../realtime.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
-import { approveDemand, defaultPipeline, pausePipeline, requestChanges, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { approveDemand, defaultPipeline, markPublished, pausePipeline, publishDraft, requestChanges, schedulePublish, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
@@ -356,7 +356,7 @@ export async function api(app: FastifyInstance) {
       assignee: z.string().nullable().optional(), dueDate: z.string().nullable().optional(), position: z.number().optional(),
       pipeline: z.array(z.enum(['briefing', 'pauta', 'copy', 'arte', 'video', 'aprovacao', 'agendado'])).optional(),
     }), 'status, position, created_at', 'demands', (b) => ({
-      createdAt: now(), updatedAt: now(), position: Date.now(), pipeline: defaultPipeline(b.kind ?? 'outro'), stage: null, auto: false, stageLog: [], reviewRounds: 0,
+      createdAt: now(), updatedAt: now(), position: Date.now(), pipeline: defaultPipeline(b.kind ?? 'outro'), stage: null, auto: false, stageLog: [], reviewRounds: 0, publish: null,
     }));
 
     // esteira da demanda: ligar, pausar, aprovar, pedir ajustes
@@ -373,11 +373,24 @@ export async function api(app: FastifyInstance) {
     pipelineAction('esteira', (id, req) => startPipeline(id, `user:${req.user.id}`));
     pipelineAction('pausar', (id) => pausePipeline(id));
     pipelineAction('aprovar', (id, req) => approveDemand(id, `user:${req.user.id}`));
-    pipelineAction('ajustes', (id, req) => requestChanges(id, String((req.body as any).text), `user:${req.user.id}`), z.object({ text: z.string().trim().min(3).max(4000) }));
+    const mark = z.object({ file: z.string().min(1), x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1), note: z.string().trim().min(1).max(500) });
+    pipelineAction('ajustes', (id, req) => requestChanges(id, String((req.body as any).text), `user:${req.user.id}`, (req.body as any).marks ?? []),
+      z.object({ text: z.string().trim().min(3).max(4000), marks: z.array(mark).max(20).optional() }));
+    pipelineAction('agendar', (id, req) => schedulePublish(id, req.body as any, `user:${req.user.id}`), z.object({
+      at: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/), networks: z.array(z.enum(NETWORKS)).min(1), caption: z.string().max(2200), files: z.array(z.string()).max(40).optional(),
+    }));
+    pipelineAction('publicado', (id, req) => markPublished(id, `user:${req.user.id}`));
+    // rascunho do pacote de publicação: as peças finais e a legenda tirada da copy
+    r.get('/api/offices/:officeId/demands/:id/pacote', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
+      return publishDraft(id);
+    });
 
     collection<CalendarEvent>('events', 'events', z.object({
       title: z.string().min(1), start: z.string(), end: z.string(),
-      kind: z.enum(['reuniao', 'gravacao', 'entrega', 'pessoal', 'outro']).default('reuniao'),
+      kind: z.enum(['reuniao', 'gravacao', 'entrega', 'publicacao', 'pessoal', 'outro']).default('reuniao'),
       clientId: z.string().nullable().optional(), demandId: z.string().nullable().optional(), room: z.string().nullable().optional(),
     }), 'start', 'events');
 

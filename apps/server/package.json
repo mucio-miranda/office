@@ -6,6 +6,7 @@
     "dev": "tsx watch --clear-screen=false src/index.ts",
     "start": "tsx src/index.ts",
     "typecheck": "tsc -p . --noEmit",
+    "test": "tsx --test src/**/*.test.ts",
     "seed": "tsx src/seed.ts"
   },
   "dependencies": {

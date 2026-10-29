@@ -8,6 +8,7 @@ import './db.ts';
 import { api, syncAgentTools } from './routes/api.ts';
 import { handleSocket } from './realtime.ts';
 import { recoverJobs } from './agents/runtime.ts';
+import { publishReminders } from './agents/pipeline.ts';
 import { closeAllLive } from './agents/live.ts';
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'warn' }, bodyLimit: 10 * 1024 * 1024 });
@@ -27,6 +28,8 @@ if (existsSync(config.webDist)) {
 }
 
 recoverJobs();
+// lembrete de "hora de publicar" das publicações agendadas
+setInterval(publishReminders, 60_000).unref();
 syncAgentTools();
 // os apps abertos ao vivo pertencem a este processo: fecham com ele
 process.on('exit', closeAllLive);
