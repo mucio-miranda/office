@@ -211,8 +211,8 @@ export async function api(app: FastifyInstance) {
       const b = body(z.object({ items: z.array(item).max(800).nullable() }), req, reply);
       if (!b) return;
       if (b.items === null) db.prepare('DELETE FROM office_layout WHERE office_id = ?').run(officeId);
-      else db.prepare(`INSERT INTO office_layout (office_id, json, updated_by, updated_at) VALUES (?, ?, ?, ?)
-        ON CONFLICT(office_id) DO UPDATE SET json = excluded.json, updated_by = excluded.updated_by, updated_at = excluded.updated_at`)
+      else db.prepare(`INSERT INTO office_layout (office_id, json, updated_by, updated_at, plan) VALUES (?, ?, ?, ?, 2)
+        ON CONFLICT(office_id) DO UPDATE SET json = excluded.json, updated_by = excluded.updated_by, updated_at = excluded.updated_at, plan = 2`)
         .run(officeId, JSON.stringify(b.items), req.user.id, now());
       invalidate(officeId, 'layout');
       return { ok: true };

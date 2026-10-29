@@ -34,12 +34,12 @@ function useSteps(): Step[] {
     {
       title: `Oi, ${user?.name.split(' ')[0]}! Eu sou ${rafa ? `a ${rafa.name}` : 'a gerente'}.`,
       body: <>Cuido da gerência e das contas do <b>{office?.name}</b>. Em um minuto te mostro onde fica cada coisa.</>,
-      focus: rafa ? DESKS[rafa.room] : { x: 0, z: -6 }, zoom: 46, spot: true,
+      focus: rafa ? DESKS[rafa.room] : { x: 0, z: -9 }, zoom: 46, spot: true,
     },
     {
       title: 'O escritório tem 7 salas',
       body: <>Aperte <kbd>1</kbd> a <kbd>7</kbd> para ir direto a qualquer uma, ou clique no mapa do canto. Para andar, use <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> ou clique no chão.</>,
-      focus: { x: 0, z: 0 }, zoom: 19,
+      focus: { x: 0, z: 0 }, zoom: 13,
     },
     {
       title: 'A equipe de IA',
@@ -49,14 +49,14 @@ function useSteps(): Step[] {
           {' '}O anel no chão mostra o status: azul é trabalhando, amarelo é <b>precisa de você</b>. Chegue perto e aperte <kbd>E</kbd> para conversar.
         </>
       ),
-      focus: { x: 3, z: 1 }, zoom: 24,
+      focus: { x: 4.5, z: 1.5 }, zoom: 16,
     },
     {
       title: mine ? 'Esta é a sua mesa' : 'Escolha a sua mesa',
       body: mine
         ? <>Você sempre entra sentado aqui. De qualquer lugar, <kbd>M</kbd> te traz de volta. Quando você sai, a mesa mostra seu nome e status.</>
         : <>As mesas do espaço aberto são das pessoas. Chegue perto de uma livre e aperte <kbd>E</kbd> para ficar com ela; depois <kbd>M</kbd> te traz de volta de qualquer lugar.</>,
-      focus: desk ? deskSeat(desk) : { x: 0, z: 4 }, zoom: 44, spot: !!desk,
+      focus: desk ? deskSeat(desk) : { x: 0, z: 6 }, zoom: 44, spot: !!desk,
     },
     {
       title: 'Atalhos que valem ouro',
@@ -79,7 +79,7 @@ function useSteps(): Step[] {
           <li>Ele trabalha sozinho e para nos checkpoints. O aviso "precisa da sua aprovação" te leva até ele.</li>
         </ol>
       ),
-      focus: { x: 0, z: -10.2 }, zoom: 40, spot: true,
+      focus: { x: 0, z: -15.3 }, zoom: 40, spot: true,
     },
   ];
 }

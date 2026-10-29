@@ -81,6 +81,8 @@ const MIGRATIONS: string[] = [
    ALTER TABLE demands ADD COLUMN stage_log TEXT NOT NULL DEFAULT '[]';
    ALTER TABLE demands ADD COLUMN review_rounds INTEGER NOT NULL DEFAULT 0;
    ALTER TABLE jobs ADD COLUMN stage TEXT;`,
+  // v0.4.3: planta 1,5× maior e aberta (plan 2); as decorações salvas na planta antiga são convertidas abaixo
+  `ALTER TABLE office_layout ADD COLUMN plan INTEGER NOT NULL DEFAULT 1;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -96,6 +98,25 @@ MIGRATIONS.slice(done).forEach((sql, i) => {
     throw e;
   }
 });
+
+/**
+ * Leva uma decoração da planta antiga (36 × 24 m, x de -18 a 18 e z de -12 a 12) para a atual (54 × 36 m).
+ * Tudo cresce 1,5×, menos a distância até a linha de parede mais próxima: o que estava encostado
+ * numa parede continua encostado nela.
+ */
+function toPlan2(items: { x: number; z: number; wall?: string }[]) {
+  const snap = (v: number, lines: number[]) => {
+    const l = lines.reduce((a, b) => (Math.abs(v - b) < Math.abs(v - a) ? b : a));
+    return Math.round((Math.abs(v - l) < 1.3 ? l * 1.5 + (v - l) : v * 1.5) * 100) / 100;
+  };
+  return items.map((it) => {
+    if (it.wall === 'fundo') return { ...it, x: snap(it.x, [-18, -6, 6, 18]), z: -18 + 0.08 };
+    if (it.wall === 'esquerda') return { ...it, x: -27 + 0.08, z: snap(it.z, [-12, -2, 5, 12]) };
+    return { ...it, x: snap(it.x, [-18, -6, 6, 18]), z: snap(it.z, [-12, -2, 5, 12]) };
+  });
+}
+for (const row of db.prepare('SELECT office_id, json FROM office_layout WHERE plan = 1').all() as { office_id: string; json: string }[])
+  db.prepare('UPDATE office_layout SET json = ?, plan = 2 WHERE office_id = ?').run(JSON.stringify(toPlan2(JSON.parse(row.json))), row.office_id);
 
 export const now = () => new Date().toISOString();
 

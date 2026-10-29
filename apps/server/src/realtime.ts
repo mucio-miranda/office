@@ -43,7 +43,7 @@ export function handleSocket(ws: WebSocket) {
       conn = {
         ws,
         officeId: msg.officeId,
-        presence: { userId: user.id, name: user.name, color: user.color, pos: { x: 0, z: 6 }, dir: Math.PI, moving: false, room: 'recepcao', status: 'disponivel' },
+        presence: { userId: user.id, name: user.name, color: user.color, pos: { x: 0, z: 9 }, dir: Math.PI, moving: false, room: 'recepcao', status: 'disponivel' },
       };
       conns.add(conn);
       send({ t: 'welcome', you: user.id, presences: onlineUsers(msg.officeId) });

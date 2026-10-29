@@ -18,7 +18,7 @@ Ela abre os brutos do cliente, monta o corte, renderiza e **levanta a mão ✋**
 
 <br/>
 
-<img src="docs/img/escritorio-pixel.jpg" alt="Escritório em pixel art isométrica: recepção com piso de tacos e tapete, sala de reunião com carpete vermelho, redação, gerência e funcionários de IA nas mesas" width="100%"/>
+<img src="docs/img/escritorio-pixel.jpg" alt="Escritório em pixel art isométrica e andar aberto: recepção, redação, gerência, copa e design sem paredes entre si, sala de reunião e ilha de vídeo fechadas e funcionários de IA nas mesas" width="100%"/>
 
 <img src="docs/img/modo-decorar.jpg" alt="Modo Decorar: catálogo de móveis na parte de baixo, com a peça escolhida seguindo o cursor sobre a grade do piso" width="100%"/>
 
@@ -26,7 +26,7 @@ Ela abre os brutos do cliente, monta o corte, renderiza e **levanta a mão ✋**
 
 ---
 
-<img src="docs/img/entrada.jpg" alt="Tela de entrada: formulário à esquerda e animação em arte ASCII à direita" width="100%"/>
+<img src="docs/img/entrada.jpg" alt="Tela de entrada: formulário à esquerda e, à direita, objetos de escritório em arte ASCII cruzando a tela e deixando rastro" width="100%"/>
 
 ## ✨ Por que o Office existe
 
@@ -47,7 +47,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 <td width="50%" valign="top">
 
 ### 🗺️ Escritório 3D navegável
-- **Pixel art isométrica** (padrão), inspirada nos mundos de pixel do Habbo e do Gather: câmera 2:1, contorno escuro, sombreamento em 3 tons, piso de tacos, carpetes e ladrilhos por sala, paredes com papel de parede e janelas, avatares em blocos que andam, sentam e digitam e etiquetas de nome em pílula. Tudo desenhado por código, sem assets de terceiros
+- **Pixel art isométrica** (padrão), inspirada nos mundos de pixel do Habbo e do Gather: câmera 2:1, contorno escuro, sombreamento em 3 tons, andar aberto de 54 × 36 m (só a sala de reunião e a ilha de vídeo têm paredes; divisórias verdes e tapetes separam as outras áreas), piso de tacos, carpetes e ladrilhos por área, paredes com papel de parede e janelas, avatares em blocos que andam, sentam e digitam e etiquetas de nome em pílula. Tudo desenhado por código, sem assets de terceiros
 - **Modo Decorar** (<kbd>X</kbd> ou o botão Decorar), no espírito do catálogo de mobis do Habbo: 74 peças em 10 categorias, inspiradas em escritórios de startup (madeira clara e vidro da Apple Park, cabines acústicas, armários coloridos e bicicletas do Google, arquibancada e neon do Nubank, horta e escada vermelha do iFood, cabanas, tijolinho e bar de cereais da Pixar) e no lado biofílico (árvores e jardins internos das Amazon Spheres: sofá orgânico curvo, banco com jardineira, divisória verde, plantas suspensas e quadro de musgo). A aba **Pisos** troca o piso de uma sala inteira: tábuas de carvalho ou nogueira, parquet, cimento queimado, porcelanato, granilite, ladrilho hidráulico, deck, grama, pedra, carpete em placas e xadrez, com prévia ao passar o mouse. Clique para selecionar, arraste para mover, <kbd>R</kbd> gira, troca de cor, duplicar, remover e desfazer (<kbd>Ctrl</kbd>+<kbd>Z</kbd>). A peça fica verde onde cabe e vermelha onde bloquearia uma porta, uma cadeira ou outro móvel; quadros, neons e revestimentos deslizam pelas paredes. A decoração é salva no servidor e aparece na hora para todo mundo do escritório
 - Ou a **maquete isométrica minimalista** (botão ao lado do tema ou `Ctrl+K` → "Mundo em maquete"), em tema claro e escuro, com as mesmas 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
 - **WASD** ou clique para andar (o avatar contorna paredes e móveis até o ponto clicado), **Shift** para correr, **1–7** para teletransportar

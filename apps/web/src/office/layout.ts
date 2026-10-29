@@ -3,15 +3,17 @@ import type { PanelId } from '../lib/store';
 
 /**
  * Planta do escritório (unidades do mundo ≈ metros). x cresce para a direita, z para "baixo" (frente).
+ * Andar aberto: só a sala de reunião e a ilha de vídeo têm paredes; as outras áreas se juntam (a decoração
+ * marca os limites com divisórias verdes e tapetes).
  *
- *   z=-12 ┌──────────┬──────────┬──────────┐
- *         │   COPY   │ GERÊNCIA │   COPA   │
- *   z=-2  ├──────────┼──────────┼──────────┤
- *         │          │          │  VÍDEO   │
- *         │ REUNIÃO  │ RECEPÇÃO ├──────────┤ z=5
- *         │          │          │  DESIGN  │
- *   z=12  └──────────┴────▼─────┴──────────┘
- *       x=-18      x=-6       x=6        x=18
+ *   z=-18 ┌──────────┬──────────┬──────────┐
+ *         │   COPY   ·  GERÊNCIA ·   COPA   │
+ *   z=-3  ├────▼─────┤· · · · · ·├────▼─────┤
+ *         │          │          ▶  VÍDEO   │
+ *         │ REUNIÃO  ◀ RECEPÇÃO │· · · · · ┤ z=7.5
+ *         │          ◀          ·  DESIGN  │
+ *   z=18  └──────────┴────▼─────┴──────────┘
+ *       x=-27      x=-9       x=9        x=27
  */
 
 export interface Room {
@@ -25,16 +27,16 @@ export interface Room {
 }
 
 export const ROOMS: Room[] = [
-  { id: 'recepcao', label: 'Recepção', emoji: '🛋️', x0: -6, z0: -2, x1: 6, z1: 12, floor: '#efe8dd', key: '1' },
-  { id: 'gerencia', label: 'Gerência', emoji: '📊', x0: -6, z0: -12, x1: 6, z1: -2, floor: '#e3e9f2', key: '2' },
-  { id: 'video', label: 'Ilha de vídeo', emoji: '🎬', x0: 6, z0: -2, x1: 18, z1: 5, floor: '#2a2633', key: '3' },
-  { id: 'design', label: 'Estúdio de design', emoji: '🎨', x0: 6, z0: 5, x1: 18, z1: 12, floor: '#efe6f6', key: '4' },
-  { id: 'copy', label: 'Redação', emoji: '✍️', x0: -18, z0: -12, x1: -6, z1: -2, floor: '#e4f3ee', key: '5' },
-  { id: 'reuniao', label: 'Sala de reunião', emoji: '🤝', x0: -18, z0: -2, x1: -6, z1: 12, floor: '#f3ece4', key: '6' },
-  { id: 'copa', label: 'Copa', emoji: '☕', x0: 6, z0: -12, x1: 18, z1: -2, floor: '#f6efe0', key: '7' },
+  { id: 'recepcao', label: 'Recepção', emoji: '🛋️', x0: -9, z0: -3, x1: 9, z1: 18, floor: '#efe8dd', key: '1' },
+  { id: 'gerencia', label: 'Gerência', emoji: '📊', x0: -9, z0: -18, x1: 9, z1: -3, floor: '#e3e9f2', key: '2' },
+  { id: 'video', label: 'Ilha de vídeo', emoji: '🎬', x0: 9, z0: -3, x1: 27, z1: 7.5, floor: '#2a2633', key: '3' },
+  { id: 'design', label: 'Estúdio de design', emoji: '🎨', x0: 9, z0: 7.5, x1: 27, z1: 18, floor: '#efe6f6', key: '4' },
+  { id: 'copy', label: 'Redação', emoji: '✍️', x0: -27, z0: -18, x1: -9, z1: -3, floor: '#e4f3ee', key: '5' },
+  { id: 'reuniao', label: 'Sala de reunião', emoji: '🤝', x0: -27, z0: -3, x1: -9, z1: 18, floor: '#f3ece4', key: '6' },
+  { id: 'copa', label: 'Copa', emoji: '☕', x0: 9, z0: -18, x1: 27, z1: -3, floor: '#f6efe0', key: '7' },
 ];
 
-export const BOUNDS = { x0: -18, z0: -12, x1: 18, z1: 12 };
+export const BOUNDS = { x0: -27, z0: -18, x1: 27, z1: 18 };
 export const DOOR = 2.6;
 export const WALL_T = 0.14;
 export const WALL_H = 0.6;
@@ -45,15 +47,16 @@ export interface Box { x0: number; z0: number; x1: number; z1: number }
 interface WallDef { a: Vec2; b: Vec2; doors: number[] }
 const WALL_DEFS: WallDef[] = [
   // contorno (porta de entrada na frente da recepção)
-  { a: { x: -18, z: -12 }, b: { x: 18, z: -12 }, doors: [] },
-  { a: { x: -18, z: 12 }, b: { x: 18, z: 12 }, doors: [0] },
-  { a: { x: -18, z: -12 }, b: { x: -18, z: 12 }, doors: [] },
-  { a: { x: 18, z: -12 }, b: { x: 18, z: 12 }, doors: [] },
-  // internas
-  { a: { x: -18, z: -2 }, b: { x: 18, z: -2 }, doors: [-12, 0, 12] },
-  { a: { x: -6, z: -12 }, b: { x: -6, z: 12 }, doors: [-7, 5] },
-  { a: { x: 6, z: -12 }, b: { x: 6, z: 12 }, doors: [-7, 1.5, 8.5] },
-  { a: { x: 6, z: 5 }, b: { x: 18, z: 5 }, doors: [12] },
+  { a: { x: -27, z: -18 }, b: { x: 27, z: -18 }, doors: [] },
+  { a: { x: -27, z: 18 }, b: { x: 27, z: 18 }, doors: [0] },
+  { a: { x: -27, z: -18 }, b: { x: -27, z: 18 }, doors: [] },
+  { a: { x: 27, z: -18 }, b: { x: 27, z: 18 }, doors: [] },
+  // sala de reunião
+  { a: { x: -27, z: -3 }, b: { x: -9, z: -3 }, doors: [-18] },
+  { a: { x: -9, z: -3 }, b: { x: -9, z: 18 }, doors: [7.5, 14.5] },
+  // ilha de vídeo (aberta para o estúdio de design)
+  { a: { x: 9, z: -3 }, b: { x: 27, z: -3 }, doors: [21] },
+  { a: { x: 9, z: -3 }, b: { x: 9, z: 7.5 }, doors: [2.2] },
 ];
 
 export interface WallSeg { x: number; z: number; w: number; d: number }
@@ -105,54 +108,54 @@ export interface Furniture {
  */
 export interface HumanDesk { id: string; room: RoomId; x: number; z: number }
 export const HUMAN_DESKS: HumanDesk[] = [
-  { id: 'redacao-1', room: 'copy', x: -15.2, z: -6.5 },
-  { id: 'redacao-2', room: 'copy', x: -8.8, z: -6.5 },
-  { id: 'gerencia-1', room: 'gerencia', x: -1.6, z: -6.5 },
-  { id: 'video-1', room: 'video', x: 10, z: 2.4 },
-  { id: 'design-1', room: 'design', x: 10.6, z: 8.5 },
-  { id: 'recepcao-1', room: 'recepcao', x: -3.6, z: 4.2 },
-  { id: 'recepcao-2', room: 'recepcao', x: 3.6, z: 4.2 },
+  { id: 'redacao-1', room: 'copy', x: -22.8, z: -9.75 },
+  { id: 'redacao-2', room: 'copy', x: -13.2, z: -9.75 },
+  { id: 'gerencia-1', room: 'gerencia', x: -2.4, z: -9.75 },
+  { id: 'video-1', room: 'video', x: 15, z: 3.6 },
+  { id: 'design-1', room: 'design', x: 15.9, z: 12.75 },
+  { id: 'recepcao-1', room: 'recepcao', x: -5.4, z: 6.3 },
+  { id: 'recepcao-2', room: 'recepcao', x: 5.4, z: 6.3 },
 ];
 export const deskSeat = (d: HumanDesk): Vec2 => ({ x: d.x, z: d.z + 1.1 });
 
 export const FURNITURE: Furniture[] = [
   ...HUMAN_DESKS.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true })),
   // recepção
-  { kind: 'balcao', x: 0, z: 1.2, w: 5, d: 1.1, solid: true, panel: 'equipe', label: 'Equipe e convites' },
-  { kind: 'quadro', x: -5.85, z: 2.4, rot: Math.PI / 2, panel: 'atividade', label: 'Mural de atividade' },
+  { kind: 'balcao', x: 0, z: 1.8, w: 5, d: 1.1, solid: true, panel: 'equipe', label: 'Equipe e convites' },
+  { kind: 'quadro', x: -8.85, z: 1.5, rot: Math.PI / 2, panel: 'atividade', label: 'Mural de atividade' },
   // gerência
-  { kind: 'quadro', x: 0, z: -11.85, w: 6, panel: 'demandas', label: 'Quadro de demandas' },
-  { kind: 'calendario', x: -4.2, z: -11.85, panel: 'calendario', label: 'Calendário' },
-  { kind: 'cofre', x: 4.6, z: -11, solid: true, panel: 'financeiro', label: 'Financeiro e métricas' },
-  { kind: 'mesa', x: 2.5, z: -6.5, solid: true },
+  { kind: 'quadro', x: 0, z: -17.85, w: 6, panel: 'demandas', label: 'Quadro de demandas' },
+  { kind: 'calendario', x: -6.3, z: -17.85, panel: 'calendario', label: 'Calendário' },
+  { kind: 'cofre', x: 6.9, z: -17, solid: true, panel: 'financeiro', label: 'Financeiro e métricas' },
+  { kind: 'mesa', x: 3.75, z: -9.75, solid: true },
   // ilha de vídeo
-  { kind: 'tv', x: 12, z: -1.85, w: 4, panel: 'video', label: 'Estúdio de vídeo (timeline)' },
-  { kind: 'mesa', x: 14.5, z: 2.4, solid: true },
+  { kind: 'tv', x: 18, z: -2.85, w: 4, panel: 'video', label: 'Estúdio de vídeo (timeline)' },
+  { kind: 'mesa', x: 21.75, z: 3.6, solid: true },
   // design
-  { kind: 'mesa', x: 14.5, z: 8.5, solid: true },
+  { kind: 'mesa', x: 21.75, z: 12.75, solid: true },
   // redação
-  { kind: 'mesa', x: -12, z: -6.5, solid: true },
+  { kind: 'mesa', x: -18, z: -9.75, solid: true },
   // reunião
-  { kind: 'mesa-reuniao', x: -12, z: 5, w: 6, d: 2.6, solid: true },
-  { kind: 'tv', x: -17.85, z: 5, rot: Math.PI / 2, w: 3.4, panel: 'calendario', label: 'Agenda da sala' },
+  { kind: 'mesa-reuniao', x: -18, z: 7.5, w: 6, d: 2.6, solid: true },
+  { kind: 'tv', x: -26.85, z: 7.5, rot: Math.PI / 2, w: 3.4, panel: 'calendario', label: 'Agenda da sala' },
   // copa
-  { kind: 'balcao', x: 12, z: -11.2, w: 8, d: 1.2, solid: true },
-  { kind: 'cafeteira', x: 10, z: -11.2, label: 'Tomar um café' },
-  { kind: 'mesa', x: 12, z: -6, solid: true },
+  { kind: 'balcao', x: 18, z: -17.2, w: 8, d: 1.2, solid: true },
+  { kind: 'cafeteira', x: 15, z: -17.2, label: 'Tomar um café' },
+  { kind: 'mesa', x: 18, z: -9, solid: true },
 ];
 
 /** Onde cada funcionário de IA senta, por sala. */
 export const DESKS: Record<RoomId, Vec2> = {
-  video: { x: 14.5, z: 3.5 },
-  design: { x: 14.5, z: 9.6 },
-  copy: { x: -12, z: -5.4 },
-  gerencia: { x: 2.5, z: -5.4 },
-  recepcao: { x: 0, z: 0.2 },
-  reuniao: { x: -12, z: 7 },
-  copa: { x: 12, z: -4.9 },
+  video: { x: 21.75, z: 4.7 },
+  design: { x: 21.75, z: 13.85 },
+  copy: { x: -18, z: -8.65 },
+  gerencia: { x: 3.75, z: -8.65 },
+  recepcao: { x: 0, z: 0.8 },
+  reuniao: { x: -18, z: 9.5 },
+  copa: { x: 18, z: -7.9 },
 };
 
-export const SPAWN: Vec2 = { x: 0, z: 7 };
+export const SPAWN: Vec2 = { x: 0, z: 10.5 };
 
 export function roomAt(p: Vec2): Room | null {
   return ROOMS.find((r) => p.x >= r.x0 && p.x < r.x1 && p.z >= r.z0 && p.z < r.z1) ?? null;

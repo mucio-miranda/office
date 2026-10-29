@@ -26,38 +26,43 @@ const W = (kind: string, along: number, wall: 'fundo' | 'esquerda', color?: stri
  */
 export const DEFAULT_DECOR: DecorItem[] = [
   // recepção
-  F('tapete-grande', 0, 5, 0, '#8aa67a'), F('tapete-redondo', 0, 9.3, 0, '#c9b79c'),
-  F('arvore', 0, 9.3),
-  F('sofa-curvo', -3.6, 8.9, 1), F('sofa-curvo', 3.6, 8.9, 3, '#c9b79c'),
-  F('plantas-suspensas', -3.9, 8.9), F('plantas-suspensas', 3.9, 8.9),
-  F('banco-jardineira', -3.6, 11.4, 2), F('banco-jardineira', 3.6, 11.4, 2),
-  F('costela', -5.35, 11.35), F('palmeira', 5.2, 11.2),
-  F('divisoria-verde', -4.4, 2.4), F('bebedouro', -5.4, 0.6),
-  F('pufe', -5.3, 7.9, 0, '#e9c46a'),
+  F('tapete-grande', 0, 7.5, 0, '#8aa67a'), F('tapete-redondo', 0, 13.95, 0, '#c9b79c'),
+  F('arvore', 0, 13.95),
+  F('sofa-curvo', -5.4, 13.35, 1), F('sofa-curvo', 5.4, 13.35, 3, '#c9b79c'),
+  F('plantas-suspensas', -5.85, 13.35), F('plantas-suspensas', 5.85, 13.35),
+  F('banco-jardineira', -5.4, 17.4, 2), F('banco-jardineira', 5.4, 17.4, 2),
+  F('costela', -8.35, 17.35), F('palmeira', 8.2, 17.2),
+  F('divisoria-verde', -6.6, 3.6), F('bebedouro', -8.4, 0.9),
+  F('pufe', -8.3, 11.85, 0, '#e9c46a'),
+  // divisórias verdes onde antes havia paredes (o andar é aberto)
+  F('divisoria-verde', -9.3, -15.2, 1), F('divisoria-verde', -9.3, -6.4, 1),
+  F('divisoria-verde', 9.3, -14.6, 1), F('divisoria-verde', 9.3, -6.6, 1),
+  F('divisoria-verde', 9, 10.6, 1), F('divisoria-verde', 9, 15.4, 1),
+  F('tapete-grande', -18, -9.4, 0, '#81b29a'), F('tapete-grande', 18, 12.4, 0, '#c9b79c'),
   // gerência
-  F('tapete-grande', 0.45, -6.2, 0, '#3f7fd6'),
-  F('estante', -5.4, -10.2, 1), F('planta', 5.2, -2.8), F('poltrona', -4.6, -3.6, 1, '#2a9d8f'),
-  W('quadro-arte', 4.9, 'fundo', '#118ab2'), W('ar-condicionado', 4.9, 'fundo'),
+  F('tapete-grande', 0.68, -9.3, 0, '#3f7fd6'),
+  F('estante', -8.4, -15.3, 1), F('planta', 8.2, -3.8), F('poltrona', -6.9, -5.4, 1, '#2a9d8f'),
+  W('quadro-arte', 7.9, 'fundo', '#118ab2'), W('ar-condicionado', 7.9, 'fundo'),
   // copa
-  ...[8, 10, 12, 14, 16].map((x) => W('tijolinho', x, 'fundo')),
-  W('neon-cafe', 12.4, 'fundo'),
-  F('geladeira', 17.2, -11.3), F('maquina-lanches', 7, -11.3),
-  F('pebolim', 16.2, -7, 1), F('mesa-bistro', 8.6, -7.6), F('pendente', 8.6, -7.6, 0, '#e63946'),
-  F('planta', 17.2, -2.8), F('bar-cereais', 15.6, -3.0, 2),
+  ...[12, 15, 18, 21, 24].map((x) => W('tijolinho', x, 'fundo')),
+  W('neon-cafe', 18.6, 'fundo'),
+  F('geladeira', 26.2, -17.3), F('maquina-lanches', 10, -17.3),
+  F('pebolim', 24.3, -10.5, 1), F('mesa-bistro', 12.9, -11.4), F('pendente', 12.9, -11.4, 0, '#e63946'),
+  F('planta', 26.2, -3.8), F('bar-cereais', 23.4, -4, 2),
   // ilha de vídeo
-  F('tripe-ring', 7.4, -0.9), F('luminaria', 17, -1.2), F('softbox', 17.2, 4.2),
+  F('tripe-ring', 11.1, -1.9), F('luminaria', 26, -2.2), F('softbox', 26.2, 6.7),
   // design
-  F('estante', 17.6, 8.5, 3), F('planta', 7, 11.2), F('cavalete', 8.3, 6.4),
-  F('pufe', 16.6, 11.2, 0, '#ff4fd8'), F('cacto', 12.6, 11.4),
+  F('estante', 26.6, 12.75, 3), F('planta', 10, 17.2), F('cavalete', 12.45, 9.6),
+  F('pufe', 24.9, 17.2, 0, '#ff4fd8'), F('cacto', 18.9, 17.4),
   // redação
-  W('janela', -15, 'fundo'), W('janela', -9, 'fundo'), W('relogio', -12, 'fundo'),
-  W('janela', -10.5, 'esquerda'), W('janela', -3.5, 'esquerda'), W('musgo', -7, 'esquerda'),
-  F('estante', -17.6, -7, 1), F('planta', -7, -11.2), F('cabine', -7.1, -3.1, 3),
+  W('janela', -22.5, 'fundo'), W('janela', -13.5, 'fundo'), W('relogio', -18, 'fundo'),
+  W('janela', -15.75, 'esquerda'), W('janela', -5.25, 'esquerda'), W('musgo', -10.5, 'esquerda'),
+  F('estante', -26.6, -10.5, 1), F('planta', -10, -17.2), F('cabine', -10.1, -4.1, 3),
   // reunião
-  W('neon-crie', 0.3, 'esquerda', '#ff4fd8'), W('janela', 9.5, 'esquerda'),
-  F('arquibancada', -16.6, 0.3, 1, '#9b5cff'),
-  F('pendente', -13.8, 5), F('pendente', -10.2, 5),
-  F('planta', -17.2, 11.2), F('luminaria-arco', -7.4, 11.2),
+  W('neon-crie', 0.45, 'esquerda', '#ff4fd8'), W('janela', 14.25, 'esquerda'),
+  F('arquibancada', -24.9, 0.45, 1, '#9b5cff'),
+  F('pendente', -20.7, 7.5), F('pendente', -15.3, 7.5),
+  F('planta', -26.2, 17.2), F('luminaria-arco', -11.1, 17.2),
 ].filter((it) => DEF[it.kind]);
 
 // ---------------------------------------------------------------- geometria
@@ -91,7 +96,7 @@ const FIXED_WALL: WallSpan[] = [
     if (Math.abs(f.x - BOUNDS.x0) < 0.3) return [{ wall: 'esquerda', a0: f.z - w / 2, a1: f.z + w / 2 }];
     return [];
   }),
-  { wall: 'fundo', a0: -6.15, a1: -5.85 }, { wall: 'fundo', a0: 5.85, a1: 6.15 }, { wall: 'esquerda', a0: -2.15, a1: -1.85 },
+  { wall: 'esquerda', a0: -3.15, a1: -2.85 },
 ];
 
 /** A peça cabe ali? (dentro do prédio, fora das paredes, portas, assentos e de outras peças). */

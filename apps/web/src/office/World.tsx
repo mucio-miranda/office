@@ -146,8 +146,8 @@ function panBy(dxPx: number, dyPx: number) {
   // direita na tela = (sin a, -cos a) no chão; "para cima" na tela = (-cos a, -sin a)
   cam.tx += -Math.sin(a) * dxPx * k + -Math.cos(a) * (dyPx * k) / sinElev();
   cam.tz += Math.cos(a) * dxPx * k + -Math.sin(a) * (dyPx * k) / sinElev();
-  cam.tx = Math.max(-34, Math.min(34, cam.tx));
-  cam.tz = Math.max(-26, Math.min(26, cam.tz));
+  cam.tx = Math.max(-50, Math.min(50, cam.tx));
+  cam.tz = Math.max(-38, Math.min(38, cam.tz));
 }
 
 const keys = new Set<string>();
@@ -397,7 +397,7 @@ function Floor({ p }: { p: ScenePalette }) {
       </mesh>
       {/* base da maquete */}
       <mesh position={[0, -0.11, 0]} receiveShadow>
-        <boxGeometry args={[36.6, 0.2, 24.6]} />
+        <boxGeometry args={[54.6, 0.2, 36.6]} />
         <meshBasicMaterial color={p.wallTop} />
       </mesh>
       {ROOMS.map((r) => (
@@ -408,7 +408,7 @@ function Floor({ p }: { p: ScenePalette }) {
       ))}
       {/* o piso não é iluminado (cor exata da paleta); este plano só recebe as sombras */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, 0]} receiveShadow raycast={() => null}>
-        <planeGeometry args={[36, 24]} />
+        <planeGeometry args={[54, 36]} />
         <shadowMaterial transparent opacity={p.shadow + 0.04} />
       </mesh>
       {WALLS.map((w, i) => (
@@ -455,7 +455,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
      * manda pinça como roda com Ctrl). A roda do mouse continua dando zoom; Shift + roda move para os lados.
      */
     let lastPad = 0;
-    const zoomBy = (k: number) => { cam.zoom = Math.min(110, Math.max(14, cam.zoom * k)); };
+    const zoomBy = (k: number) => { cam.zoom = Math.min(110, Math.max(9, cam.zoom * k)); };
     const wheel = (e: WheelEvent) => {
       if ((e.target as HTMLElement)?.tagName !== 'CANVAS') return;
       e.preventDefault();
@@ -536,14 +536,14 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
           {/* luz de cima e da esquerda: topo claro, face da esquerda média, face da direita escura (como no Habbo) */}
           <ambientLight intensity={1.1} />
           <directionalLight position={[-10, 26, 14]} intensity={1.6} castShadow shadow-mapSize={[4096, 4096]} shadow-bias={-0.0004}
-            shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
+            shadow-camera-left={-42} shadow-camera-right={42} shadow-camera-top={42} shadow-camera-bottom={-42} />
         </>
       ) : (
         <>
           <ambientLight intensity={1.7} />
           <hemisphereLight args={['#ffffff', p.ground, 0.6]} />
           <directionalLight position={[14, 30, 18]} intensity={1.25} castShadow shadow-mapSize={[2048, 2048]} shadow-bias={-0.0004}
-            shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
+            shadow-camera-left={-42} shadow-camera-right={42} shadow-camera-top={42} shadow-camera-bottom={-42} />
         </>
       )}
       <Floor p={p} />
