@@ -108,7 +108,7 @@ export const PIXEL: Record<Theme, PixelPalette> = {
     fabric: '#d64545', fabricAlt: '#3f7fd6', plant: '#4caf50', plantDark: '#2e7d32', pot: '#c8643b', paper: '#f4efe4',
     skin: '#f2c49b', hair: '#4a2f1e', pants: '#2f3b55', shoes: '#1f1f26',
     floors: {
-      recepcao: ['#c9965f', '#b88550'],
+      recepcao: ['#dcb98a', '#cfa877'],
       gerencia: ['#5b7fb8', '#4f72a8'],
       video: ['#3b3550', '#332d47'],
       design: ['#c7a6e0', '#b996d6'],
@@ -125,7 +125,7 @@ export const PIXEL: Record<Theme, PixelPalette> = {
     fabric: '#a83a3a', fabricAlt: '#3462a8', plant: '#3b8a3f', plantDark: '#245e27', pot: '#9a4d2d', paper: '#cfc8bb',
     skin: '#d9ac85', hair: '#3a2417', pants: '#252e44', shoes: '#16161c',
     floors: {
-      recepcao: ['#8f6a43', '#7f5c38'],
+      recepcao: ['#9c8060', '#8f7454'],
       gerencia: ['#3f5884', '#374e76'],
       video: ['#2a2539', '#231f31'],
       design: ['#8c74a0', '#7f6893'],

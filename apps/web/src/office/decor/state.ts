@@ -3,7 +3,7 @@ import { uid, type DecorItem } from '@office/shared';
 import { useStore } from '../../lib/store';
 import { api } from '../../lib/api';
 import {
-  BOUNDS, DESKS, DOOR_ZONES, FURNITURE, FURN_BOX, HUMAN_DESKS, SPAWN, WALL_BOXES, deskSeat, setDecorSolids, type Box,
+  BOUNDS, DESKS, DOOR_ZONES, FURNITURE, FURN_BOX, HUMAN_DESKS, SPAWN, WALL_BOXES, deskSeat, roomAt, setDecorSolids, type Box,
 } from '../layout';
 import { DEF, footprint, type DecorDef } from './catalog';
 
@@ -20,16 +20,20 @@ const W = (kind: string, along: number, wall: 'fundo' | 'esquerda', color?: stri
 });
 
 /**
- * Decoração com que todo escritório começa (dá para mudar tudo no modo Decorar). Copa com tijolinho e
- * neon, pebolim e mesa bistrô; redação com cabine acústica; reunião com arquibancada e pendentes.
+ * Decoração com que todo escritório começa (dá para mudar tudo no modo Decorar). Recepção biofílica (árvore
+ * no meio com sofás orgânicos em volta, bancos com jardineira, divisória verde e plantas suspensas); copa com
+ * tijolinho e neon, pebolim e mesa bistrô; redação com cabine acústica; reunião com arquibancada e pendentes.
  */
 export const DEFAULT_DECOR: DecorItem[] = [
   // recepção
-  F('tapete-grande', 0, 5, 0, '#d64545'),
-  F('sofa', -3.5, 9.6, 2), F('sofa', 3.5, 9.6, 2, '#3f7fd6'),
-  F('planta', -5.2, 11.2), F('palmeira', 5.2, 11.2),
-  F('bebedouro', -5.4, 0.6), F('cabideiro', 3.2, 11.3),
-  F('pufe', -5.3, 7.9, 0, '#f1c40f'),
+  F('tapete-grande', 0, 5, 0, '#8aa67a'), F('tapete-redondo', 0, 9.3, 0, '#c9b79c'),
+  F('arvore', 0, 9.3),
+  F('sofa-curvo', -3.6, 8.9, 1), F('sofa-curvo', 3.6, 8.9, 3, '#c9b79c'),
+  F('plantas-suspensas', -3.9, 8.9), F('plantas-suspensas', 3.9, 8.9),
+  F('banco-jardineira', -3.6, 11.4, 2), F('banco-jardineira', 3.6, 11.4, 2),
+  F('costela', -5.35, 11.35), F('palmeira', 5.2, 11.2),
+  F('divisoria-verde', -4.4, 2.4), F('bebedouro', -5.4, 0.6),
+  F('pufe', -5.3, 7.9, 0, '#e9c46a'),
   // gerência
   F('tapete-grande', 0.45, -6.2, 0, '#3f7fd6'),
   F('estante', -5.4, -10.2, 1), F('planta', 5.2, -2.8), F('poltrona', -4.6, -3.6, 1, '#2a9d8f'),
@@ -47,7 +51,7 @@ export const DEFAULT_DECOR: DecorItem[] = [
   F('pufe', 16.6, 11.2, 0, '#ff4fd8'), F('cacto', 12.6, 11.4),
   // redação
   W('janela', -15, 'fundo'), W('janela', -9, 'fundo'), W('relogio', -12, 'fundo'),
-  W('janela', -10.5, 'esquerda'), W('janela', -3.5, 'esquerda'),
+  W('janela', -10.5, 'esquerda'), W('janela', -3.5, 'esquerda'), W('musgo', -7, 'esquerda'),
   F('estante', -17.6, -7, 1), F('planta', -7, -11.2), F('cabine', -7.1, -3.1, 3),
   // reunião
   W('neon-crie', 0.3, 'esquerda', '#ff4fd8'), W('janela', 9.5, 'esquerda'),
@@ -94,6 +98,7 @@ const FIXED_WALL: WallSpan[] = [
 export function fits(it: DecorItem, items: DecorItem[]) {
   const d = DEF[it.kind];
   if (!d) return false;
+  if (d.place === 'sala') return !!roomAt(it);
   if (d.place === 'parede') {
     if (!it.wall) return false;
     const s = wallSpan(it, d);
@@ -205,6 +210,19 @@ export function redo() {
   queueSave();
 }
 
+/** Piso escolhido para cada sala (o da prévia por cima, enquanto o mouse passa com um piso na mão). */
+export function roomFloors(items: DecorItem[], ghost: DecorItem | null): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const it of ghost ? [...items, ghost] : items) {
+    if (DEF[it.kind]?.place !== 'sala') continue;
+    const room = roomAt(it)?.id;
+    if (!room) continue;
+    if (it.kind === 'piso-original') delete out[room];
+    else out[room] = it.kind.slice('piso-'.length);
+  }
+  return out;
+}
+
 /** Volta à decoração padrão do Office (dá para desfazer). */
 export function restoreDefault() {
   const s = useDecor.getState();
@@ -277,6 +295,14 @@ export function placeGhost(keep: boolean) {
   const s = useDecor.getState();
   if (!s.placing || !s.ghost || !s.ghostOk) return false;
   const it: DecorItem = { ...s.ghost, id: uid() };
+  if (DEF[it.kind]?.place === 'sala') {
+    // um piso por sala; o "original" só tira a troca
+    const room = roomAt(it)?.id;
+    const rest = s.items.filter((o) => !(DEF[o.kind]?.place === 'sala' && roomAt(o)?.id === room));
+    commit(it.kind === 'piso-original' ? rest : [...rest, it]);
+    useDecor.setState(keep ? { ghost: null } : { ghost: null });
+    return true;
+  }
   commit([...s.items, it]);
   useDecor.setState(keep ? { ghost: null } : { placing: null, ghost: null, sel: it.id });
   return true;

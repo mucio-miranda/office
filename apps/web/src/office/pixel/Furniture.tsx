@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { Furniture } from '../layout';
 import { usePixel, type PixelPalette } from '../../lib/theme';
-import { OutlineColor, PBox, PCyl, screenTexture } from './kit';
+import { OutlineColor, PBlob, PBox, PCyl, leafTexture, screenTexture, shade, woodTexture } from './kit';
 
 /** Contorno de destaque quando o mouse passa por algo que dá para usar. */
 const HOVER = '#ffe066';
@@ -21,15 +21,20 @@ export function OfficeChair({ p, pos, rot = 0, color }: { p: PixelPalette; pos: 
   );
 }
 
-/** Planta em vaso: folhagem em camadas de blocos, do escuro (embaixo) ao claro (em cima). */
+/** Moita: volume arredondado com textura de folhas miúdas e contorno verde-escuro (as moitas do Habbo). */
+export function Bush({ p, pos, size, rot, flowers, tint = 1 }: { p: PixelPalette; pos: V3; size: V3; rot?: V3; flowers?: string; tint?: number }) {
+  return <PBlob p={p} pos={pos} size={size} rot={rot} color="#ffffff" map={leafTexture(shade(p.plant, tint), shade(p.plantDark, tint), flowers)} edge={shade(p.plantDark, 0.45)} />;
+}
+
+/** Planta em vaso: folhagem em camadas, do escuro (embaixo) ao claro (em cima). */
 export function Plant({ p, pos, scale = 1 }: { p: PixelPalette; pos: V3; scale?: number }) {
   return (
     <group position={pos} scale={scale}>
-      <PCyl p={p} pos={[0, 0.22, 0]} r={0.22} rTop={0.27} h={0.44} color={p.pot} sides={8} />
-      <PBox p={p} pos={[0, 0.46, 0]} size={[0.4, 0.04, 0.4]} color="#5b3a22" outline={false} />
-      <PBox p={p} pos={[0, 0.66, 0]} size={[0.62, 0.32, 0.62]} color={p.plantDark} rot={[0, 0.4, 0]} />
-      <PBox p={p} pos={[0.05, 0.92, -0.03]} size={[0.5, 0.3, 0.5]} color={p.plant} rot={[0, -0.3, 0]} />
-      <PBox p={p} pos={[-0.04, 1.14, 0.04]} size={[0.32, 0.22, 0.32]} color={p.plant} rot={[0, 0.7, 0]} />
+      <PCyl p={p} pos={[0, 0.22, 0]} r={0.22} rTop={0.27} h={0.44} color={p.pot} sides={10} />
+      <PCyl p={p} pos={[0, 0.43, 0]} r={0.28} h={0.04} color={shade(p.pot, 1.15)} sides={10} outline={false} />
+      <Bush p={p} pos={[0, 0.68, 0]} size={[0.66, 0.42, 0.66]} rot={[0, 0.4, 0]} tint={0.92} />
+      <Bush p={p} pos={[0.05, 0.94, -0.03]} size={[0.5, 0.32, 0.5]} rot={[0, -0.3, 0]} tint={1.08} />
+      <Bush p={p} pos={[-0.04, 1.16, 0.04]} size={[0.32, 0.22, 0.32]} rot={[0, 0.7, 0]} tint={1.18} />
     </group>
   );
 }
@@ -129,11 +134,17 @@ export function PixelFurniture({ f, onUse }: { f: Furniture; onUse?: (f: Furnitu
         const w = f.w ?? 5, d = f.d ?? 1.1;
         return (
           <group>
-            <PBox p={p} pos={[0, 0.5, 0]} size={[w, 1, d]} color={p.wood} />
-            <PBox p={p} pos={[0, 1.03, 0]} size={[w + 0.1, 0.06, d + 0.1]} color={p.paper} />
-            {Array.from({ length: Math.max(2, Math.floor(w / 1.2)) }).map((_, i, a) => (
-              <PBox key={i} p={p} pos={[(i - (a.length - 1) / 2) * (w / a.length), 0.5, d / 2 + 0.01]} size={[w / a.length - 0.16, 0.7, 0.02]} color={p.woodDark} outline={false} />
+            <PBox p={p} pos={[0, 0.5, 0]} size={[w, 1, d]} color={shade(p.wood, 0.8)} />
+            {/* ripas verticais na frente, com rodapé recuado */}
+            {Array.from({ length: Math.floor(w / 0.16) }).map((_, i, a) => (
+              <PBox key={i} p={p} pos={[(i - (a.length - 1) / 2) * 0.16, 0.54, d / 2 + 0.02]} size={[0.1, 0.84, 0.04]} color="#ffffff" map={woodTexture(shade(p.wood, i % 2 ? 1.2 : 1.12))} outline={false} />
             ))}
+            <PBox p={p} pos={[0, 0.05, d / 2 - 0.02]} size={[w - 0.04, 0.1, 0.04]} color={shade(p.woodDark, 0.8)} outline={false} />
+            <PBox p={p} pos={[0, 1.03, 0]} size={[w + 0.1, 0.06, d + 0.1]} color="#ffffff" map={woodTexture('#eadcc6')} />
+            {/* jardineira embutida na ponta do tampo */}
+            <PBox p={p} pos={[-w / 2 + 0.45, 1.1, 0]} size={[0.7, 0.1, d - 0.3]} color={shade(p.woodDark, 0.9)} />
+            <Bush p={p} pos={[-w / 2 + 0.45, 1.3, 0]} size={[0.66, 0.3, d - 0.36]} rot={[0, 0.06, 0]} />
+            <Bush p={p} pos={[-w / 2 + 0.52, 1.5, 0.05]} size={[0.4, 0.22, 0.42]} rot={[0, 0.5, 0]} tint={1.15} />
           </group>
         );
       }

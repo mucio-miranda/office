@@ -1,18 +1,20 @@
 import type { ReactNode } from 'react';
 import type { PixelPalette } from '../../lib/theme';
-import { Glass, PBox, PCyl, booksTexture, canvasTexture, rugTexture, screenTexture, shade, tiled } from '../pixel/kit';
-import { OfficeChair, Plant } from '../pixel/Furniture';
+import { Glass, PBox, PCyl, booksTexture, canvasTexture, leafTexture, mossTexture, rugTexture, screenTexture, shade, tiled, woodTexture } from '../pixel/kit';
+import { Bush, OfficeChair, Plant } from '../pixel/Furniture';
+import { FLOOR_MATERIALS, floorMaterialTexture } from '../pixel/floors';
 
 /**
  * Catálogo de decoração do modo Decorar, no espírito do catálogo de mobis do Habbo. As peças seguem as
  * referências de escritórios de startup: madeira clara e vidro (Apple Park), cabines acústicas, armários
  * coloridos, pufes e bicicletas (Google), arquibancada e neon (Nubank), horta e escada vermelha (iFood),
- * cabanas, tijolinho e bar de cereais (Pixar). Tudo é desenhado por código, sem sprites de terceiros.
+ * cabanas, tijolinho e bar de cereais (Pixar), e o lado biofílico (Amazon Spheres, Nubank): sofá orgânico,
+ * jardineiras, divisória verde, plantas suspensas e quadro de musgo. Tudo é desenhado por código, sem sprites de terceiros.
  *
  * Cada peça tem a frente para +z; `size` é a pegada no chão sem giro (itens de parede: largura e altura).
  */
 
-export type DecorCat = 'escritorio' | 'lounge' | 'plantas' | 'copa' | 'lazer' | 'estudio' | 'estrutura' | 'parede' | 'luz' | 'piso';
+export type DecorCat = 'escritorio' | 'lounge' | 'plantas' | 'copa' | 'lazer' | 'estudio' | 'estrutura' | 'parede' | 'luz' | 'piso' | 'pisos';
 
 export const CATEGORIES: { id: DecorCat; label: string; emoji: string }[] = [
   { id: 'escritorio', label: 'Escritório', emoji: '🖥️' },
@@ -25,6 +27,7 @@ export const CATEGORIES: { id: DecorCat; label: string; emoji: string }[] = [
   { id: 'parede', label: 'Parede', emoji: '🖼️' },
   { id: 'luz', label: 'Luz', emoji: '💡' },
   { id: 'piso', label: 'Tapetes', emoji: '🟫' },
+  { id: 'pisos', label: 'Pisos', emoji: '🪵' },
 ];
 
 export interface DecorDef {
@@ -34,8 +37,9 @@ export interface DecorDef {
   size: [number, number];
   /** Altura aproximada (maquete e enquadramento da miniatura). */
   h: number;
-  /** chao: bloqueia a passagem; piso: tapete (anda por cima); alto: pendurado (não ocupa o chão); parede. */
-  place: 'chao' | 'piso' | 'alto' | 'parede';
+  /** chao: bloqueia a passagem; piso: tapete (anda por cima); alto: pendurado (não ocupa o chão); parede;
+   *  sala: troca o piso da sala inteira (fica no centro da sala e não aparece como peça). */
+  place: 'chao' | 'piso' | 'alto' | 'parede' | 'sala';
   /** Parede: altura do centro da peça. */
   y?: number;
   /** Revestimento de parede: fica atrás dos outros itens de parede, sem disputar lugar. */
@@ -47,7 +51,7 @@ export interface DecorDef {
 
 type V3 = [number, number, number];
 
-const FABRICS = ['#d64545', '#3f7fd6', '#f1c40f', '#2a9d8f', '#8e44ad', '#f4a261', '#3d3d46'];
+const FABRICS = ['#d64545', '#3f7fd6', '#f1c40f', '#2a9d8f', '#8e44ad', '#f4a261', '#3d3d46', '#8aa67a', '#c9b79c'];
 const WOODS = ['#e8cfa0', '#b9824e', '#f4f4f2', '#2b2b30'];
 const NEONS = ['#ff4fd8', '#3ff0ff', '#9b5cff', '#ff3b3b', '#ffd23f'];
 const BRIGHT = ['#4285f4', '#ea4335', '#fbbc05', '#34a853', '#8e44ad'];
@@ -255,9 +259,91 @@ function Stool({ p, pos, c, h = 0.72 }: { p: PixelPalette; pos: V3; c: string; h
 function Foliage({ p, pos, s = 1 }: { p: PixelPalette; pos: V3; s?: number }) {
   return (
     <group position={pos} scale={s}>
-      <PBox p={p} pos={[0, 0, 0]} size={[1, 0.5, 1]} color={p.plantDark} rot={[0, 0.3, 0]} />
-      <PBox p={p} pos={[0.05, 0.36, 0.02]} size={[0.8, 0.44, 0.8]} color={p.plant} rot={[0, -0.4, 0]} />
-      <PBox p={p} pos={[-0.04, 0.68, -0.02]} size={[0.5, 0.32, 0.5]} color={shade(p.plant, 1.15)} rot={[0, 0.6, 0]} />
+      <Bush p={p} pos={[0, 0, 0]} size={[1, 0.5, 1]} rot={[0, 0.3, 0]} tint={0.92} />
+      <Bush p={p} pos={[0.05, 0.36, 0.02]} size={[0.8, 0.44, 0.8]} rot={[0, -0.4, 0]} />
+      <Bush p={p} pos={[-0.04, 0.68, -0.02]} size={[0.5, 0.32, 0.5]} rot={[0, 0.6, 0]} tint={1.15} />
+      <Bush p={p} pos={[0.42, 0.18, 0.2]} size={[0.5, 0.4, 0.5]} rot={[0, 0.2, 0]} tint={1.05} />
+      <Bush p={p} pos={[-0.38, 0.24, -0.25]} size={[0.46, 0.38, 0.46]} rot={[0, -0.5, 0]} tint={0.98} />
+    </group>
+  );
+}
+
+// ---------------------------------------------------------------- biofílico
+
+/** Sofá orgânico em arco (módulos estofados virados para o centro, como os lounges curvos de 2025). */
+function CurvedSofa({ p, c }: { p: PixelPalette; c: string }) {
+  const R = 1.6, cz = 1.0, n = 6;
+  return (
+    <group>
+      {Array.from({ length: n }).map((_, i) => {
+        const a = -0.8 + (i * 1.6) / (n - 1);
+        return (
+          <group key={i} position={[R * Math.sin(a), 0, cz - R * Math.cos(a)]} rotation={[0, -a, 0]}>
+            <PBox p={p} pos={[0, 0.12, 0]} size={[0.52, 0.16, 0.72]} color={shade(p.woodDark, 0.85)} />
+            <PBox p={p} pos={[0, 0.32, 0.04]} size={[0.5, 0.2, 0.66]} color={c} />
+            <PBox p={p} pos={[0, 0.43, 0.06]} size={[0.44, 0.03, 0.56]} color={shade(c, 1.1)} outline={false} />
+            <PBox p={p} pos={[0, 0.62, -0.28]} size={[0.52, 0.5, 0.18]} color={shade(c, 0.95)} />
+            <PBox p={p} pos={[0, 0.86, -0.28]} size={[0.48, 0.03, 0.16]} color={shade(c, 1.12)} outline={false} />
+            {i % 2 === 1 && <PBox p={p} pos={[0, 0.58, -0.14]} size={[0.32, 0.26, 0.1]} rot={[0.25, 0, 0]} color={i === 3 ? '#e9c46a' : '#f4efe4'} />}
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
+/** Banco de ripas com jardineira (o banco-canteiro das praças internas). */
+function PlanterBench({ p, c }: { p: PixelPalette; c: string }) {
+  return (
+    <group>
+      {/* banco */}
+      <PBox p={p} pos={[-0.45, 0.2, 0]} size={[1.25, 0.4, 0.6]} color={shade(c, 0.6)} />
+      {Array.from({ length: 5 }).map((_, i) => (
+        <PBox key={i} p={p} pos={[-0.45, 0.43, -0.24 + i * 0.12]} size={[1.25, 0.05, 0.09]} color="#ffffff" map={woodTexture(shade(c, i % 2 ? 1 : 1.07))} outline={i === 0 || i === 4} />
+      ))}
+      {/* jardineira */}
+      <PBox p={p} pos={[0.65, 0.32, 0]} size={[0.9, 0.64, 0.8]} color="#ffffff" map={woodTexture(shade(c, 0.9))} />
+      <PBox p={p} pos={[0.65, 0.65, 0]} size={[0.8, 0.04, 0.7]} color="#5b3a22" outline={false} />
+      <Bush p={p} pos={[0.65, 0.85, 0]} size={[0.82, 0.36, 0.72]} rot={[0, 0.1, 0]} tint={0.95} />
+      <Bush p={p} pos={[0.55, 1.12, 0.05]} size={[0.5, 0.3, 0.5]} rot={[0, 0.6, 0]} tint={1.12} flowers="#ffd166" />
+      <Bush p={p} pos={[0.85, 1.05, -0.12]} size={[0.3, 0.26, 0.3]} rot={[0, 0.2, 0]} tint={1.22} />
+    </group>
+  );
+}
+
+/** Divisória de estante vazada com vasos e pendentes caindo (separa ambientes sem fechar). */
+function GreenDivider({ p, c }: { p: PixelPalette; c: string }) {
+  const shelves = [0.06, 0.66, 1.26, 1.82];
+  return (
+    <group>
+      {[-1.15, 0, 1.15].map((x) => <PBox key={x} p={p} pos={[x, 0.92, 0]} size={[0.06, 1.84, 0.36]} color={c} />)}
+      {shelves.map((y) => <PBox key={y} p={p} pos={[0, y, 0]} size={[2.36, 0.05, 0.38]} color="#ffffff" map={woodTexture(shade(c, 1.05))} />)}
+      {[[-0.6, 0], [0.6, 0], [-0.55, 1], [0.5, 1], [-0.7, 2], [0.35, 2]].map(([x, s], i) => (
+        <group key={i} position={[x, shelves[s] + 0.03, 0]}>
+          <PCyl p={p} pos={[0, 0.11, 0]} r={0.1} rTop={0.12} h={0.22} color={['#f4efe4', '#c8643b', '#2b2b30'][i % 3]} sides={8} />
+          <Bush p={p} pos={[0, 0.33, 0]} size={[0.3, 0.24, 0.26]} rot={[0, i * 0.5, 0]} tint={[0.9, 1.05, 1.18][i % 3]} />
+          {/* folhas caindo da prateleira */}
+          {i % 2 === 0 && <Bush p={p} pos={[0.12, -0.12, 0.08]} size={[0.08, 0.42, 0.08]} tint={1.1} />}
+        </group>
+      ))}
+    </group>
+  );
+}
+
+/** Plantas suspensas: dois vasos pendurados no teto, com ramas compridas. */
+function HangingPlants({ p }: { p: PixelPalette }) {
+  return (
+    <group>
+      {[[-0.15, 2.05, 0.6], [0.18, 1.8, 0.85]].map(([x, y, rope], i) => (
+        <group key={i} position={[x, 0, i ? 0.1 : -0.1]}>
+          <PBox p={p} pos={[0, y + 0.18 + rope / 2, 0]} size={[0.012, rope, 0.012]} color="#c9b79c" outline={false} cast={false} />
+          <PCyl p={p} pos={[0, y + 0.08, 0]} r={0.12} rTop={0.16} h={0.18} color={i ? '#f4efe4' : '#c8643b'} sides={10} />
+          <Bush p={p} pos={[0, y + 0.24, 0]} size={[0.34, 0.16, 0.34]} rot={[0, 0.4, 0]} tint={1.1} />
+          {[[-0.12, 0.35], [0.1, 0.5], [0.02, 0.26]].map(([dx, len], k) => (
+            <Bush key={k} p={p} pos={[dx, y - len / 2 + 0.05, k === 2 ? 0.12 : 0]} size={[0.07, len, 0.07]} tint={[1, 1.15, 0.9][k]} />
+          ))}
+        </group>
+      ))}
     </group>
   );
 }
@@ -552,6 +638,22 @@ export const CATALOG: DecorDef[] = [
 
   // ------------------------------------------------ plantas
   {
+    kind: 'sofa-curvo', name: 'Sofá orgânico curvo', cat: 'lounge', size: [2.9, 1.3], h: 0.9, place: 'chao', colors: ['#8aa67a', '#c9b79c', '#f4a261', '#2a9d8f', '#3d3d46'],
+    render: (p, c = '#8aa67a') => <group position={[0, 0, 0.1]}><CurvedSofa p={p} c={c} /></group>,
+  },
+  {
+    kind: 'banco-jardineira', name: 'Banco com jardineira', cat: 'plantas', size: [2.2, 0.8], h: 1.3, place: 'chao', colors: WOODS,
+    render: (p, c = '#d9b88a') => <PlanterBench p={p} c={c} />,
+  },
+  {
+    kind: 'divisoria-verde', name: 'Divisória verde', cat: 'plantas', size: [2.4, 0.4], h: 1.9, place: 'chao', colors: WOODS,
+    render: (p, c = '#d9b88a') => <GreenDivider p={p} c={c} />,
+  },
+  {
+    kind: 'plantas-suspensas', name: 'Plantas suspensas', cat: 'plantas', size: [0.6, 0.6], h: 2.6, place: 'alto',
+    render: (p) => <HangingPlants p={p} />,
+  },
+  {
     kind: 'planta', name: 'Planta em vaso', cat: 'plantas', size: [0.7, 0.7], h: 1.3, place: 'chao',
     render: (p) => <Plant p={p} pos={[0, 0, 0]} />,
   },
@@ -606,8 +708,12 @@ export const CATALOG: DecorDef[] = [
           <PBox key={`${x}${z}`} p={p} pos={[x, 0.53, z]} size={x ? [0.16, 0.06, 1.6] : [1.6, 0.06, 0.16]} color={c} />
         ))}
         <PBox p={p} pos={[0, 0.52, 0]} size={[1.2, 0.04, 1.2]} color="#5b3a22" outline={false} />
-        <PCyl p={p} pos={[0, 1.2, 0]} r={0.1} rTop={0.07} h={1.4} color="#7a5232" sides={6} />
-        <Foliage p={p} pos={[0, 2.0, 0]} s={1.15} />
+        {/* forração do canteiro */}
+        {[[-0.35, -0.3], [0.38, -0.2], [-0.3, 0.35], [0.32, 0.36]].map(([x, z], i) => (
+          <Bush key={i} p={p} pos={[x, 0.62, z]} size={[0.5, 0.2, 0.46]} rot={[0, i, 0]} tint={[1, 1.15, 0.95, 1.08][i]} flowers={i === 1 ? '#ff8fab' : undefined} />
+        ))}
+        <PCyl p={p} pos={[0, 1.25, 0]} r={0.11} rTop={0.07} h={1.5} color="#7a5232" sides={8} />
+        <Foliage p={p} pos={[0, 2.05, 0]} s={1.35} />
       </group>
     ),
   },
@@ -986,8 +1092,20 @@ export const CATALOG: DecorDef[] = [
         <PBox p={p} pos={[0, 0, 0.03]} size={[2, 1.8, 0.06]} color={p.woodDark} />
         {Array.from({ length: 24 }).map((_, i) => {
           const x = -0.8 + (i % 6) * 0.32, y = -0.68 + Math.floor(i / 6) * 0.45;
-          return <PBox key={i} p={p} pos={[x + ((i * 7) % 3) * 0.03, y, 0.12]} size={[0.34, 0.3, 0.14]} color={[p.plantDark, p.plant, shade(p.plant, 1.15), '#79c653'][(i * 5) % 4]} rot={[0, 0, (i % 3) * 0.3]} out={0.03} />;
+          return <Bush key={i} p={p} pos={[x + ((i * 7) % 3) * 0.03, y, 0.12]} size={[0.34, 0.3, 0.14]} rot={[0, 0, (i % 3) * 0.3]} tint={[0.85, 1, 1.12, 1.25][(i * 5) % 4]} flowers={i % 5 === 0 ? '#ff8fab' : undefined} />;
         })}
+      </group>
+    ),
+  },
+  {
+    kind: 'musgo', name: 'Quadro de musgo', cat: 'parede', size: [1.8, 1.1], h: 1.1, place: 'parede', y: 1.6, colors: WOODS,
+    render: (p, c = '#d9b88a') => (
+      <group>
+        <PBox p={p} pos={[0, 0, 0.04]} size={[1.8, 1.1, 0.08]} color="#ffffff" map={woodTexture(c)} />
+        <PBox p={p} pos={[0, 0, 0.085]} size={[1.64, 0.94, 0.02]} color="#ffffff" map={tiled(mossTexture(), 1, 1)} outline={false} cast={false} />
+        {[[-0.5, 0.18, 0.28], [0.3, -0.2, 0.34], [0.62, 0.25, 0.2], [-0.1, -0.05, 0.24]].map(([x, y, s], i) => (
+          <PBox key={i} p={p} pos={[x, y, 0.11]} size={[s, s * 0.7, 0.05]} color="#ffffff" map={leafTexture(shade(p.plant, 1.2), p.plantDark)} edge={shade(p.plantDark, 0.45)} />
+        ))}
       </group>
     ),
   },
@@ -1096,6 +1214,18 @@ export const CATALOG: DecorDef[] = [
     ),
   },
 ];
+
+/** Pisos de sala: a miniatura é uma amostra de 2 m do material. "Piso original" desfaz a troca. */
+CATALOG.push(
+  {
+    kind: 'piso-original', name: 'Piso original da sala', cat: 'pisos', size: [2, 2], h: 0.02, place: 'sala',
+    render: (p) => <PBox p={p} pos={[0, 0.02, 0]} size={[2, 0.04, 2]} color="#ffffff" map={tiled(rugTexture('#e8e2d6', '#b9b2a4'), 1, 1)} outline={false} />,
+  },
+  ...FLOOR_MATERIALS.map((m): DecorDef => ({
+    kind: `piso-${m.id}`, name: m.name, cat: 'pisos', size: [2, 2], h: 0.02, place: 'sala',
+    render: (p) => <PBox p={p} pos={[0, 0.02, 0]} size={[2, 0.04, 2]} color="#ffffff" map={floorMaterialTexture(m.id)} outline={false} />,
+  })),
+);
 
 export const DEF: Record<string, DecorDef> = Object.fromEntries(CATALOG.map((d) => [d.kind, d]));
 

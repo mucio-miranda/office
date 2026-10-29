@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { DecorItem } from '@office/shared';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../../lib/theme';
 import { useStore } from '../../lib/store';
-import { BOUNDS, type FurnitureKind } from '../layout';
+import { BOUNDS, roomAt, type FurnitureKind } from '../layout';
 import { FurnitureMesh } from '../Furniture';
 import { OutlineColor } from '../pixel/kit';
 import { DEF, footprint, type DecorDef } from './catalog';
@@ -57,7 +57,8 @@ function DecorPiece({ it, outline, onDown, onOver, onOut }: {
   const scene = useScene();
   const pixel = useWorldStyle((s) => s.style) === 'pixel';
   const d = DEF[it.kind];
-  if (!d) return null;
+  // o piso de sala é desenhado pelo próprio chão (PixelRoom)
+  if (!d || d.place === 'sala') return null;
   const { pos, rotY } = placement(it);
   return (
     <group position={pos} rotation={[0, rotY, 0]} onPointerDown={onDown} onPointerOver={onOver} onPointerOut={onOut}>
@@ -71,6 +72,22 @@ function Footprint({ it, ok }: { it: DecorItem; ok: boolean }) {
   const d = DEF[it.kind];
   if (!d) return null;
   const color = ok ? C_OK : C_BAD;
+  if (d.place === 'sala') {
+    // contorno da sala que vai receber o piso
+    const r = roomAt(it);
+    if (!r) return null;
+    const w = r.x1 - r.x0, dd = r.z1 - r.z0;
+    return (
+      <group position={[(r.x0 + r.x1) / 2, 0.02, (r.z0 + r.z1) / 2]}>
+        {[[0, -dd / 2, w, 0.12], [0, dd / 2, w, 0.12], [-w / 2, 0, 0.12, dd], [w / 2, 0, 0.12, dd]].map(([x, z, a, b], i) => (
+          <mesh key={i} position={[x, 0, z]} rotation={[-Math.PI / 2, 0, 0]} raycast={() => null}>
+            <planeGeometry args={[a, b]} />
+            <meshBasicMaterial color={color} transparent opacity={0.8} depthWrite={false} />
+          </mesh>
+        ))}
+      </group>
+    );
+  }
   if (d.place === 'parede') {
     const { pos, rotY } = placement(it);
     return (
@@ -166,6 +183,11 @@ export function DecorLayer() {
       }
       const f = floorPoint();
       if (!f) return null;
+      if (d.place === 'sala') {
+        // o piso vai para a sala inteira: a prévia fica no centro da sala sob o cursor
+        const r = roomAt(f);
+        return r ? { ...base, wall: undefined, rot: 0, x: (r.x0 + r.x1) / 2, z: (r.z0 + r.z1) / 2 } : null;
+      }
       const [w, dd] = footprint(d, base.rot);
       // o canto da peça encaixa na grade de meio metro
       return { ...base, wall: undefined, x: snap(f.x - w / 2, 0.5) + w / 2, z: snap(f.z - dd / 2, 0.5) + dd / 2 };

@@ -59,8 +59,8 @@ export const beacon = { on: false, x: 0, z: 0 };
 const camHeight = () => (useWorldStyle.getState().style === 'pixel' ? Math.tan(Math.PI / 6) * Math.SQRT2 : 1.15);
 /** Seno da elevação (para converter o arraste em pixels em metros no chão). */
 const sinElev = () => camHeight() / Math.hypot(1, camHeight());
-/** Tamanho do pixel da arte no tema Pixel, em pixels da tela. */
-const PIXEL_SIZE = 2;
+/** Tamanho do pixel da arte no tema Pixel, em pixels da tela (1:1, como nos quartos do Habbo). */
+const PIXEL_SIZE = 1;
 
 /** Modo drone ligado (Espaço segurado) ou arrastando: cliques não movem o personagem. */
 export const droneBlocksClick = () => useStore.getState().drone || cam.justDragged || useDecor.getState().editing;
@@ -535,7 +535,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         <>
           {/* luz de cima e da esquerda: topo claro, face da esquerda média, face da direita escura (como no Habbo) */}
           <ambientLight intensity={1.1} />
-          <directionalLight position={[-10, 26, 14]} intensity={1.6} castShadow shadow-mapSize={[1024, 1024]} shadow-bias={-0.0006}
+          <directionalLight position={[-10, 26, 14]} intensity={1.6} castShadow shadow-mapSize={[4096, 4096]} shadow-bias={-0.0004}
             shadow-camera-left={-30} shadow-camera-right={30} shadow-camera-top={30} shadow-camera-bottom={-30} />
         </>
       ) : (

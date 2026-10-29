@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
-import type { PixelPalette } from '../../lib/theme';
+import { useTheme, type PixelPalette } from '../../lib/theme';
 import { BOUNDS, ROOMS, WALLS, WALL_T } from '../layout';
-import { PBox, useFloorTextures, wallpaperTexture } from './kit';
+import { roomFloors, useDecor } from '../decor/state';
+import { FLOOR_MATERIAL_M, floorMaterialTexture } from './floors';
+import { PBox, tiled, useFloorTextures, wallpaperTexture } from './kit';
 
 /** As paredes do fundo (vistas de frente pela câmera) sobem inteiras; as internas ficam baixas. */
 const BACK_H = 2.6;
@@ -15,6 +17,10 @@ const isBack = (w: { x: number; z: number; w: number; d: number }) =>
  */
 export function PixelRoom({ p, onWalk }: { p: PixelPalette; onWalk: (e: any) => void }) {
   const floors = useFloorTextures(p, ROOMS);
+  const items = useDecor((s) => s.items);
+  const ghost = useDecor((s) => s.ghost);
+  const chosen = useMemo(() => roomFloors(items, ghost), [items, ghost]);
+  const night = useTheme((s) => s.theme) === 'dark';
   const walls = useMemo(() => WALLS.map((w) => {
     const h = isBack(w) ? BACK_H : LOW_H;
     const t = wallpaperTexture(p).clone();
@@ -37,12 +43,17 @@ export function PixelRoom({ p, onWalk }: { p: PixelPalette; onWalk: (e: any) => 
       {/* o topo da laje fica 3 cm abaixo do piso: sem disputa de profundidade entre os dois */}
       <PBox p={p} pos={[0, -0.33, 0]} size={[W + 0.6, 0.6, D + 0.6]} color={p.slab} cast={false} />
       <PBox p={p} pos={[0, -0.59, 0]} size={[W + 0.9, 0.1, D + 0.9]} color={p.slabEdge} cast={false} />
-      {ROOMS.map((r) => (
-        <mesh key={r.id} rotation={[-Math.PI / 2, 0, 0]} position={[(r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2]} receiveShadow onClick={onWalk}>
-          <planeGeometry args={[r.x1 - r.x0, r.z1 - r.z0]} />
-          <meshLambertMaterial map={floors[r.id]} />
-        </mesh>
-      ))}
+      {ROOMS.map((r) => {
+        const mat = chosen[r.id] ? floorMaterialTexture(chosen[r.id]) : null;
+        const map = mat ? tiled(mat, (r.x1 - r.x0) / FLOOR_MATERIAL_M, (r.z1 - r.z0) / FLOOR_MATERIAL_M) : floors[r.id];
+        return (
+          <mesh key={r.id} rotation={[-Math.PI / 2, 0, 0]} position={[(r.x0 + r.x1) / 2, 0, (r.z0 + r.z1) / 2]} receiveShadow onClick={onWalk}>
+            <planeGeometry args={[r.x1 - r.x0, r.z1 - r.z0]} />
+            {/* os pisos escolhidos têm cores fixas: à noite o material escurece */}
+            <meshLambertMaterial map={map} color={mat && night ? '#8a8a96' : '#ffffff'} />
+          </mesh>
+        );
+      })}
       {walls.map((w, i) => (
         <group key={i}>
           <PBox p={p} pos={[w.x, w.h / 2, w.z]} size={[w.w, w.h, w.d]} color="#ffffff" map={w.t} />

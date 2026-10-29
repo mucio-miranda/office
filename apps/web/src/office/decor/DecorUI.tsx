@@ -6,6 +6,7 @@ import { Check, ChevronDown, ChevronUp, Copy, Paintbrush, Redo2, RotateCcw, Rota
 import { useTheme, useWorldStyle, usePixel } from '../../lib/theme';
 import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
+import { floorMaterialTexture } from '../pixel/floors';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
 } from './state';
@@ -64,7 +65,8 @@ function Shooter({ kinds, theme }: { kinds: string[]; theme: string }) {
 function ThumbStudio() {
   const theme = useTheme((s) => s.theme);
   const thumbs = useDecor((s) => s.thumbs);
-  const missing = useMemo(() => CATALOG.map((d) => d.kind).filter((k) => !thumbs[`${theme}:${k}`]), [theme]); // eslint-disable-line react-hooks/exhaustive-deps
+  // os pisos usam a própria textura como miniatura (ver Thumb)
+  const missing = useMemo(() => CATALOG.filter((d) => d.place !== 'sala').map((d) => d.kind).filter((k) => !thumbs[`${theme}:${k}`]), [theme]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!missing.length) return null;
   return (
     <div className="decor-studio" aria-hidden>
@@ -78,9 +80,21 @@ function ThumbStudio() {
   );
 }
 
+/** Miniatura de piso: a amostra de 2 m do material, direto do canvas da textura. */
+const floorThumb = (kind: string) => {
+  if (kind === 'piso-original') return null;
+  const img = floorMaterialTexture(kind.slice('piso-'.length))?.image as HTMLCanvasElement | undefined;
+  return img?.toDataURL?.() ?? null;
+};
+
 function Thumb({ kind }: { kind: string }) {
   const theme = useTheme((s) => s.theme);
-  const url = useDecor((s) => s.thumbs[`${theme}:${kind}`]);
+  const shot = useDecor((s) => s.thumbs[`${theme}:${kind}`]);
+  const floor = useMemo(() => (DEF[kind]?.place === 'sala' ? floorThumb(kind) : null), [kind]);
+  if (DEF[kind]?.place === 'sala') {
+    return floor ? <img className="decor-thumb floor" src={floor} alt="" /> : <span className="decor-thumb floor original">↺</span>;
+  }
+  const url = shot;
   return url ? <img className="decor-thumb" src={url} alt="" /> : <span className="decor-thumb loading" />;
 }
 
@@ -136,7 +150,9 @@ function Inspector() {
         <Thumb kind={placing.kind} />
         <div className="decor-info">
           <b>{d?.name}</b>
-          <span className="muted">Clique para colocar · <kbd>R</kbd> gira · <kbd>Shift</kbd>+clique põe outra · <kbd>Esc</kbd> cancela</span>
+          <span className="muted">{d?.place === 'sala'
+            ? <>Clique numa sala para trocar o piso · dá para aplicar em várias · <kbd>Esc</kbd> termina</>
+            : <>Clique para colocar · <kbd>R</kbd> gira · <kbd>Shift</kbd>+clique põe outra · <kbd>Esc</kbd> cancela</>}</span>
         </div>
       </div>
     );

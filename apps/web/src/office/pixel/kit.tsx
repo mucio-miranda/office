@@ -8,11 +8,11 @@ import type { PixelPalette } from '../../lib/theme';
  * baixa resolução e ampliada sem suavizar (ver World), o que dá o pixel nítido.
  */
 
-/** Gradiente de 3 degraus do MeshToonMaterial: sombra, meio-tom e luz. */
+/** Gradiente de 4 degraus do MeshToonMaterial: sombra, meio-tom, tom e luz. */
 let gradient: THREE.DataTexture | null = null;
 export function toonGradient() {
   if (!gradient) {
-    gradient = new THREE.DataTexture(new Uint8Array([110, 110, 110, 255, 175, 175, 175, 255, 255, 255, 255, 255]), 3, 1, THREE.RGBAFormat);
+    gradient = new THREE.DataTexture(new Uint8Array([96, 96, 96, 255, 150, 150, 150, 255, 208, 208, 208, 255, 255, 255, 255, 255]), 4, 1, THREE.RGBAFormat);
     gradient.minFilter = THREE.NearestFilter;
     gradient.magFilter = THREE.NearestFilter;
     gradient.generateMipmaps = false;
@@ -28,20 +28,29 @@ export function OutlineColor({ color, children }: { color: string | null; childr
 }
 
 /** Espessura do contorno: cerca de 1 pixel da arte no zoom padrão. */
-const OUT = 0.045;
+const OUT = 0.03;
+
+/** Contorno: um tom bem escuro da própria cor, puxado para o contorno da paleta (as peças não ficam com borda preta). */
+export function edgeOf(color: string, p: PixelPalette) {
+  const c = new THREE.Color(color).multiplyScalar(0.38);
+  return `#${c.lerp(new THREE.Color(p.outline), 0.4).getHexString()}`;
+}
 
 export function Toon({ color, map, emissive }: { color: string; map?: THREE.Texture | null; emissive?: string }) {
   return <meshToonMaterial color={color} map={map ?? null} gradientMap={toonGradient()} emissive={emissive ?? '#000000'} emissiveIntensity={emissive ? 0.9 : 0} />;
 }
 
 /** Caixa com sombreamento chapado e contorno. `glow` = cor que brilha (tela, lâmpada). */
-export function PBox({ p, pos, size, color, rot, map, glow, outline = true, cast = true, out = OUT }: {
+export function PBox({ p, pos, size, color, rot, map, glow, outline = true, cast = true, out = OUT, edge }: {
   p: PixelPalette; pos: [number, number, number]; size: [number, number, number]; color: string;
   rot?: [number, number, number]; map?: THREE.Texture | null; glow?: boolean; outline?: boolean; cast?: boolean;
   /** Espessura do contorno (peças pequenas, como as do avatar, usam um contorno mais fino). */
   out?: number;
+  /** Cor do contorno (padrão: tom escuro da própria cor). */
+  edge?: string;
 }) {
   const hover = useContext(OutlineCtx);
+  const line = hover ?? edge ?? (map || glow ? p.outline : edgeOf(color, p));
   return (
     <group position={pos} rotation={rot}>
       <mesh castShadow={cast} receiveShadow>
@@ -51,7 +60,7 @@ export function PBox({ p, pos, size, color, rot, map, glow, outline = true, cast
       {outline && (
         <mesh raycast={() => null}>
           <boxGeometry args={[size[0] + out * 2, size[1] + out * 2, size[2] + out * 2]} />
-          <meshBasicMaterial color={hover ?? p.outline} side={THREE.BackSide} />
+          <meshBasicMaterial color={line} side={THREE.BackSide} />
         </mesh>
       )}
     </group>
@@ -73,9 +82,30 @@ export function PCyl({ p, pos, r, h, color, rTop, sides = 10, glow, rot, outline
       {outline && (
         <mesh raycast={() => null}>
           <cylinderGeometry args={[(rTop ?? r) + OUT, r + OUT, h + OUT * 2, sides]} />
-          <meshBasicMaterial color={hover ?? p.outline} side={THREE.BackSide} />
+          <meshBasicMaterial color={hover ?? (glow ? p.outline : edgeOf(color, p))} side={THREE.BackSide} />
         </mesh>
       )}
+    </group>
+  );
+}
+
+/** Volume arredondado (moitas, copas de árvore): icosaedro achatado na medida `size`, com contorno. */
+export function PBlob({ p, pos, size, color, map, rot, edge }: {
+  p: PixelPalette; pos: [number, number, number]; size: [number, number, number]; color: string;
+  map?: THREE.Texture | null; rot?: [number, number, number]; edge?: string;
+}) {
+  const hover = useContext(OutlineCtx);
+  const k = 1 + (OUT * 2) / Math.min(...size);
+  return (
+    <group position={pos} rotation={rot} scale={[size[0] / 2, size[1] / 2, size[2] / 2]}>
+      <mesh castShadow receiveShadow>
+        <icosahedronGeometry args={[1, 1]} />
+        <Toon color={color} map={map} />
+      </mesh>
+      <mesh raycast={() => null} scale={k}>
+        <icosahedronGeometry args={[1, 1]} />
+        <meshBasicMaterial color={hover ?? edge ?? p.outline} side={THREE.BackSide} />
+      </mesh>
     </group>
   );
 }
@@ -136,24 +166,54 @@ export function Glass({ pos, size, tint = '#bfe6ff', opacity = 0.32, rot }: {
   );
 }
 
-/** Piso de cada sala, 16 px por metro: tacos, carpete, ladrilho, xadrez. */
+/** Sorteio repetível (as texturas saem iguais em toda máquina). */
+export const rand = (seed: number) => () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+
+/** Assoalho de tábuas largas (madeira clara de escritório escandinavo), 32 px por metro, 2 m por repetição. */
+function planksTexture(key: string, [a, b]: [string, string]) {
+  return canvasTexture(`planks:${key}:${a}`, 64, 64, (g) => {
+    const r = rand(7);
+    const tones = [a, b, shade(a, 1.06), shade(b, 0.95), shade(a, 0.97)];
+    for (let row = 0; row < 8; row++) {
+      const y = row * 8;
+      let x = -Math.floor(r() * 40);
+      while (x < 64) {
+        const len = 22 + Math.floor(r() * 26);
+        const tone = tones[Math.floor(r() * tones.length)];
+        const draw = (ox: number) => {
+          g.fillStyle = tone;
+          g.fillRect(x + ox, y, len, 8);
+          // veio: riscos finos um pouco mais escuros, e um nó de vez em quando
+          g.fillStyle = shade(tone, 0.9);
+          for (let k = 0; k < 3; k++) g.fillRect(x + ox + 2 + Math.floor(r() * (len - 8)), y + 1 + Math.floor(r() * 6), 4 + Math.floor(r() * 8), 1);
+          if (r() < 0.25) { g.fillStyle = shade(tone, 0.75); g.fillRect(x + ox + 4 + Math.floor(r() * (len - 10)), y + 3, 2, 2); }
+          // brilho na borda de cima, fresta embaixo e na emenda
+          g.fillStyle = shade(tone, 1.08);
+          g.fillRect(x + ox, y, len, 1);
+          g.fillStyle = shade(a, 0.72);
+          g.fillRect(x + ox, y + 7, len, 1);
+          g.fillRect(x + ox + len - 1, y, 1, 8);
+        };
+        draw(0);
+        if (x + len > 64) draw(-64);
+        if (x < 0) draw(64);
+        x += len;
+      }
+    }
+  });
+}
+
+/** Metros cobertos por uma repetição da textura de piso de cada sala. */
+export const FLOOR_TILE_M: Record<string, number> = { recepcao: 2 };
+
+/** Piso de cada sala, 16 px por metro (a recepção, 32): tábuas, carpete, ladrilho, xadrez. */
 export function floorTexture(room: string, [a, b]: [string, string]) {
+  if (room === 'recepcao') return planksTexture(room, [a, b]);
   return canvasTexture(`floor:${room}:${a}`, 16, 16, (g) => {
     const px = (x: number, y: number, c: string) => { g.fillStyle = c; g.fillRect(x, y, 1, 1); };
     g.fillStyle = a;
     g.fillRect(0, 0, 16, 16);
-    if (room === 'recepcao') {
-      // tacos de madeira em fiadas desencontradas
-      for (let row = 0; row < 4; row++) {
-        g.fillStyle = row % 2 ? b : a;
-        g.fillRect(0, row * 4, 16, 4);
-        g.fillStyle = shade(a, 0.78);
-        g.fillRect(0, row * 4 + 3, 16, 1);
-        const off = row % 2 ? 4 : 12;
-        g.fillRect(off, row * 4, 1, 3);
-        px((off + 6) % 16, row * 4 + 1, shade(b, 0.9));
-      }
-    } else if (room === 'copa' || room === 'design') {
+    if (room === 'copa' || room === 'design') {
       // xadrez de ladrilho
       g.fillStyle = b;
       g.fillRect(0, 0, 8, 8);
@@ -176,18 +236,91 @@ export function floorTexture(room: string, [a, b]: [string, string]) {
   });
 }
 
-/** Papel de parede listrado com faixa (lambri) embaixo, repetindo a cada metro. */
+/**
+ * Parede de reboco claro com textura fina e lambri ripado de madeira embaixo (o "quente" dos escritórios
+ * biofílicos), 32 px por metro, repetindo a cada metro de largura e 2 m de altura.
+ */
 export function wallpaperTexture(p: PixelPalette) {
-  return canvasTexture(`wall:${p.wall}`, 16, 32, (g) => {
+  return canvasTexture(`wall:${p.wall}`, 32, 64, (g) => {
+    const r = rand(3);
     g.fillStyle = p.wall;
-    g.fillRect(0, 0, 16, 32);
-    g.fillStyle = p.wallStripe;
-    for (let x = 0; x < 16; x += 4) g.fillRect(x, 0, 2, 22);
-    g.fillStyle = shade(p.wall, 0.82);
-    g.fillRect(0, 22, 16, 10);
-    g.fillStyle = shade(p.wall, 0.7);
-    g.fillRect(0, 22, 16, 1);
-    for (let x = 0; x < 16; x += 8) g.fillRect(x, 23, 1, 9);
+    g.fillRect(0, 0, 32, 64);
+    // reboco: pontinhos claros e escuros espalhados
+    for (let i = 0; i < 90; i++) {
+      g.fillStyle = r() < 0.5 ? shade(p.wall, 1.04) : p.wallStripe;
+      g.fillRect(Math.floor(r() * 32), Math.floor(r() * 40), 1, 1);
+    }
+    // lambri ripado (de 0,8 m para baixo): ripas de 4 px com luz à esquerda e sombra à direita
+    const wood = shade(p.wood, 1.18);
+    g.fillStyle = shade(wood, 0.55);
+    g.fillRect(0, 38, 32, 26);
+    for (let x = 0; x < 32; x += 4) {
+      g.fillStyle = x % 8 ? wood : shade(wood, 0.94);
+      g.fillRect(x, 40, 3, 24);
+      g.fillStyle = shade(wood, 1.12);
+      g.fillRect(x, 40, 1, 24);
+    }
+    // arremate do lambri
+    g.fillStyle = shade(p.wood, 0.85);
+    g.fillRect(0, 38, 32, 2);
+    g.fillStyle = shade(p.wood, 1.25);
+    g.fillRect(0, 38, 32, 1);
+  });
+}
+
+/** Folhagem: folhas miúdas em 3 tons com brilho, como as moitas dos quartos do Habbo (32 px). */
+export function leafTexture(light: string, dark: string, flowers?: string) {
+  return canvasTexture(`leaf:${light}:${dark}:${flowers ?? ''}`, 32, 32, (g) => {
+    const r = rand(11);
+    g.fillStyle = shade(dark, 0.8);
+    g.fillRect(0, 0, 32, 32);
+    const leaf = (x: number, y: number, c: string) => {
+      g.fillStyle = c;
+      g.fillRect(x, y, 3, 2);
+      g.fillRect(x + 1, y - 1, 1, 1);
+      g.fillStyle = shade(c, 0.8);
+      g.fillRect(x, y + 1, 1, 1);
+    };
+    for (let i = 0; i < 120; i++) leaf(Math.floor(r() * 32), Math.floor(r() * 32), i % 3 ? dark : shade(dark, 1.15));
+    for (let i = 0; i < 90; i++) leaf(Math.floor(r() * 32), Math.floor(r() * 32), i % 4 ? light : shade(light, 1.2));
+    g.fillStyle = shade(light, 1.45);
+    for (let i = 0; i < 14; i++) g.fillRect(Math.floor(r() * 32), Math.floor(r() * 32), 1, 1);
+    if (flowers) for (let i = 0; i < 6; i++) {
+      const x = Math.floor(r() * 30), y = Math.floor(r() * 30);
+      g.fillStyle = flowers; g.fillRect(x, y, 2, 2);
+      g.fillStyle = '#fff6d8'; g.fillRect(x, y, 1, 1);
+    }
+  });
+}
+
+/** Musgo preservado: tufos arredondados em verdes e um pouco de líquen amarelado. */
+export function mossTexture() {
+  return canvasTexture('moss', 48, 32, (g) => {
+    const r = rand(5);
+    g.fillStyle = '#2f5d2a';
+    g.fillRect(0, 0, 48, 32);
+    const tones = ['#3f7a34', '#4f8f3c', '#6aa84a', '#87bf5c', '#2b5225', '#b5b85a'];
+    for (let i = 0; i < 160; i++) {
+      const x = Math.floor(r() * 48), y = Math.floor(r() * 32), s = 1 + Math.floor(r() * 3);
+      g.fillStyle = tones[Math.floor(r() * (i % 9 ? 5 : 6))];
+      g.fillRect(x, y, s, s);
+      g.fillStyle = shade(g.fillStyle as string, 1.25);
+      g.fillRect(x, y, 1, 1);
+    }
+  });
+}
+
+/** Madeira clara com veio (tampos, bancos, ripas), 32 px. */
+export function woodTexture(base: string) {
+  return canvasTexture(`wood:${base}`, 32, 32, (g) => {
+    const r = rand(9);
+    g.fillStyle = base;
+    g.fillRect(0, 0, 32, 32);
+    for (let y = 0; y < 32; y++) {
+      if (r() < 0.45) { g.fillStyle = shade(base, 0.9 + r() * 0.05); g.fillRect(Math.floor(r() * 16), y, 8 + Math.floor(r() * 20), 1); }
+    }
+    g.fillStyle = shade(base, 1.08);
+    for (let i = 0; i < 10; i++) g.fillRect(Math.floor(r() * 32), Math.floor(r() * 32), 3, 1);
   });
 }
 
@@ -246,7 +379,8 @@ export function screenTexture(glow: string) {
 export const useFloorTextures = (p: PixelPalette, rooms: { id: string; x0: number; x1: number; z0: number; z1: number }[]) =>
   useMemo(() => Object.fromEntries(rooms.map((r) => {
     const t = floorTexture(r.id, p.floors[r.id] ?? ['#bbbbbb', '#aaaaaa']).clone();
-    t.repeat.set(r.x1 - r.x0, r.z1 - r.z0);
+    const m = FLOOR_TILE_M[r.id] ?? 1;
+    t.repeat.set((r.x1 - r.x0) / m, (r.z1 - r.z0) / m);
     t.needsUpdate = true;
     return [r.id, t];
   })), [p, rooms]);
