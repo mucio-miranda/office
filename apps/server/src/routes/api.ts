@@ -730,7 +730,16 @@ export async function api(app: FastifyInstance) {
 function sendMedia(req: FastifyRequest, reply: FastifyReply, file: string) {
   const size = statSync(file).size;
   const ext = path.extname(file).toLowerCase();
-  const type = ({ '.mp4': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm', '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp' } as Record<string, string>)[ext] ?? 'application/octet-stream';
+  const text = 'text/plain; charset=utf-8';
+  // SVG e HTML ficam de fora (abririam scripts na origem do Office); o resto que não está aqui vai como download
+  const type = ({
+    '.mp4': 'video/mp4', '.m4v': 'video/mp4', '.mov': 'video/quicktime', '.webm': 'video/webm',
+    '.mp3': 'audio/mpeg', '.wav': 'audio/wav', '.m4a': 'audio/mp4', '.ogg': 'audio/ogg', '.aac': 'audio/aac', '.flac': 'audio/flac',
+    '.png': 'image/png', '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.gif': 'image/gif',
+    '.pdf': 'application/pdf', '.md': text, '.txt': text, '.csv': text, '.json': text,
+  } as Record<string, string>)[ext] ?? 'application/octet-stream';
+  reply.header('X-Content-Type-Options', 'nosniff');
+  if (type === 'application/octet-stream') reply.header('Content-Disposition', `attachment; filename*=UTF-8''${encodeURIComponent(path.basename(file))}`);
   // suporte a Range para o <video> conseguir pular no tempo
   const range = req.headers.range?.match(/bytes=(\d*)-(\d*)/);
   if (range) {

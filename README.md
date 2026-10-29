@@ -90,6 +90,8 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - **Publicação**: a peça aprovada ganha data, redes e legenda (puxada da seção "Legenda" da copy). O Office põe o
   post no calendário, grava o pacote em `PUBLICAR\<data> <peça>\POST.md` na pasta do cliente, avisa na hora de
   postar e fecha o ciclo com "Marcar como publicado"
+- **Arquivo dos clientes**: um armário por cliente na redação; clicar abre a pasta dele por grupo, com busca e
+  prévia de imagem, vídeo, áudio, PDF e texto. Editar um PDF vira uma tarefa para o funcionário com o PdfCraft
 
 ### 🧾 Clientes
 - **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com DOCUMENTOS, FOTOS e VIDEOS); só cria
@@ -357,7 +359,8 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Visual detalhado em pixel art 1:1 (contorno na cor do material, assoalho e lambri de 32 px por metro, folhagem arredondada) e pisos por sala
 - [x] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
 - [x] Mesa do diretor de arte (versões e ajustes marcados na imagem) e agendamento da publicação com pacote e calendário
-- [ ] Publicação automática com Postiz e arquivo de documentos no mapa
+- [x] Arquivo dos clientes no mapa: um armário por cliente na redação, com prévia dos documentos
+- [ ] Publicação automática com Postiz
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Voz e vídeo por proximidade
 - [ ] Google Calendar, Notion e Trello

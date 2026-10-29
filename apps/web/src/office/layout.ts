@@ -85,7 +85,7 @@ export const WALLS: WallSeg[] = WALL_DEFS.flatMap(({ a, b, doors }) => {
 
 export type FurnitureKind =
   | 'mesa' | 'cadeira' | 'sofa' | 'planta' | 'quadro' | 'calendario' | 'tv' | 'mesa-reuniao'
-  | 'cafeteira' | 'balcao' | 'cofre' | 'estante' | 'tapete' | 'luminaria';
+  | 'cafeteira' | 'balcao' | 'cofre' | 'estante' | 'tapete' | 'luminaria' | 'arquivo';
 
 export interface Furniture {
   kind: FurnitureKind;
@@ -118,6 +118,20 @@ export const HUMAN_DESKS: HumanDesk[] = [
 ];
 export const deskSeat = (d: HumanDesk): Vec2 => ({ x: d.x, z: d.z + 1.1 });
 
+/**
+ * Arquivo dos clientes: fileira de arquivos de aço na parede do fundo da redação, abaixo das janelas (um armário
+ * por cliente, ver Archive.tsx). Ocupa sempre a fileira inteira, para a rota não mudar quando entra cliente.
+ */
+export const ARCHIVE_SLOTS = 12;
+export const ARCHIVE: Furniture & { w: number; d: number } = { kind: 'arquivo', x: -18.4, z: -17.62, w: 14.4, d: 0.6, solid: true, panel: 'arquivo', label: 'Arquivo dos clientes' };
+
+/** Distância de um ponto até a borda do móvel (o arquivo é comprido: vale o armário mais perto, não o centro). */
+export const distToFurniture = (f: Furniture, p: Vec2) => {
+  if (f.kind !== 'arquivo') return Math.hypot(f.x - p.x, f.z - p.z);
+  const b = FURN_BOX(f);
+  return Math.hypot(Math.max(b.x0 - p.x, 0, p.x - b.x1), Math.max(b.z0 - p.z, 0, p.z - b.z1)) + 0.6;
+};
+
 export const FURNITURE: Furniture[] = [
   ...HUMAN_DESKS.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true })),
   // recepção
@@ -135,6 +149,7 @@ export const FURNITURE: Furniture[] = [
   { kind: 'mesa', x: 21.75, z: 12.75, solid: true },
   // redação
   { kind: 'mesa', x: -18, z: -9.75, solid: true },
+  ARCHIVE,
   // reunião
   { kind: 'mesa-reuniao', x: -18, z: 7.5, w: 6, d: 2.6, solid: true },
   { kind: 'tv', x: -26.85, z: 7.5, rot: Math.PI / 2, w: 3.4, panel: 'calendario', label: 'Agenda da sala' },

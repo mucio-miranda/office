@@ -12,7 +12,8 @@ import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
 import { LiveScreens } from './LiveScreens';
-import { DESKS, FURNITURE, HUMAN_DESKS, ROOMS, SPAWN, WALLS, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+import { ClientArchive, cabinets, openArchive } from './Archive';
+import { DESKS, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALLS, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -270,8 +271,14 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     let best: { d: number; key: string; n: Nearby } | null = null;
     for (const f of FURNITURE) {
       if (!f.panel && !f.label) continue;
-      const d = Math.hypot(f.x - player.x, f.z - player.z);
-      if (d < 2.4 && (!best || d < best.d)) best = { d, key: `f:${f.x}:${f.z}`, n: { label: f.label ?? '', action: () => useFurniture(f) } };
+      const d = distToFurniture(f, player);
+      if (d >= 2.4 || (best && d >= best.d)) continue;
+      if (f.kind === 'arquivo') {
+        // o armário mais perto de quem está na frente da fileira
+        const c = cabinets(st.clients).reduce((a, b) => (Math.abs(b.x - player.x) < Math.abs(a.x - player.x) ? b : a));
+        const id = c.client?.id ?? null;
+        best = { d, key: `arq:${id}`, n: { label: c.client ? `Arquivo de ${c.client.name}` : f.label ?? '', action: () => openArchive(id) } };
+      } else best = { d, key: `f:${f.x}:${f.z}`, n: { label: f.label ?? '', action: () => useFurniture(f) } };
     }
     for (const hd of HUMAN_DESKS) {
       const seat = deskSeat(hd);
@@ -615,7 +622,9 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         </>
       )}
       <Floor p={p} />
-      {FURNITURE.map((f, i) => (
+      {FURNITURE.map((f, i) => f.kind === 'arquivo' ? (
+        <ClientArchive key={i} f={f} p={p} onUse={(x, id) => { if (droneBlocksClick()) return; walkTo({ x, z: f.z + 1.3 }); openArchive(id); }} />
+      ) : (
         <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; walkTo({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}
       <DecorLayer />

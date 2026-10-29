@@ -6,6 +6,7 @@ import { Finance } from './Finance';
 import { AgentPanel } from './AgentPanel';
 import { VideoStudio } from './VideoStudio';
 import { Team, Activity } from './Team';
+import { Archive } from './Archive';
 
 export const PAGE_TITLE = {
   escritorio: 'Escritório',
@@ -17,12 +18,13 @@ export const PAGE_TITLE = {
   agente: 'Funcionário',
   equipe: 'Equipe',
   atividade: 'Atividade',
+  arquivo: 'Arquivo dos clientes',
 } as const;
 
 /** Páginas que aparecem no lugar do mundo 3D (o mundo continua montado, pausado, por trás). */
 export function Pages() {
   const panel = useStore((s) => s.panel);
-  const flush = panel === 'agente' || panel === 'video';
+  const flush = panel === 'agente' || panel === 'video' || panel === 'arquivo';
   return (
     <div className={`page-body ${flush ? 'flush' : ''}`} style={{ position: 'absolute', inset: 0 }}>
       {panel === 'clientes' && <Clients />}
@@ -33,6 +35,7 @@ export function Pages() {
       {panel === 'video' && <VideoStudio />}
       {panel === 'equipe' && <Team />}
       {panel === 'atividade' && <Activity />}
+      {panel === 'arquivo' && <Archive />}
     </div>
   );
 }

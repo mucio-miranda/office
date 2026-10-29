@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Grid2x2,
-  Paintbrush, Briefcase,
+  Paintbrush, Briefcase, Archive as ArchiveIcon,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
@@ -20,6 +20,7 @@ type NavId = Exclude<PanelId, 'agente'>;
 const NAV: { id: NavId; icon: typeof Box; label: string; key: string }[] = [
   { id: null, icon: Box, label: 'Escritório', key: 'O' },
   { id: 'clientes', icon: Briefcase, label: 'Clientes', key: 'K' },
+  { id: 'arquivo', icon: ArchiveIcon, label: 'Arquivo', key: 'J' },
   { id: 'demandas', icon: KanbanSquare, label: 'Demandas', key: 'B' },
   { id: 'calendario', icon: Calendar, label: 'Calendário', key: 'C' },
   { id: 'financeiro', icon: CircleDollarSign, label: 'Financeiro', key: 'F' },
@@ -40,7 +41,7 @@ export function OfficeView() {
   const waiting = useStore((s) => s.jobs.filter((j) => j.status === 'aguardando').length);
   const drone = useStore((s) => s.drone);
   // páginas de tela cheia (funcionário, estúdio): o mapa abre pelo cabeçalho para não cobrir a caixa de mensagem nem a timeline
-  const flush = panel === 'agente' || panel === 'video';
+  const flush = panel === 'agente' || panel === 'video' || panel === 'arquivo';
   const [peek, setPeek] = useState(false);
   const droneDragging = useStore((s) => s.droneDragging);
   const touring = useStore((s) => s.tour !== null);

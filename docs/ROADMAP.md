@@ -86,8 +86,11 @@ agência de verdade: o humano é o diretor de arte, a IA é o estagiário. Tudo 
    Falta: edição ao vivo da área marcada no PhotoCraft e no LightCraft
 9. **Publicação automática (v0.5.1)**: [Postiz](https://github.com/gitroomhq/postiz-app) (AGPL-3.0) rodando junto,
    recebendo os posts agendados pelo Office; as contas dos clientes são conectadas por vocês no próprio Postiz
-10. **Arquivo no mapa (v0.5.2)**: armário por cliente nas salas, documentos como marcadores no mapa e visualização
-    no Office (PdfCraft para editar)
+10. ✅ **Arquivo no mapa (v0.5.2)**: uma fileira de arquivos de aço na redação, um armário por cliente com a etiqueta
+    na cor dele. Clicar (ou apertar E na frente) abre o arquivo do cliente: a pasta por grupo (artes, documentos,
+    fotos, vídeos…), busca e prévia de imagem, vídeo, áudio, PDF e texto, sem tirar nada do lugar. "Editar com o
+    PdfCraft" vira uma tarefa para o funcionário, que grava a versão editada ao lado do original.
+    Falta: documentos como marcadores soltos no mapa
 11. **Vida no escritório**: sons à moda do Gather, o gerente aplica direto as demandas que sugere (um clique) e o
     modo Auto (maquete de perto, planta esquemática de longe)
 12. **Editor de planta**: arrastar móveis, criar salas, temas e vários andares

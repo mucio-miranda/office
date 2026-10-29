@@ -19,12 +19,12 @@ const base = (f: string) => f.split(/[\\/]/).pop() ?? f;
 /** Entradas da esteira que produziram peças (cada uma é uma versão daquela etapa). */
 export const versionsOf = (d: Demand) => (d.stageLog ?? []).filter((e) => e.result === 'feito' && e.files?.length);
 
-const openFile = (p: string) => {
+export const openFile = (p: string) => {
   if (!desktop) return useStore.getState().notify(`Arquivo: ${p}`);
   desktop.openPath(p).then((err) => { if (err) useStore.getState().notify(`Não consegui abrir ${base(p)}`); });
 };
 
-function TextPreview({ officeId, file }: { officeId: string; file: string }) {
+export function TextPreview({ officeId, file }: { officeId: string; file: string }) {
   const [text, setText] = useState<string | null>(null);
   useEffect(() => {
     let alive = true;
