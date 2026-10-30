@@ -7,6 +7,8 @@ export interface User {
   name: string;
   color: string;
   createdAt: string;
+  /** Precisa escolher uma senha nova antes de continuar (conta antiga sem senha ou com PIN curto). */
+  mustChangePin?: boolean;
 }
 
 export type OfficeRole = 'dono' | 'membro' | 'convidado';
@@ -26,6 +28,8 @@ export interface Office {
   extraDirs: string[];
   /** Pasta do Drive montada no computador, para onde vai o trabalho aprovado. */
   driveRoot: string | null;
+  /** Pasta que recebe uma segunda cópia do backup do banco. */
+  backupDir: string | null;
   theme: OfficeTheme;
   createdAt: string;
 }

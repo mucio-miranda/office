@@ -88,6 +88,14 @@ const MIGRATIONS: string[] = [
   // v0.5.4: envio do trabalho aprovado para o Drive
   `ALTER TABLE offices ADD COLUMN drive_root TEXT;
    ALTER TABLE clients ADD COLUMN drive_folder TEXT;`,
+  // v0.6: login seguro (sessões com validade e só o hash no banco, todo mundo entra de novo) e backup
+  `ALTER TABLE users ADD COLUMN must_change_pin INTEGER NOT NULL DEFAULT 0;
+   DELETE FROM sessions;
+   ALTER TABLE sessions ADD COLUMN expires_at TEXT NOT NULL DEFAULT '';
+   CREATE TABLE pin_resets (
+     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, code_hash TEXT NOT NULL, expires_at TEXT NOT NULL);
+   UPDATE offices SET invite_code = hex(randomblob(6));
+   ALTER TABLE offices ADD COLUMN backup_dir TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -131,7 +139,7 @@ const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
 const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish']);
-const BOOL_COLS = new Set(['paid', 'auto']);
+const BOOL_COLS = new Set(['paid', 'auto', 'must_change_pin']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {
   if (!row) return undefined;

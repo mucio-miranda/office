@@ -10,12 +10,15 @@ import { handleSocket } from './realtime.ts';
 import { recoverJobs } from './agents/runtime.ts';
 import { publishReminders } from './agents/pipeline.ts';
 import { closeAllLive } from './agents/live.ts';
+import { guardHost, purgeSessions } from './auth.ts';
+import { scheduleBackups } from './backup.ts';
 
 const app = Fastify({ logger: { level: process.env.LOG_LEVEL ?? 'warn' }, bodyLimit: 10 * 1024 * 1024 });
 
+app.addHook('onRequest', guardHost);
 await app.register(websocket);
 // o app de desktop usa isto para saber se já existe um Office nesta porta
-app.get('/api/health', async () => ({ office: true, version: config.version, dataDir: config.dataDir }));
+app.get('/api/health', async () => ({ office: true, version: config.version }));
 app.get('/ws', { websocket: true }, (socket) => handleSocket(socket));
 await app.register(api);
 
@@ -30,6 +33,9 @@ if (existsSync(config.webDist)) {
 recoverJobs();
 // lembrete de "hora de publicar" das publicações agendadas
 setInterval(publishReminders, 60_000).unref();
+purgeSessions();
+setInterval(purgeSessions, 3_600_000).unref();
+scheduleBackups();
 syncAgentTools();
 // os apps abertos ao vivo pertencem a este processo: fecham com ele
 process.on('exit', closeAllLive);
@@ -44,6 +50,6 @@ process.send?.({ type: 'ready', port: config.port });
 const lan = Object.values(networkInterfaces()).flat().filter((i) => i && i.family === 'IPv4' && !i.internal).map((i) => i!.address);
 console.log(`\n  🏢  Office rodando`);
 console.log(`     nesta máquina:  http://localhost:${config.port}`);
-if (config.host === '0.0.0.0') for (const ip of lan) console.log(`     na rede local:  http://${ip}:${config.port}`);
+if (config.host === '0.0.0.0') for (const ip of lan) console.log(`     na rede:        http://${ip}:${config.port}`);
 console.log(`     dados:          ${config.dataDir}`);
 console.log(`     claude:         ${config.claudeBin}\n`);

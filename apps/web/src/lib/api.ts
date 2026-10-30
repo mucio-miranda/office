@@ -22,6 +22,11 @@ export async function api<T = any>(path: string, init: { method?: string; body?:
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
   const data = await res.json().catch(() => ({}));
+  // sessão vencida ou encerrada: volta para a tela de entrada
+  if (res.status === 401 && token && !path.startsWith('/api/auth/')) {
+    setToken(null);
+    location.reload();
+  }
   if (!res.ok) throw new ApiError(res.status, data.error ?? `Erro ${res.status}`);
   return data as T;
 }

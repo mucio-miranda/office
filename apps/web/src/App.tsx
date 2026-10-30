@@ -7,13 +7,15 @@ import { AsciiOffice } from './lib/AsciiOffice';
 import { PathField, PathList } from './lib/PathPicker';
 import { OfficeView } from './OfficeView';
 
+const MIN_PASSWORD = 8;
+
 export function App() {
   const user = useStore((s) => s.user);
   const office = useStore((s) => s.office);
   const [booted, setBooted] = useState(false);
   useEffect(() => { useStore.getState().boot().finally(() => setBooted(true)); }, []);
   if (!booted) return <div className="splash"><Brand /></div>;
-  if (!user || !office) return <Gate />;
+  if (!user || !office || user.mustChangePin) return <Gate />;
   return <OfficeView />;
 }
 
@@ -26,7 +28,7 @@ function Gate() {
       <div className="auth-form">
         <div className="auth-inner">
           <div className="auth-brand"><Brand /></div>
-          {user ? <OfficeChooser /> : <Login />}
+          {!user ? <Login /> : user.mustChangePin ? <ForceNewPassword /> : <OfficeChooser />}
         </div>
       </div>
       <div className="auth-art"><AsciiOffice /></div>
@@ -36,25 +38,76 @@ function Gate() {
 
 function Login() {
   const login = useStore((s) => s.login);
+  const [mode, setMode] = useState<'entrar' | 'convite' | 'redefinir'>('entrar');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
+  const [code, setCode] = useState('');
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
+  const go = (m: typeof mode) => { setMode(m); setErr(''); setInfo(''); setCode(''); setPin(''); };
+  const submit = async () => {
+    if (mode !== 'redefinir') return login(name.trim(), pin, mode === 'convite' ? code.trim() : undefined);
+    await api('/api/auth/redefinir', { body: { name: name.trim(), code: code.trim() || undefined, pin } });
+    go('entrar');
+    setInfo('Senha trocada. Agora é só entrar com a senha nova.');
+  };
   return (
     <>
-      <h1 className="auth-title">Entrar no Office</h1>
-      <p className="auth-sub">Use seu nome para entrar neste servidor. Se for a primeira vez, a conta é criada na hora e o PIN é opcional.</p>
+      <h1 className="auth-title">{mode === 'convite' ? 'Entrar com convite' : mode === 'redefinir' ? 'Trocar a senha' : 'Entrar no Office'}</h1>
+      <p className="auth-sub">
+        {mode === 'convite' ? `Escolha seu nome e uma senha de pelo menos ${MIN_PASSWORD} caracteres. O código vem de quem criou o escritório.`
+          : mode === 'redefinir' ? 'Peça o código ao dono do escritório. No computador que roda o Office, o código não é necessário.'
+          : 'Use seu nome e sua senha. Primeira vez aqui? Entre com o convite.'}
+      </p>
       <form className="auth-fields" onSubmit={async (e) => {
         e.preventDefault();
         setErr('');
+        setInfo('');
         setBusy(true);
-        try { await login(name.trim(), pin); } catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
+        try { await submit(); } catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
       }}>
         <label>Nome<input autoFocus autoComplete="username" value={name} onChange={(e) => setName(e.target.value)} /></label>
-        <label>PIN<input type="password" inputMode="numeric" autoComplete="current-password" value={pin} onChange={(e) => setPin(e.target.value)} placeholder="opcional" /></label>
+        {mode !== 'entrar' && <label>{mode === 'convite' ? 'Código do convite' : 'Código de redefinição'}<input className="mono" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} /></label>}
+        <label>{mode === 'redefinir' ? 'Senha nova' : 'Senha'}<input type="password" autoComplete={mode === 'entrar' ? 'current-password' : 'new-password'} value={pin} onChange={(e) => setPin(e.target.value)} /></label>
         {err && <p className="auth-error" role="alert">{err}</p>}
-        <button className="primary wide" disabled={busy || name.trim().length < 2}>{busy ? 'Entrando…' : 'Entrar'}</button>
+        {info && <p className="muted small" role="status">{info}</p>}
+        <button className="primary wide" disabled={busy || name.trim().length < 2}>{busy ? 'Aguarde…' : mode === 'redefinir' ? 'Trocar a senha' : 'Entrar'}</button>
       </form>
+      <div className="auth-links">
+        {mode !== 'entrar' && <button className="link" onClick={() => go('entrar')}>Já tenho conta</button>}
+        {mode !== 'convite' && <button className="link" onClick={() => go('convite')}>Tenho um convite</button>}
+        {mode !== 'redefinir' && <button className="link" onClick={() => go('redefinir')}>Esqueci a senha</button>}
+      </div>
+    </>
+  );
+}
+
+/** Conta antiga, sem senha ou com PIN curto: agora o Office pode ser aberto de fora, então a troca é obrigatória. */
+function ForceNewPassword() {
+  const { user, logout, boot } = useStore();
+  const [pin, setPin] = useState('');
+  const [again, setAgain] = useState('');
+  const [err, setErr] = useState('');
+  return (
+    <>
+      <h1 className="auth-title">Crie uma senha</h1>
+      <p className="auth-sub">{user?.name}, o Office agora pede uma senha de pelo menos {MIN_PASSWORD} caracteres. Seus dados continuam todos aqui.</p>
+      <form className="auth-fields" onSubmit={async (e) => {
+        e.preventDefault();
+        setErr('');
+        if (pin !== again) return setErr('As duas senhas estão diferentes.');
+        try {
+          await api('/api/auth/senha', { body: { pin } });
+          await boot();
+        } catch (x) { setErr((x as Error).message); }
+      }}>
+        <label>Senha nova<input autoFocus type="password" autoComplete="new-password" value={pin} onChange={(e) => setPin(e.target.value)} /></label>
+        <label>Repita a senha<input type="password" autoComplete="new-password" value={again} onChange={(e) => setAgain(e.target.value)} /></label>
+        {err && <p className="auth-error" role="alert">{err}</p>}
+        <button className="primary wide" disabled={pin.length < MIN_PASSWORD}>Salvar e entrar</button>
+      </form>
+      <div className="auth-links"><span className="spacer" /><button className="link muted" onClick={logout}><LogOut size={13} /> Sair</button></div>
     </>
   );
 }
@@ -114,7 +167,7 @@ function OfficeChooser() {
           const o = await api('/api/offices/join', { body: { code } });
           await enterOffice(o.id);
         })}>
-          <label>Código<input autoFocus className="mono" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="A1B2C3D4" /></label>
+          <label>Código<input autoFocus className="mono" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="A1B2C3D4E5F6" /></label>
           {err && <p className="auth-error" role="alert">{err}</p>}
           <button className="primary wide" disabled={code.length < 4}>Entrar</button>
         </form>

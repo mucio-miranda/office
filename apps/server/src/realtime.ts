@@ -4,6 +4,7 @@ import { membership, userFromToken } from './auth.ts';
 
 interface Conn {
   ws: WebSocket;
+  token: string;
   officeId: string;
   presence: Presence;
 }
@@ -20,6 +21,11 @@ export const invalidate = (officeId: string, what: Extract<ServerMsg, { t: 'inva
 
 export function onlineUsers(officeId: string) {
   return [...conns].filter((c) => c.officeId === officeId).map((c) => c.presence);
+}
+
+/** Fecha as abas abertas de quem perdeu o acesso; `except` poupa o aparelho que pediu. */
+export function disconnectUser(userId: string, except?: string) {
+  for (const c of conns) if (c.presence.userId === userId && c.token !== except) c.ws.close(4001, 'sessão encerrada');
 }
 
 /** Ponto de entrada de cada aba aberta. A primeira mensagem precisa ser `join`. */
@@ -42,6 +48,7 @@ export function handleSocket(ws: WebSocket) {
       for (const c of conns) if (c.officeId === msg.officeId && c.presence.userId === user.id) c.ws.close(4000, 'aberto em outra aba');
       conn = {
         ws,
+        token: msg.token,
         officeId: msg.officeId,
         presence: { userId: user.id, name: user.name, color: user.color, pos: { x: 0, z: 9 }, dir: Math.PI, moving: false, room: 'recepcao', status: 'disponivel' },
       };

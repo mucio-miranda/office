@@ -34,8 +34,14 @@ flowchart LR
 - **Um processo só**: API REST em `/api`, WebSocket em `/ws` e, em produção, a UI estática de `apps/web/dist`.
 - **Banco**: `node:sqlite` (sem dependência nativa para compilar). Migrações em `db.ts`. Colunas JSON são
   serializadas automaticamente e os nomes snake_case viram camelCase.
-- **Autenticação**: nome + PIN opcional (scrypt). O token vai no `Authorization: Bearer` e também num cookie
-  httpOnly (para `<video>` conseguir buscar mídia). Todo acesso a escritório confere o vínculo de membro.
+- **Autenticação**: nome + senha (scrypt, mínimo de 8 caracteres). Conta nova exige convite, salvo no computador do Office ou
+  na primeira conta do servidor. O token vai no `Authorization: Bearer` e também num cookie httpOnly (para `<video>`
+  conseguir buscar mídia); o banco guarda só o SHA-256 dele, e a sessão vale 30 dias. Todo acesso a escritório confere o
+  vínculo de membro, e o que mexe em pastas, permissões e contas exige o papel de dono.
+- **Origem**: `guardHost` só atende por IP, pelo nome da máquina, por `*.netbird.cloud` ou por `OFFICE_HOSTS`, o que barra
+  DNS rebinding. "Local" vem do socket (`isLocal`), por isso túneis e proxies na mesma máquina não são suportados.
+- **Backup**: `VACUUM INTO` diário em `dados/backups`, com `integrity_check` e os 14 últimos; a segunda cópia opcional usa um
+  arquivo por dia da semana e não apaga nada na pasta de destino.
 - **Arquivos**: `/fs`, `/media` e `/probe` só enxergam a pasta raiz do escritório e as pastas extras.
   `/media` suporta `Range` (pular no tempo do vídeo).
 - **Tempo real** (`realtime.ts`): presença (posição, direção, sala, status), chat por sala ou geral, emotes

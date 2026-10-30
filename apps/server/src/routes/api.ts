@@ -3,14 +3,19 @@ import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
 import { createReadStream, existsSync, statSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
-import { homedir } from 'node:os';
+import { homedir, networkInterfaces } from 'node:os';
 import {
   BRIEFING_FIELDS, DEMAND_COLUMNS, NETWORKS, uid,
   type AgentJob, type AgentProfile, type CalendarEvent, type Client, type Demand, type JobMessage, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
-import { checkPin, createSession, hashPin, membership, requireMember, requireUser, sessionCookie } from '../auth.ts';
-import { invalidate, onlineUsers } from '../realtime.ts';
+import {
+  MIN_PIN, attemptKeys, blocked, checkPin, checkResetCode, clearFails, createResetCode, createSession, hashPin, isLocal, membership, noteFail,
+  requireMember, requireOwner, requireUser, revokeSession, revokeSessions, sessionCookie, setPin,
+} from '../auth.ts';
+import { disconnectUser, invalidate, onlineUsers } from '../realtime.ts';
+import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts';
+import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
 import { driveDirs } from '../clients/drive.ts';
@@ -23,6 +28,10 @@ import { EXPORT_FORMATS, probe } from '@office/video-engine';
 
 const COLORS = ['#ff5c8a', '#7c5cff', '#22c3a6', '#ffb020', '#3fa7ff', '#ff7a45', '#9be15d', '#e056fd'];
 const pick = () => COLORS[Math.floor(Math.random() * COLORS.length)];
+const newInvite = () => randomBytes(6).toString('hex').toUpperCase();
+const TOO_MANY = 'Muitas tentativas erradas. Espere 15 minutos.';
+const SHORT_PIN = `A senha precisa de pelo menos ${MIN_PIN} caracteres.`;
+const pinField = z.string().max(128);
 
 /** Valida o corpo com zod e responde 400 com mensagem legível. */
 const members = (officeId: string) =>
@@ -65,9 +74,9 @@ export function seedAgents(officeId: string) {
 
 export function createOffice(name: string, rootPath: string, extraDirs: string[], ownerId: string) {
   const office: Office & { inviteCode: string } = {
-    id: uid(), name, rootPath, extraDirs, driveRoot: null,
+    id: uid(), name, rootPath, extraDirs, driveRoot: null, backupDir: null,
     theme: { primary: '#ff5c8a', floor: '#e9e4dc', wall: '#f6f3ee' },
-    inviteCode: randomBytes(4).toString('hex').toUpperCase(),
+    inviteCode: newInvite(),
     createdAt: now(),
   };
   insert('offices', office as never);
@@ -79,19 +88,63 @@ export function createOffice(name: string, rootPath: string, extraDirs: string[]
 export async function api(app: FastifyInstance) {
   // ---------------- autenticação ----------------
   app.post('/api/auth/enter', async (req, reply) => {
-    const b = body(z.object({ name: z.string().trim().min(2).max(40), pin: z.string().min(4).max(32).optional() }), req, reply);
+    const b = body(z.object({ name: z.string().trim().min(2).max(40), pin: pinField.optional(), invite: z.string().trim().toUpperCase().max(32).optional() }), req, reply);
     if (!b) return;
+    const keys = attemptKeys(req, b.name);
+    if (blocked(keys)) return reply.code(429).send({ error: TOO_MANY });
+    const deny = (error: string) => { noteFail(keys); return reply.code(401).send({ error }); };
+    const invited = b.invite ? one<Office>('SELECT * FROM offices WHERE invite_code = ?', b.invite) : undefined;
+    if (b.invite && !invited) return deny('Código de convite inválido.');
+
     let user = one<User & { pinHash: string | null }>('SELECT * FROM users WHERE name = ?', b.name);
     if (user) {
-      if (user.pinHash && (!b.pin || !checkPin(b.pin, user.pinHash))) return reply.code(401).send({ error: 'PIN incorreto.' });
+      if (user.pinHash) {
+        if (!b.pin || !checkPin(b.pin, user.pinHash)) return deny('Nome ou senha incorretos.');
+        // PIN curto da versão antiga: entra, mas precisa escolher uma senha antes de continuar
+        if (b.pin.length < MIN_PIN && !user.mustChangePin) { update('users', user.id, { mustChangePin: true }); user.mustChangePin = true; }
+      } else if (isLocal(req)) {
+        // conta antiga sem senha: só no computador do Office, e já cai na troca
+        if (!user.mustChangePin) { update('users', user.id, { mustChangePin: true }); user.mustChangePin = true; }
+      } else {
+        return deny('Esta conta ainda não tem senha. Peça ao dono do escritório um código de redefinição.');
+      }
     } else {
-      user = { id: uid(), name: b.name, color: pick(), createdAt: now(), pinHash: b.pin ? hashPin(b.pin) : null };
+      // conta nova só com convite; a exceção é quem está no computador do Office ou a primeira conta do servidor
+      const first = !one('SELECT id FROM users LIMIT 1');
+      if (!invited && !first && !isLocal(req)) return deny('Nome ou senha incorretos. Se é sua primeira vez, use o convite.');
+      if (!b.pin || b.pin.length < MIN_PIN) return reply.code(400).send({ error: SHORT_PIN });
+      user = { id: uid(), name: b.name, color: pick(), createdAt: now(), pinHash: hashPin(b.pin) };
       insert('users', user as never);
+    }
+    clearFails(keys);
+    if (invited && !membership(invited.id, user.id)) {
+      db.prepare('INSERT INTO office_members (office_id, user_id, role) VALUES (?, ?, ?)').run(invited.id, user.id, 'membro');
+      logActivity(invited.id, `user:${user.id}`, 'entrou no escritório');
+      invalidate(invited.id, 'members');
     }
     const { pinHash: _, ...pub } = user;
     const token = createSession(user.id);
     reply.header('Set-Cookie', sessionCookie(token));
-    return { token, user: pub };
+    return { token, user: pub, officeId: invited?.id ?? null };
+  });
+
+  // com o código que o dono gerou; no próprio computador do Office o código é dispensado (é a saída de quem é dono e esqueceu)
+  app.post('/api/auth/redefinir', async (req, reply) => {
+    const b = body(z.object({ name: z.string().trim().min(2).max(40), code: z.string().max(32).optional(), pin: pinField }), req, reply);
+    if (!b) return;
+    const keys = attemptKeys(req, b.name);
+    if (blocked(keys)) return reply.code(429).send({ error: TOO_MANY });
+    if (b.pin.length < MIN_PIN) return reply.code(400).send({ error: SHORT_PIN });
+    const user = one<User>('SELECT id FROM users WHERE name = ?', b.name);
+    if (!user || !(b.code ? checkResetCode(user.id, b.code) : isLocal(req))) {
+      noteFail(keys);
+      return reply.code(401).send({ error: 'Nome ou código incorretos.' });
+    }
+    setPin(user.id, b.pin);
+    revokeSessions(user.id);
+    disconnectUser(user.id);
+    clearFails(keys);
+    return { ok: true };
   });
 
   app.register(async (r) => {
@@ -106,19 +159,44 @@ export async function api(app: FastifyInstance) {
         offices: all<Office & { role: string; inviteCode: string }>(
           'SELECT o.*, m.role FROM offices o JOIN office_members m ON m.office_id = o.id WHERE m.user_id = ? ORDER BY o.created_at',
           req.user.id,
-        ),
+        ).map((o) => (o.role === 'dono' ? o : { ...o, inviteCode: '' })),
       };
+    });
+
+    r.post('/api/auth/sair', async (req, reply) => {
+      revokeSession(req.token);
+      reply.header('Set-Cookie', sessionCookie('').replace(/Max-Age=\d+/, 'Max-Age=0'));
+      return { ok: true };
+    });
+
+    r.post('/api/auth/sair-de-todos', async (req) => {
+      revokeSessions(req.user.id);
+      disconnectUser(req.user.id, req.token);
+      return { ok: true };
+    });
+
+    r.post('/api/auth/senha', async (req, reply) => {
+      const b = body(z.object({ current: pinField.optional(), pin: pinField }), req, reply);
+      if (!b) return;
+      if (b.pin.length < MIN_PIN) return reply.code(400).send({ error: SHORT_PIN });
+      const keys = attemptKeys(req, req.user.name);
+      if (blocked(keys)) return reply.code(429).send({ error: TOO_MANY });
+      const stored = one<{ pinHash: string | null }>('SELECT pin_hash FROM users WHERE id = ?', req.user.id)!.pinHash;
+      // na troca obrigatória a pessoa acabou de provar quem é ao entrar
+      if (!req.user.mustChangePin && stored && (!b.current || !checkPin(b.current, stored))) {
+        noteFail(keys);
+        return reply.code(401).send({ error: 'A senha atual está errada.' });
+      }
+      setPin(req.user.id, b.pin);
+      revokeSessions(req.user.id, req.token);
+      disconnectUser(req.user.id, req.token);
+      return { ok: true };
     });
 
     // ---------------- navegador de pastas da máquina ----------------
     // Só para quem está no próprio computador do servidor: na LAN isso exporia o disco inteiro.
     r.get('/api/system/browse', async (req, reply) => {
-      const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
-      const socketIp = req.socket.remoteAddress ?? '';
-      // atrás do proxy do Vite (dev) a conexão vem de 127.0.0.1; o IP real chega no X-Forwarded-For
-      const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
-      const ip = LOOPBACK.includes(socketIp) && fwd ? fwd : socketIp;
-      if (!LOOPBACK.includes(ip))
+      if (!isLocal(req))
         return reply.code(403).send({ error: 'Por segurança, só dá para navegar pelas pastas no computador que roda o Office.' });
       const q = (req.query as { path?: string }).path;
       const places = [
@@ -147,6 +225,9 @@ export async function api(app: FastifyInstance) {
     r.post('/api/offices', async (req, reply) => {
       const b = body(z.object({ name: z.string().trim().min(2), rootPath: z.string().min(2), extraDirs: z.array(z.string()).default([]) }), req, reply);
       if (!b) return;
+      // a pasta raiz é onde a IA trabalha nesta máquina: quem é só membro não abre escritório novo
+      const canCreate = isLocal(req) || !one('SELECT id FROM offices LIMIT 1') || !!one("SELECT user_id FROM office_members WHERE user_id = ? AND role = 'dono' LIMIT 1", req.user.id);
+      if (!canCreate) return reply.code(403).send({ error: 'Só o dono de um escritório abre outro neste servidor.' });
       if (!existsSync(b.rootPath) || !statSync(b.rootPath).isDirectory()) return reply.code(400).send({ error: `A pasta ${b.rootPath} não existe.` });
       return createOffice(b.name, path.resolve(b.rootPath), b.extraDirs, req.user.id);
     });
@@ -154,19 +235,25 @@ export async function api(app: FastifyInstance) {
     r.post('/api/offices/join', async (req, reply) => {
       const b = body(z.object({ code: z.string().trim().toUpperCase() }), req, reply);
       if (!b) return;
+      const keys = attemptKeys(req);
+      if (blocked(keys)) return reply.code(429).send({ error: TOO_MANY });
       const office = one<Office>('SELECT * FROM offices WHERE invite_code = ?', b.code);
-      if (!office) return reply.code(404).send({ error: 'Código de convite inválido.' });
+      if (!office) {
+        noteFail(keys);
+        return reply.code(404).send({ error: 'Código de convite inválido.' });
+      }
       if (!membership(office.id, req.user.id))
         db.prepare('INSERT INTO office_members (office_id, user_id, role) VALUES (?, ?, ?)').run(office.id, req.user.id, 'membro');
       logActivity(office.id, `user:${req.user.id}`, 'entrou no escritório');
-      return office;
+      invalidate(office.id, 'members');
+      return { ...office, inviteCode: '' };
     });
 
     r.get('/api/offices/:officeId', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const { officeId } = req.params as { officeId: string };
       return {
-        office: one<Office>('SELECT * FROM offices WHERE id = ?', officeId),
+        office: { ...one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, inviteCode: '' },
         members: members(officeId),
         online: onlineUsers(officeId).map((p) => p.userId),
       };
@@ -175,6 +262,69 @@ export async function api(app: FastifyInstance) {
     r.get('/api/offices/:officeId/members', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       return members((req.params as { officeId: string }).officeId);
+    });
+
+    // ---------------- acesso: convite, pessoas, endereços e backup ----------------
+    r.post('/api/offices/:officeId/convite', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId } = req.params as { officeId: string };
+      const inviteCode = newInvite();
+      update('offices', officeId, { inviteCode });
+      logActivity(officeId, `user:${req.user.id}`, 'trocou o código de convite');
+      return { inviteCode };
+    });
+
+    r.post('/api/offices/:officeId/members/:userId/redefinir', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId, userId } = req.params as { officeId: string; userId: string };
+      if (!membership(officeId, userId)) return reply.code(404).send({ error: 'Essa pessoa não está no escritório.' });
+      if (userId === req.user.id) return reply.code(409).send({ error: 'Para a sua própria senha, use "Minha conta".' });
+      const code = createResetCode(userId);
+      revokeSessions(userId);
+      disconnectUser(userId);
+      logActivity(officeId, `user:${req.user.id}`, 'gerou um código de redefinição de senha', userId);
+      return { code };
+    });
+
+    r.delete('/api/offices/:officeId/members/:userId', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId, userId } = req.params as { officeId: string; userId: string };
+      const m = membership(officeId, userId);
+      if (!m) return { ok: true };
+      if (m.role === 'dono') return reply.code(409).send({ error: 'O dono não pode ser removido.' });
+      db.prepare('DELETE FROM office_members WHERE office_id = ? AND user_id = ?').run(officeId, userId);
+      revokeSessions(userId);
+      disconnectUser(userId);
+      logActivity(officeId, `user:${req.user.id}`, 'removeu uma pessoa do escritório', userId);
+      invalidate(officeId, 'members');
+      return { ok: true };
+    });
+
+    // endereços desta máquina; 100.64.0.0/10 é a faixa usada pela VPN privada
+    r.get('/api/offices/:officeId/enderecos', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      // as placas virtuais do WSL e do Docker só existem dentro desta máquina
+      const ips = Object.entries(networkInterfaces()).filter(([name]) => !/vEthernet|WSL|docker/i.test(name)).flatMap(([, list]) => list ?? [])
+        .filter((i) => i.family === 'IPv4' && !i.internal).map((i) => i.address);
+      const isVpn = (ip: string) => { const [a, b] = ip.split('.').map(Number); return a === 100 && b >= 64 && b <= 127; };
+      const url = (ip: string) => `http://${ip}:${config.port}`;
+      return { lan: ips.filter((ip) => !isVpn(ip)).map(url), vpn: ips.filter(isVpn).map(url) };
+    });
+
+    r.get('/api/offices/:officeId/backups', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      return { dir: backupDir(), items: listBackups().map(({ name, size, at }) => ({ name, size, at })), error: lastBackupError() };
+    });
+
+    r.post('/api/offices/:officeId/backups', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      try {
+        const res = runBackup();
+        logActivity((req.params as any).officeId, `user:${req.user.id}`, 'fez um backup do banco');
+        return res;
+      } catch (e) {
+        return reply.code(500).send({ error: `O backup falhou: ${(e as Error).message}` });
+      }
     });
 
     // escolher (ou liberar, com null) a própria mesa
@@ -220,10 +370,10 @@ export async function api(app: FastifyInstance) {
     });
 
     r.patch('/api/offices/:officeId', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
-      const b = body(z.object({ name: z.string().min(2).optional(), rootPath: z.string().optional(), extraDirs: z.array(z.string()).optional(), driveRoot: z.string().nullable().optional(), theme: z.any().optional() }), req, reply);
+      if (!requireOwner(req, reply)) return;
+      const b = body(z.object({ name: z.string().min(2).optional(), rootPath: z.string().optional(), extraDirs: z.array(z.string()).optional(), driveRoot: z.string().nullable().optional(), backupDir: z.string().nullable().optional(), theme: z.any().optional() }), req, reply);
       if (!b) return;
-      for (const dir of [b.rootPath, ...(b.extraDirs ?? []), b.driveRoot].filter(Boolean) as string[])
+      for (const dir of [b.rootPath, ...(b.extraDirs ?? []), b.driveRoot, b.backupDir].filter(Boolean) as string[])
         if (!existsSync(dir) || !statSync(dir).isDirectory()) return reply.code(400).send({ error: `A pasta ${dir} não existe.` });
       update('offices', (req.params as any).officeId, b);
       return { ok: true };
@@ -487,10 +637,11 @@ export async function api(app: FastifyInstance) {
     });
 
     r.patch('/api/offices/:officeId/agents/:id', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireOwner(req, reply)) return;
       const b = body(z.object({ name: z.string().optional(), role: z.string().optional(), persona: z.string().optional(), color: z.string().optional(), allowedTools: z.array(z.string()).optional(), skills: z.array(z.string()).optional(), mcp: z.array(z.string().regex(/^!?[a-z0-9-]+$/)).optional(), live: z.array(z.string().regex(/^[a-z0-9-]+$/)).optional() }), req, reply);
       if (!b) return;
       const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM agents WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Funcionário não encontrado' });
       update('agents', id, b);
       invalidate(officeId, 'agents');
       return { ok: true };
@@ -562,7 +713,9 @@ export async function api(app: FastifyInstance) {
 
     r.get('/api/offices/:officeId/jobs/:id/messages', async (req, reply) => {
       if (!requireMember(req, reply)) return;
-      return all<JobMessage>('SELECT * FROM job_messages WHERE job_id = ? ORDER BY created_at, rowid', (req.params as any).id);
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
+      return all<JobMessage>('SELECT * FROM job_messages WHERE job_id = ? ORDER BY created_at, rowid', id);
     });
 
     r.post('/api/offices/:officeId/jobs', async (req, reply) => {
@@ -574,7 +727,7 @@ export async function api(app: FastifyInstance) {
       if (!agent) return reply.code(404).send({ error: 'Funcionário não encontrado' });
       let prompt = b.prompt;
       if (b.demandId) {
-        const d = one<Demand>('SELECT * FROM demands WHERE id = ?', b.demandId);
+        const d = one<Demand>('SELECT * FROM demands WHERE id = ? AND office_id = ?', b.demandId, officeId);
         const c = d?.clientId ? one<Client>('SELECT * FROM clients WHERE id = ?', d.clientId) : undefined;
         if (d) {
           prompt = `## Demanda: ${d.title}\nCliente: ${c?.name ?? '—'}${c?.folder ? ` (pasta: ${c.folder})` : ''}\nTipo: ${d.kind} · Prioridade: ${d.priority} · Prazo: ${d.dueDate ?? '—'}\n\n${d.description}\n\n## Pedido\n${b.prompt}`;
@@ -600,6 +753,7 @@ export async function api(app: FastifyInstance) {
       if (!requireMember(req, reply)) return;
       const b = body(z.object({ text: z.string().min(1) }), req, reply);
       if (!b) return;
+      if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
       try {
         replyToJob((req.params as any).id, b.text);
         return { ok: true };
@@ -610,6 +764,7 @@ export async function api(app: FastifyInstance) {
 
     r.post('/api/offices/:officeId/jobs/:id/cancel', async (req, reply) => {
       if (!requireMember(req, reply)) return;
+      if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
       cancelJob((req.params as any).id);
       return { ok: true };
     });
@@ -640,6 +795,7 @@ export async function api(app: FastifyInstance) {
       if (!requireMember(req, reply)) return;
       const b = body(z.object({ name: z.string().optional(), json: z.any(), baseDir: z.string().optional() }), req, reply);
       if (!b) return;
+      if (!one('SELECT id FROM timelines WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId)) return reply.code(404).send({ error: 'Timeline não encontrada' });
       update('timelines', (req.params as any).id, { ...b, updatedAt: now() });
       invalidate((req.params as any).officeId, 'timelines');
       return { ok: true };

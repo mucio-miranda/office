@@ -56,7 +56,7 @@ interface State {
   tour: number | null;
 
   boot(): Promise<void>;
-  login(name: string, pin?: string): Promise<void>;
+  login(name: string, pin?: string, invite?: string): Promise<void>;
   logout(): void;
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
@@ -89,6 +89,7 @@ export const useStore = create<State>((set, get) => ({
     try {
       const me = await api('/api/me');
       set({ user: me.user, offices: me.offices });
+      if (me.user.mustChangePin) return;
       const last = (() => { try { return localStorage.getItem('office.last'); } catch { return null; } })();
       if (last && me.offices.some((o: Office) => o.id === last)) await get().enterOffice(last);
     } catch {
@@ -96,13 +97,16 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  async login(name, pin) {
-    const r = await api('/api/auth/enter', { body: { name, pin: pin || undefined } });
+  async login(name, pin, invite) {
+    const r = await api('/api/auth/enter', { body: { name, pin: pin || undefined, invite: invite || undefined } });
     setToken(r.token);
+    // quem entrou por convite já cai direto no escritório
+    if (r.officeId) try { localStorage.setItem('office.last', r.officeId); } catch { /* ok */ }
     await get().boot();
   },
 
   logout() {
+    api('/api/auth/sair', { body: {} }).catch(() => { /* a sessão já tinha acabado */ });
     ws?.close();
     setToken(null);
     set({ user: null, office: null, offices: [] });
@@ -142,7 +146,11 @@ export const useStore = create<State>((set, get) => ({
     const a = get().agents.find((x) => x.id === agentId);
     if (!o || !a) return;
     const mcp = [...a.mcp.filter((x) => x !== toolId && x !== `!${toolId}`), on ? toolId : `!${toolId}`];
-    await api(`/api/offices/${o.id}/agents/${agentId}`, { method: 'PATCH', body: { mcp } });
+    try {
+      await api(`/api/offices/${o.id}/agents/${agentId}`, { method: 'PATCH', body: { mcp } });
+    } catch (e) {
+      return get().notify((e as Error).message);
+    }
     await get().reload('agents');
   },
 
@@ -151,7 +159,11 @@ export const useStore = create<State>((set, get) => ({
     const a = get().agents.find((x) => x.id === agentId);
     if (!o || !a) return;
     const live = [...a.live.filter((x) => x !== toolId), ...(on ? [toolId] : [])];
-    await api(`/api/offices/${o.id}/agents/${agentId}`, { method: 'PATCH', body: { live } });
+    try {
+      await api(`/api/offices/${o.id}/agents/${agentId}`, { method: 'PATCH', body: { live } });
+    } catch (e) {
+      return get().notify((e as Error).message);
+    }
     await get().reload('agents');
   },
 
@@ -201,6 +213,10 @@ function connect(officeId: string) {
   sock.onclose = (e) => {
     if (ws !== sock) return;
     if (e.code === 4000) return useStore.getState().notify('O escritório foi aberto em outra aba.');
+    // sessão encerrada (remoção, senha redefinida ou "sair de todos os aparelhos")
+    if (e.code === 4001) { setToken(null); location.reload(); return; }
+    // perdeu o acesso a este escritório: volta para a escolha em vez de insistir
+    if (e.code === 4003) return useStore.getState().leaveOffice();
     setTimeout(() => useStore.getState().office?.id === officeId && connect(officeId), 1500);
   };
 }

@@ -38,7 +38,7 @@ Mas essas duas coisas ainda vivem em mundos separados.
 dividem o mesmo quadro de demandas, o mesmo calendário e as mesmas pastas de clientes. Cada funcionário é treinado
 com **skills** e sabe usar as ferramentas do mercado (ffmpeg, Photoshop por script, Figma via MCP, pesquisa web...).
 
-E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela rede local e a IA usa a sua assinatura do Claude.
+E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela rede local ou por uma VPN privada e a IA usa a sua assinatura do Claude.
 
 ## 🎮 O que tem dentro
 
@@ -127,7 +127,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 
 ### 👥 Multi-escritório e multiusuário
 - Crie **quantos escritórios quiser**, cada um com a própria pasta raiz e os próprios funcionários
-- Convide a equipe com um **código**: quem estiver na mesma rede abre `http://SEU-IP:4747`
+- Convide a equipe com um **código**: quem estiver na mesma rede abre `http://SEU-IP:4747`; quem estiver em outro lugar entra pela VPN
 - Presença em tempo real, e você vê os colegas andando pelo escritório
 
 </td>
@@ -325,8 +325,41 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
   lixeira e compartilhamento do Google Drive e exclusão no Notion.
 - O navegador de arquivos e o servidor de mídia só enxergam a pasta raiz do escritório e as pastas extras que você liberou.
 - Renders nunca sobrescrevem arquivos.
-- Na rede local, qualquer pessoa com o **código de convite** entra no escritório. Não exponha a porta na internet
-  sem um proxy com HTTPS.
+- Conta nova só com o **código de convite**, e toda conta tem senha de pelo menos 8 caracteres. Tentativas erradas bloqueiam
+  por 15 minutos, as sessões valem 30 dias e o banco guarda só o hash delas.
+- Só o dono mexe em pastas, permissões dos funcionários, convite, backup e contas. **Todo membro pode pedir tarefas aos
+  funcionários de IA, que rodam no computador do escritório: convide só quem é de confiança.**
+- **Não exponha a porta na internet**, nem com túnel público ou proxy. Para quem está em outro lugar, use uma VPN privada
+  (veja abaixo). Um túnel faz o acesso externo parecer local para o Office.
+
+</details>
+
+<details>
+<summary><b>Acesso de fora</b></summary>
+
+O Office roda no computador do escritório, que precisa estar ligado e com o Office aberto. Para colegas em outros lugares,
+recomendamos o [NetBird](https://netbird.io), uma VPN open source com plano gratuito para equipes pequenas:
+
+1. Crie uma conta no NetBird e instale o programa no computador do escritório.
+2. Convide cada colega para a mesma rede; cada um instala o NetBird no próprio computador.
+3. Em **Equipe**, o Office mostra o endereço `http://100.x.x.x:4747`. O colega abre esse endereço no navegador e entra com
+   o código de convite. O tráfego vai criptografado pela VPN.
+
+Se o endereço não abrir, confira se o Firewall do Windows libera o Office na rede da VPN.
+Outro nome de domínio que você use para chegar ao Office precisa entrar na variável `OFFICE_HOSTS`.
+
+</details>
+
+<details>
+<summary><b>Backup e restauração</b></summary>
+
+O Office copia o banco uma vez por dia enquanto está aberto e guarda os 14 últimos em `dados\backups`. Em **Equipe > Backup
+do banco** você vê o último, faz um na hora e pode escolher uma pasta para a segunda cópia, com um arquivo por dia da semana.
+O backup cobre demandas, clientes, financeiro e contas, não os arquivos dos clientes. Ele traz dados financeiros: escolha uma
+pasta só sua, não uma compartilhada.
+
+Para restaurar: saia do Office pela bandeja, guarde `office.db`, `office.db-wal` e `office.db-shm` em outro lugar (no Windows,
+em `%APPDATA%\Office\data`), copie o backup escolhido para essa pasta com o nome `office.db` e abra o Office de novo.
 
 </details>
 
@@ -346,6 +379,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 ## 🗺️ Roadmap
 
 - [x] Escritório 3D, multi-escritório, presença na LAN
+- [x] Login seguro, acesso de fora por VPN privada e backup diário do banco
 - [x] Demandas, calendário, financeiro e métricas
 - [x] Funcionários de IA com Claude Code e aprovação
 - [x] Engine de vídeo com timeline
