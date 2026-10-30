@@ -85,6 +85,9 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE office_layout ADD COLUMN plan INTEGER NOT NULL DEFAULT 1;`,
   // v0.5: publicação agendada das demandas prontas
   `ALTER TABLE demands ADD COLUMN publish TEXT;`,
+  // v0.5.4: envio do trabalho aprovado para o Drive
+  `ALTER TABLE offices ADD COLUMN drive_root TEXT;
+   ALTER TABLE clients ADD COLUMN drive_folder TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   APPROVAL_MARKER, BRIEFING_FIELDS, NETWORK_LABEL, STAGE_AGENT, STAGE_LABEL, uid,
@@ -8,6 +8,7 @@ import {
 import { all, insert, logActivity, now, one, update } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { clientDir, folderName, indexClient, indexSummary, writeNew } from '../clients/folder.ts';
+import { clientDriveFolder, driveInfo, driveSubdir, sendToDrive, type DriveItem } from '../clients/drive.ts';
 import { enqueueJob } from './runtime.ts';
 import { captionFrom, isInsideAny, latestFiles, marksText, producedFiles, slug, stageOutput } from './outputs.ts';
 
@@ -420,6 +421,47 @@ Pacote gerado pelo Office. Depois de postar, marque como publicado na demanda.
   addLog(d, { stage: 'agendado', by, jobId: null, text: `Publicação agendada para ${when.toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })} (${input.networks.map((n) => NETWORK_LABEL[n]).join(', ')}).`, result: 'feito' }, { publish });
   logActivity(d.officeId, by, 'agendou a publicação de', d.title);
   return null;
+}
+
+// ---------------------------------------------------------------- envio para o Drive
+
+/** Peças da versão aprovada de cada etapa: é só isso que pode ir para o Drive. */
+const approvedFiles = (d: Demand) => [...new Set(Object.values(latestFiles(d).byStage).flat())].filter((f) => existsSync(f));
+
+/** O que o botão de envio mostra: a pasta sugerida e cada peça com a subpasta dela (a mesma da pasta local). */
+export function driveDraft(demandId: string) {
+  const d = getDemand(demandId);
+  if (!d) return null;
+  const office = getOffice(d.officeId);
+  const client = getClient(d.clientId);
+  const info = driveInfo(office.driveRoot);
+  const local = client ? clientDir(office, client) : null;
+  return {
+    ...info,
+    folder: info.ok ? clientDriveFolder(office.driveRoot!, client) : '',
+    files: approvedFiles(d).map((file) => ({ file, sub: driveSubdir(local, file), size: statSync(file).size })),
+  };
+}
+
+export async function sendDemandToDrive(demandId: string, input: { folder: string; items: DriveItem[] }, by: string) {
+  const d = getDemand(demandId);
+  if (!d) return 'Demanda não encontrada.';
+  if (d.stage !== 'agendado' || d.status !== 'entregue') return 'Só o trabalho aprovado vai para o Drive.';
+  const office = getOffice(d.officeId);
+  if (!office.driveRoot) return 'Defina a pasta do Drive em Equipe > Pastas do escritório.';
+  const allowed = new Set(approvedFiles(d));
+  const strange = input.items.find((it) => !allowed.has(it.file));
+  if (strange) return `${path.basename(strange.file)} não é uma peça aprovada desta demanda.`;
+  const res = await sendToDrive(office.driveRoot, input.folder, input.items);
+  if (typeof res === 'string') return res;
+  const fresh = getDemand(demandId)!;
+  if (res.sent.length || res.skipped.length) {
+    const parts = [`${res.sent.length} arquivo(s) enviado(s)`, res.skipped.length && `${res.skipped.length} já estava(m) lá`, res.failed.length && `${res.failed.length} com erro`].filter(Boolean);
+    addLog(fresh, { stage: 'agendado', by, jobId: null, text: `Drive (${input.folder}): ${parts.join(', ')}.`, result: 'feito', drive: input.folder });
+    if (d.clientId) { update('clients', d.clientId, { driveFolder: input.folder }); invalidate(d.officeId, 'clients'); }
+    logActivity(d.officeId, by, `enviou ${res.sent.length} arquivo(s) ao Drive de`, d.title);
+  }
+  return res;
 }
 
 export function markPublished(demandId: string, by: string): string | null {

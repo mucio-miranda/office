@@ -61,6 +61,8 @@ for (const e of ['mp3', 'wav', 'm4a', 'aac', 'flac', 'ogg']) EXT[e] = 'audio';
 for (const e of ['pdf', 'md', 'txt', 'doc', 'docx', 'xls', 'xlsx', 'csv', 'ppt', 'pptx', 'json']) EXT[e] = 'doc';
 for (const e of ['psd', 'ai', 'svg', 'eps', 'fig', 'indd', 'xd', 'afdesign', 'afphoto', 'fcproj', 'prproj']) EXT[e] = 'design';
 
+export const kindOf = (file: string): FileKind => EXT[path.extname(file).slice(1).toLowerCase()] ?? 'outro';
+
 /** Grupos do índice, na ordem em que aparecem; o primeiro que casar com o caminho leva o arquivo. */
 const GROUPS: { key: string; label: string; test: (rel: string, kind: FileKind) => boolean }[] = [
   { key: 'idv', label: 'Identidade visual', test: (r) => /(^|\/)IDENTIDADE VISUAL\//i.test(r) },
@@ -96,7 +98,7 @@ export function indexClient(dir: string): ClientIndex {
       if (!e.isFile() || res.total >= MAX_FILES) continue;
       let st;
       try { st = statSync(childAbs); } catch { continue; }
-      const kind = EXT[path.extname(e.name).slice(1).toLowerCase()] ?? 'outro';
+      const kind = kindOf(e.name);
       const g = groups.get(GROUPS.find((x) => x.test(childRel, kind))!.key)!;
       g.count++;
       g.size += st.size;

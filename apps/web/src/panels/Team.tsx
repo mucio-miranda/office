@@ -24,7 +24,8 @@ export function Team() {
   const lan = lanUrls[0] ?? `${location.protocol}//${location.hostname}:${location.port}`;
   const [root, setRoot] = useState(office!.rootPath);
   const [extra, setExtra] = useState<string[]>(office!.extraDirs);
-  const dirty = root !== office!.rootPath || JSON.stringify(extra) !== JSON.stringify(office!.extraDirs);
+  const [drive, setDrive] = useState(office!.driveRoot ?? '');
+  const dirty = root !== office!.rootPath || JSON.stringify(extra) !== JSON.stringify(office!.extraDirs) || drive !== (office!.driveRoot ?? '');
 
   return (
     <div className="stack" style={{ maxWidth: 760 }}>
@@ -54,9 +55,10 @@ export function Team() {
         </div>
         <label>Pasta raiz <span className="muted">(onde os funcionários de IA trabalham)</span><PathField value={root} onChange={setRoot} title="Pasta raiz do escritório" /></label>
         <label>Pastas extras liberadas<PathList values={extra} onChange={setExtra} /></label>
+        <label>Pasta do Drive <span className="muted">(a pasta da agência no Google Drive para computador; recebe o trabalho aprovado)</span><PathField value={drive} onChange={setDrive} title="Pasta do Drive" placeholder="G:\Meu Drive\AGENCIA" /></label>
         <div className="row end">
           <button className="primary" disabled={!dirty} onClick={async () => {
-            await api(`/api/offices/${office!.id}`, { method: 'PATCH', body: { rootPath: root, extraDirs: extra } });
+            await api(`/api/offices/${office!.id}`, { method: 'PATCH', body: { rootPath: root, extraDirs: extra, driveRoot: drive.trim() || null } });
             await enterOffice(office!.id);
             notify('Pastas atualizadas');
           }}>Salvar pastas</button>

@@ -13,7 +13,8 @@ import { checkPin, createSession, hashPin, membership, requireMember, requireUse
 import { invalidate, onlineUsers } from '../realtime.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
-import { approveDemand, defaultPipeline, markPublished, pausePipeline, publishDraft, requestChanges, schedulePublish, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { driveDirs } from '../clients/drive.ts';
+import { approveDemand, defaultPipeline, driveDraft, markPublished, pausePipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
@@ -64,7 +65,7 @@ export function seedAgents(officeId: string) {
 
 export function createOffice(name: string, rootPath: string, extraDirs: string[], ownerId: string) {
   const office: Office & { inviteCode: string } = {
-    id: uid(), name, rootPath, extraDirs,
+    id: uid(), name, rootPath, extraDirs, driveRoot: null,
     theme: { primary: '#ff5c8a', floor: '#e9e4dc', wall: '#f6f3ee' },
     inviteCode: randomBytes(4).toString('hex').toUpperCase(),
     createdAt: now(),
@@ -220,9 +221,9 @@ export async function api(app: FastifyInstance) {
 
     r.patch('/api/offices/:officeId', async (req, reply) => {
       if (!requireMember(req, reply)) return;
-      const b = body(z.object({ name: z.string().min(2).optional(), rootPath: z.string().optional(), extraDirs: z.array(z.string()).optional(), theme: z.any().optional() }), req, reply);
+      const b = body(z.object({ name: z.string().min(2).optional(), rootPath: z.string().optional(), extraDirs: z.array(z.string()).optional(), driveRoot: z.string().nullable().optional(), theme: z.any().optional() }), req, reply);
       if (!b) return;
-      for (const dir of [b.rootPath, ...(b.extraDirs ?? [])].filter(Boolean) as string[])
+      for (const dir of [b.rootPath, ...(b.extraDirs ?? []), b.driveRoot].filter(Boolean) as string[])
         if (!existsSync(dir) || !statSync(dir).isDirectory()) return reply.code(400).send({ error: `A pasta ${dir} não existe.` });
       update('offices', (req.params as any).officeId, b);
       return { ok: true };
@@ -285,7 +286,7 @@ export async function api(app: FastifyInstance) {
       const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
       const { createFolder, interview, ...data } = b;
       const folder = data.folder || (createFolder ? path.join('CLIENTES', folderName(data.name)) : null);
-      const row = { id: uid(), officeId, ...data, folder, color: data.color ?? pick(), briefing: data.briefing ?? {} } as Client;
+      const row = { id: uid(), officeId, ...data, folder, driveFolder: null, color: data.color ?? pick(), briefing: data.briefing ?? {} } as Client;
       let created: string[] = [];
       if (createFolder && folder) {
         try { created = ensureStructure(clientDir(office, row)!); } catch (e) { return reply.code(400).send({ error: `Não consegui criar a pasta: ${(e as Error).message}` }); }
@@ -386,6 +387,29 @@ export async function api(app: FastifyInstance) {
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
       return publishDraft(id);
+    });
+
+    // envio do trabalho aprovado para o Drive: as peças com as subpastas sugeridas, as pastas de lá e o envio em si
+    r.get('/api/offices/:officeId/demands/:id/drive', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
+      return driveDraft(id);
+    });
+    r.get('/api/offices/:officeId/drive/pastas', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const root = one<Office>('SELECT * FROM offices WHERE id = ?', (req.params as any).officeId)!.driveRoot;
+      const dirs = root && existsSync(root) ? driveDirs(root, String((req.query as any).rel ?? '')) : null;
+      return dirs ?? reply.code(400).send({ error: 'Pasta fora do Drive' });
+    });
+    r.post('/api/offices/:officeId/demands/:id/drive', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
+      const b = body(z.object({ folder: z.string().trim().min(1).max(400), items: z.array(z.object({ file: z.string().min(1), sub: z.string().max(300) })).min(1).max(80) }), req, reply);
+      if (!b) return;
+      const res = await sendDemandToDrive(id, b, `user:${req.user.id}`);
+      return typeof res === 'string' ? reply.code(409).send({ error: res }) : res;
     });
 
     collection<CalendarEvent>('events', 'events', z.object({

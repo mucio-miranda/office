@@ -3,7 +3,7 @@ import { Bot, Check, Eye, Megaphone, Pause, Play, Plus, RotateCcw, Workflow, X }
 import { DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, STAGE_AGENT, STAGE_LABEL, type Demand, type DemandKind, type DemandStatus, type Priority, type Stage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, fmtDuration } from '../lib/api';
-import { PublishBox, ReviewDesk, versionsOf } from './ReviewDesk';
+import { DriveBox, PublishBox, ReviewDesk, versionsOf } from './ReviewDesk';
 
 const KIND_LABEL: Record<DemandKind, string> = { video: 'Vídeo', design: 'Design', copy: 'Copy', estrategia: 'Estratégia', foto: 'Foto', outro: 'Outro' };
 const PRIO_LEVEL: Record<Priority, string> = { baixa: 'on1', media: 'on2', alta: 'on3', urgente: 'on3 urgent' };
@@ -182,6 +182,7 @@ function Pipeline({ d }: { d: Demand }) {
         </div>
       )}
       {finished && d.stage === 'agendado' && <PublishBox d={d} />}
+      {finished && d.stage === 'agendado' && <DriveBox d={d} />}
       {desk && <ReviewDesk d={d} onClose={() => setDesk(false)} />}
       {(d.stageLog ?? []).length > 0 && (
         <ol className="stage-log">

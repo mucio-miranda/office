@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Check, ExternalLink, FileText, FolderOpen, Megaphone, RotateCcw, Trash2, X } from 'lucide-react';
+import { CalendarClock, Check, CloudUpload, CornerLeftUp, ExternalLink, FileText, FolderOpen, Megaphone, RotateCcw, Trash2, X } from 'lucide-react';
 import { NETWORKS, NETWORK_LABEL, STAGE_LABEL, type Demand, type Network, type ReviewMark, type StageLogEntry } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, getToken, mediaUrl } from '../lib/api';
@@ -246,6 +246,93 @@ export function PublishBox({ d }: { d: Demand }) {
         {p.folder && desktop && <button type="button" className="ghost small" title={p.folder} onClick={() => openFile(p.folder!)}><FolderOpen size={13} /> Pacote</button>}
         {p.status !== 'publicado' && <button type="button" className="ghost small" onClick={openForm}>Reagendar</button>}
         {p.status !== 'publicado' && <button type="button" className="primary small" disabled={busy} onClick={() => act('publicado')}><Megaphone size={13} /> Marcar como publicado</button>}
+      </div>
+    </div>
+  );
+}
+
+const gb = (n: number) => (n >= 1024 ** 3 ? `${(n / 1024 ** 3).toFixed(1).replace('.', ',')} GB` : `${Math.max(1, Math.round(n / 1024 ** 2))} MB`);
+
+interface DriveDraft { ok: boolean; root: string | null; free: number; folder: string; files: { file: string; sub: string; size: number }[] }
+interface DriveResult { sent: unknown[]; skipped: unknown[]; failed: { file: string; error: string }[] }
+
+/** Botão que manda o trabalho aprovado para o Drive: a pessoa escolhe a pasta do cliente e as peças. Só copia. */
+export function DriveBox({ d }: { d: Demand }) {
+  const { office, notify } = useStore();
+  const [draft, setDraft] = useState<DriveDraft | null>(null);
+  const [folder, setFolder] = useState('');
+  const [items, setItems] = useState<{ file: string; sub: string; size: number; on: boolean }[]>([]);
+  const [dirs, setDirs] = useState<{ parent: string | null; dirs: string[] } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const url = `/api/offices/${office!.id}`;
+  const last = [...(d.stageLog ?? [])].reverse().find((e) => e.drive);
+
+  const open = async () => {
+    try {
+      const r = await api<DriveDraft>(`${url}/demands/${d.id}/drive`);
+      setDraft(r);
+      setFolder(r.folder);
+      // PSD fica de fora por padrão: pesa e a equipe só precisa dele para editar
+      setItems(r.files.map((f) => ({ ...f, on: !/\.psd$/i.test(f.file) })));
+    } catch (e) { notify((e as Error).message); }
+  };
+  useEffect(() => {
+    if (!draft?.ok) return;
+    let alive = true;
+    api<{ parent: string | null; dirs: string[] }>(`${url}/drive/pastas?rel=${encodeURIComponent(folder)}`).then((r) => alive && setDirs(r)).catch(() => alive && setDirs(null));
+    return () => { alive = false; };
+  }, [draft?.ok, folder, url]);
+
+  const chosen = items.filter((i) => i.on);
+  const size = chosen.reduce((n, i) => n + i.size, 0);
+  const send = async () => {
+    setBusy(true);
+    try {
+      const r = await api<DriveResult>(`${url}/demands/${d.id}/drive`, { body: { folder, items: chosen.map(({ file, sub }) => ({ file, sub })) } });
+      notify(r.failed.length ? `${r.sent.length} enviado(s), ${r.failed.length} com erro: ${r.failed[0].error}` : r.sent.length ? `${r.sent.length} arquivo(s) no Drive` : 'Esses arquivos já estavam no Drive');
+      if (!r.failed.length) setDraft(null);
+    } catch (e) { notify((e as Error).message); } finally { setBusy(false); }
+  };
+
+  if (!draft) {
+    return (
+      <div className={`approval ${last ? 'done' : ''}`}>
+        <span>{last ? last.text : 'Envie as peças aprovadas para a equipe no Drive.'}</span>
+        <button type="button" className={last ? 'ghost small' : 'primary small'} onClick={open}><CloudUpload size={13} /> Enviar ao Drive</button>
+      </div>
+    );
+  }
+  if (!draft.ok) {
+    return (
+      <div className="approval">
+        <span>{draft.root ? `Não encontrei a pasta do Drive (${draft.root}). O Google Drive para computador está aberto?` : 'Defina a pasta do Drive em Equipe > Pastas do escritório.'}</span>
+        <button type="button" className="ghost small" onClick={() => setDraft(null)}>Fechar</button>
+      </div>
+    );
+  }
+  const go = (name: string) => setFolder(folder ? `${folder}/${name}` : name);
+  return (
+    <div className="publish col gap-s">
+      <b className="row gap"><CloudUpload size={14} /> Enviar ao Drive</b>
+      <label>Pasta do cliente no Drive<input className="mono" value={folder} spellCheck={false} onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }} onChange={(e) => setFolder(e.target.value)} /></label>
+      {dirs && (dirs.parent !== null || dirs.dirs.length > 0) && (
+        <div className="drive-dirs">
+          {dirs.parent !== null && <button type="button" className="chip" onClick={() => setFolder(dirs.parent!)}><CornerLeftUp size={12} /> Voltar</button>}
+          {dirs.dirs.map((n) => <button type="button" key={n} className="chip" onClick={() => go(n)}>{n}</button>)}
+        </div>
+      )}
+      {dirs && !dirs.dirs.length && dirs.parent !== null && <p className="muted small" style={{ margin: 0 }}>Se esta pasta ainda não existir, ela é criada no envio.</p>}
+      {items.length === 0 && <p className="muted small" style={{ margin: 0 }}>Nenhuma peça registrada nesta demanda.</p>}
+      {items.map((it, i) => (
+        <div key={it.file} className="drive-file">
+          <label className="check"><input type="checkbox" checked={it.on} onChange={(e) => setItems(items.map((x, k) => (k === i ? { ...x, on: e.target.checked } : x)))} /><span className="truncate" title={it.file}>{base(it.file)}</span></label>
+          <input className="mono" aria-label={`Subpasta de ${base(it.file)}`} value={it.sub} spellCheck={false} disabled={!it.on} onChange={(e) => setItems(items.map((x, k) => (k === i ? { ...x, sub: e.target.value } : x)))} />
+        </div>
+      ))}
+      <div className={`small ${size > draft.free ? 'st-erro' : 'muted'}`}>{gb(size)} no envio · {gb(draft.free)} livres no Drive. Nada é apagado nem sobrescrito lá.</div>
+      <div className="row gap end">
+        <button type="button" className="ghost small" onClick={() => setDraft(null)}>Cancelar</button>
+        <button type="button" className="primary small" disabled={busy || !chosen.length || !folder.trim() || size > draft.free} onClick={send}><CloudUpload size={13} /> {busy ? 'Enviando…' : `Enviar ${chosen.length} arquivo(s)`}</button>
       </div>
     </div>
   );

@@ -744,6 +744,10 @@ label.check input { width: auto; height: auto; }
 .publish { padding: 10px; border-radius: 8px; border: 1px solid var(--border); background: var(--background); font-size: 13px; }
 .publish-nets { display: flex; flex-wrap: wrap; gap: 6px 14px; }
 .publish-nets .check { flex-direction: row; align-items: center; gap: 6px; font-size: 12px; }
+.drive-dirs { display: flex; flex-wrap: wrap; gap: 4px; max-height: 92px; overflow-y: auto; }
+.drive-file { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; align-items: center; }
+.drive-file .check { min-width: 0; }
+.drive-file input.mono { font-size: 11px; }
 .approval.done { background: color-mix(in srgb, var(--done) 12%, var(--background)); }
 .badge.pub { gap: 4px; }
 .badge.pub.publicado { color: var(--done); }

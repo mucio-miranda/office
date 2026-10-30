@@ -24,6 +24,8 @@ export interface Office {
   rootPath: string;
   /** Pastas extras liberadas para os agentes (ex.: D:\CLAUDE). */
   extraDirs: string[];
+  /** Pasta do Drive montada no computador, para onde vai o trabalho aprovado. */
+  driveRoot: string | null;
   theme: OfficeTheme;
   createdAt: string;
 }
@@ -40,6 +42,8 @@ export interface Client {
   name: string;
   /** Pasta do cliente, relativa ao rootPath do escritório ou absoluta. */
   folder: string | null;
+  /** Pasta do cliente no Drive (relativa a driveRoot), lembrada do último envio. */
+  driveFolder: string | null;
   monthlyFee: number;
   status: 'ativo' | 'pausado' | 'encerrado';
   color: string;
@@ -104,6 +108,8 @@ export interface StageLogEntry {
   version?: number;
   /** Áreas marcadas nas peças junto com o pedido de ajuste. */
   marks?: ReviewMark[];
+  /** Pasta do Drive para onde esta entrada enviou as peças. */
+  drive?: string;
 }
 
 /**
