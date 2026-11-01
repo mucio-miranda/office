@@ -21,6 +21,7 @@ import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
 import { driveDirs } from '../clients/drive.ts';
 import { adoptFiles, approveDemand, defaultPipeline, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { marksText } from '../agents/outputs.ts';
+import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
@@ -432,6 +433,7 @@ export async function api(app: FastifyInstance) {
       name: z.string().min(1), folder: z.string().nullable().optional(), monthlyFee: z.number().min(0).default(0),
       status: z.enum(['ativo', 'pausado', 'encerrado']).default('ativo'), color: z.string().optional(),
       approvalMode: z.enum(['humano', 'ia']).default('humano'), briefing: briefingSchema.optional(),
+      niche: z.string().regex(/^[a-z0-9-]{1,60}$/).nullable().optional(),
     });
     collection<Client>('clients', 'clients', clientSchema, 'name', 'clients', undefined, false);
 
@@ -496,6 +498,25 @@ export async function api(app: FastifyInstance) {
       if (st.size > 25 * 1024 * 1024) return reply.code(413).send({ error: 'Arquivo grande demais para a miniatura' });
       reply.headers({ 'Content-Type': type, 'Content-Length': st.size, 'Cache-Control': 'private, max-age=300' });
       return reply.send(createReadStream(abs));
+    });
+
+    // moodboards do estúdio de design: por nicho (biblioteca da agência) e por cliente (pastas de referência dele)
+    r.get('/api/offices/:officeId/moodboards', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as any;
+      return moodboardList(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, all<Client>('SELECT * FROM clients WHERE office_id = ? ORDER BY name', officeId));
+    });
+    r.get('/api/offices/:officeId/moodboards/nicho/:niche', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, niche } = req.params as any;
+      return nicheBoard(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, niche) ?? reply.code(404).send({ error: 'Nicho sem referências' });
+    });
+    r.get('/api/offices/:officeId/clients/:id/moodboard', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      return clientBoard(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, c);
     });
 
     r.post('/api/offices/:officeId/clients/:id/briefing', async (req, reply) => {

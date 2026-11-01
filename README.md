@@ -92,6 +92,8 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   postar e fecha o ciclo com "Marcar como publicado"
 - **Processos da casa**: a demanda segue um método validado (arte de feed, Reels, story, tratamento de fotos, roteiro). O
   funcionário abre dentro da pasta do cliente, usa a skill e continua na mesma conversa a cada decisão e ajuste.
+- **Moodboards**: um por nicho, da biblioteca `REFERENCIAS`, e um por cliente, das pastas de referência dele, cada um com as
+  cores e a tipografia da marca. Aparecem em cavaletes no estúdio de design e dão início a uma arte com a referência escolhida.
 - **Mesa de trabalho**: o que está esperando você, peça por peça, com os caminhos reais de cada arquivo. Você responde,
   marca áreas na imagem, comenta um tempo do vídeo e aprova, sem procurar nas pastas. Se você editar uma peça à mão, a mesa
   nota e oferece usar como versão atual.
@@ -386,6 +388,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Escritório 3D, multi-escritório, presença na LAN
 - [x] Login seguro, acesso de fora por VPN privada e backup diário do banco
 - [x] Processos da casa na pasta do cliente, sessão contínua por peça e mesa de trabalho
+- [x] Moodboards por nicho e por cliente, no painel e no estúdio de design
 - [x] Demandas, calendário, financeiro e métricas
 - [x] Funcionários de IA com Claude Code e aprovação
 - [x] Engine de vídeo com timeline

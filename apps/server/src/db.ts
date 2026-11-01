@@ -100,6 +100,8 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE demands ADD COLUMN process TEXT;
    ALTER TABLE jobs ADD COLUMN cwd TEXT;
    ALTER TABLE jobs ADD COLUMN turn_started_at TEXT;`,
+  // v0.8: nicho do cliente, para o moodboard e a biblioteca de referências
+  `ALTER TABLE clients ADD COLUMN niche TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

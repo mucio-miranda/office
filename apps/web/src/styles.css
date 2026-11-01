@@ -798,3 +798,64 @@ label.check input { width: auto; height: auto; }
 .mesa-thumb img { width: 100%; height: 100%; object-fit: cover; }
 .mesa-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .review-path { margin: 0; overflow-wrap: anywhere; }
+
+/* moodboards */
+.mood-rail { overflow: auto; }
+.mood-rail-title { padding: 10px 8px 6px; }
+.mood-rail-item { display: flex; align-items: center; justify-content: flex-start; flex: none; width: 100%; gap: 10px; height: auto; padding: 6px 8px; border: 0; border-radius: 8px; background: transparent; text-align: left; font-size: 13px; color: inherit; cursor: pointer; }
+.mood-rail-item:hover { background: var(--muted); }
+.mood-rail-item.on { background: var(--accent); }
+.mood-rail-swatch { flex: none; width: 34px; height: 42px; overflow: hidden; border-radius: 4px; display: grid; place-items: center; }
+.mood-rail-swatch img { width: 100%; height: 100%; object-fit: cover; }
+.mood-rail-swatch i { width: 12px; height: 12px; border-radius: 50%; }
+.mood-scroll { overflow: auto; height: 100%; min-width: 0; }
+.mood-board { min-height: 100%; padding: clamp(24px, 4vw, 56px); background: var(--mb-bg); color: var(--mb-fg); font-family: var(--mb-body); }
+.mood-hero { max-width: 1100px; margin-bottom: 36px; }
+.mood-kicker { font-size: 11px; letter-spacing: .22em; text-transform: uppercase; color: var(--mb-accent); }
+.mood-hero h1 { margin: 10px 0 22px; font-family: var(--mb-title); font-size: clamp(38px, 6vw, 84px); font-weight: 400; line-height: 1.02; letter-spacing: -.01em; overflow-wrap: anywhere; }
+.mood-swatches { display: flex; flex-wrap: wrap; gap: 14px; }
+.mood-swatch { display: flex; flex-direction: column; gap: 6px; height: auto; padding: 0; border: 0; background: none; color: inherit; font: 10px var(--mono); letter-spacing: .06em; opacity: .85; cursor: pointer; }
+.mood-swatch:hover { opacity: 1; }
+.mood-swatch i { display: block; width: 62px; height: 62px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--mb-fg) 22%, transparent); }
+.mood-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 22px; font-size: 13px; }
+.mood-type b { font-family: var(--mb-title); font-size: 26px; font-weight: 400; margin-right: 6px; color: var(--mb-accent); }
+.mood-niche { display: flex; flex-direction: row; align-items: center; gap: 8px; margin: 0; font-size: 13px; color: inherit; }
+.mood-niche select { width: auto; height: 30px; background: transparent; color: inherit; border: 1px solid color-mix(in srgb, var(--mb-fg) 30%, transparent); }
+.mood-niche option { color: #111; }
+.mood-link { display: inline-flex; align-items: center; gap: 6px; height: auto; padding: 4px 0; border: 0; background: none; color: inherit; font-size: 13px; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.mood-filters { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 22px; }
+.mood-filters button { height: 30px; padding: 0 12px; border: 1px solid color-mix(in srgb, var(--mb-fg) 25%, transparent); border-radius: 999px; background: none; color: inherit; font-size: 12px; cursor: pointer; }
+.mood-filters button span { opacity: .55; margin-left: 4px; }
+.mood-filters button.on { background: var(--mb-accent); border-color: var(--mb-accent); color: var(--mb-bg); }
+.mood-grid { columns: 5 200px; column-gap: 14px; }
+.mood-card { position: relative; display: block; width: 100%; height: auto; margin: 0 0 14px; padding: 0; border: 0; border-radius: 4px; overflow: hidden; break-inside: avoid; background: color-mix(in srgb, var(--mb-fg) 8%, transparent); cursor: zoom-in; }
+.mood-card img { display: block; width: 100%; height: auto; transition: transform .35s ease; }
+.mood-card:hover img { transform: scale(1.03); }
+.mood-tag { position: absolute; left: 8px; bottom: 8px; padding: 2px 8px; border-radius: 999px; background: rgba(0,0,0,.62); color: #fff; font-size: 10px; opacity: 0; transition: opacity .2s; }
+.mood-card:hover .mood-tag { opacity: 1; }
+.mood-star { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: var(--mb-accent); color: var(--mb-bg); }
+.mood-section { margin: 44px 0 18px; font-family: var(--mb-title); font-size: 28px; font-weight: 400; }
+.mood-empty { max-width: 560px; opacity: .75; line-height: 1.5; }
+.mood-zoom { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px; background: rgba(0,0,0,.78); }
+.mood-zoom-inner { display: grid; grid-template-columns: minmax(0, auto) 300px; max-width: min(1100px, 100%); max-height: 100%; overflow: auto; border-radius: 8px; background: var(--mb-bg); color: var(--mb-fg); }
+.mood-zoom-inner > img { display: block; max-width: 100%; max-height: calc(100vh - 48px); object-fit: contain; }
+.mood-zoom-inner aside { position: relative; display: flex; flex-direction: column; gap: 12px; padding: 24px 20px; font-family: var(--mb-body); }
+.mood-close { position: absolute; top: 10px; right: 10px; width: 30px; height: 30px; padding: 0; border: 0; background: none; color: inherit; cursor: pointer; }
+.mood-obs { margin: 0; font-family: var(--mb-title); font-size: 20px; line-height: 1.3; }
+.mood-small { margin: 0; font-size: 12px; opacity: .72; line-height: 1.45; }
+.mood-path { overflow-wrap: anywhere; font-family: var(--mono); font-size: 10px; }
+.mood-mini { display: flex; gap: 6px; }
+.mood-mini i { width: 24px; height: 24px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--mb-fg) 22%, transparent); cursor: pointer; }
+.mood-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: auto; }
+.mood-primary { display: inline-flex; align-items: center; gap: 8px; height: 36px; padding: 0 14px; border: 0; border-radius: 6px; background: var(--mb-accent); color: var(--mb-bg); font-size: 13px; font-weight: 600; cursor: pointer; }
+@media (max-width: 900px) {
+  .archive-page:has(> .mood-rail) { grid-template-rows: auto minmax(0, 1fr); }
+  .archive-page > .mood-rail { display: flex; flex-direction: row; gap: 6px; padding: 8px 12px; border-right: 0; border-bottom: 1px solid var(--border); overflow-x: auto; overflow-y: hidden; }
+  .mood-rail .mood-rail-title { display: none; }
+  .mood-rail .mood-rail-item { width: 190px; }
+}
+@media (max-width: 760px) {
+  .mood-zoom-inner { grid-template-columns: 1fr; }
+  .mood-zoom-inner > img { max-height: 60vh; margin: 0 auto; }
+}
+

@@ -1,6 +1,7 @@
 import { useStore } from '../lib/store';
 import { Demands } from './Demands';
 import { Mesa } from './Mesa';
+import { Moodboard } from './Moodboard';
 import { Clients } from './Clients';
 import { CalendarPanel } from './CalendarPanel';
 import { Finance } from './Finance';
@@ -12,6 +13,7 @@ import { Archive } from './Archive';
 export const PAGE_TITLE = {
   escritorio: 'Escritório',
   mesa: 'Mesa de trabalho',
+  moodboard: 'Moodboards',
   clientes: 'Clientes',
   demandas: 'Demandas',
   calendario: 'Calendário',
@@ -26,10 +28,11 @@ export const PAGE_TITLE = {
 /** Páginas que aparecem no lugar do mundo 3D (o mundo continua montado, pausado, por trás). */
 export function Pages() {
   const panel = useStore((s) => s.panel);
-  const flush = panel === 'agente' || panel === 'video' || panel === 'arquivo';
+  const flush = panel === 'agente' || panel === 'video' || panel === 'arquivo' || panel === 'moodboard';
   return (
     <div className={`page-body ${flush ? 'flush' : ''}`} style={{ position: 'absolute', inset: 0 }}>
       {panel === 'mesa' && <Mesa />}
+      {panel === 'moodboard' && <Moodboard />}
       {panel === 'clientes' && <Clients />}
       {panel === 'demandas' && <Demands />}
       {panel === 'calendario' && <CalendarPanel />}

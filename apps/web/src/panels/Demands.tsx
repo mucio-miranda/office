@@ -48,6 +48,11 @@ export function Demands() {
   useEffect(() => {
     // 'nova' abre o formulário de demanda em branco (fim do tour)
     if (panelArg === 'nova') setEditing({ status: 'a_fazer', kind: 'video', priority: 'media' });
+    else if (panelArg?.startsWith('ref:')) {
+      // veio do moodboard: arte nova já com a referência escolhida
+      const ref = JSON.parse(panelArg.slice(4)) as { clientId: string | null; file: string };
+      setEditing({ status: 'a_fazer', kind: 'design', priority: 'media', process: 'arte-feed', clientId: ref.clientId, description: `Referência escolhida no moodboard:\n${ref.file}\n\n` });
+    }
     else if (panelArg) setEditing(demands.find((d) => d.id === panelArg) ?? null);
   }, [panelArg]);
 

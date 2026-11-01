@@ -8,6 +8,7 @@ import {
 import { all, insert, logActivity, now, one, update } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { clientDir, folderName, indexClient, indexSummary, writeNew } from '../clients/folder.ts';
+import { nicheOf } from '../clients/moodboard.ts';
 import { clientDriveFolder, driveInfo, driveSubdir, sendToDrive, type DriveItem } from '../clients/drive.ts';
 import { enqueueJob, replyToJob } from './runtime.ts';
 import { baseCheck, captionFrom, isInsideAny, latestFiles, marksText, newerFiles, processFiles, producedFiles, slug, stageOutput } from './outputs.ts';
@@ -125,9 +126,10 @@ const AUTO_RULES = `Esta tarefa está na **esteira automática**: não pare nos 
 function processPrompt(d: Demand, p: ProcessDef, office: Office, client?: Client) {
   const dir = outDir(office, client);
   const missing = baseCheck(dir, p.needs).filter((n) => !n.ok).map((n) => n.label);
+  const niche = client ? nicheOf(office, client) : null;
   return `## Demanda: ${d.title}
 Cliente: ${client?.name ?? '—'} · Pasta: ${dir}
-Processo: ${p.label} · Prioridade: ${d.priority} · Prazo: ${d.dueDate ?? '—'}
+Processo: ${p.label} · Prioridade: ${d.priority} · Prazo: ${d.dueDate ?? '—'}${niche ? `\nNicho: ${niche} (biblioteca em ${path.join(office.rootPath, 'REFERENCIAS', niche)})` : ''}
 
 ${d.description || '(sem descrição)'}
 

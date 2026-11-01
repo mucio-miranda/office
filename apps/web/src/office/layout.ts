@@ -85,7 +85,7 @@ export const WALLS: WallSeg[] = WALL_DEFS.flatMap(({ a, b, doors }) => {
 
 export type FurnitureKind =
   | 'mesa' | 'cadeira' | 'sofa' | 'planta' | 'quadro' | 'calendario' | 'tv' | 'mesa-reuniao'
-  | 'cafeteira' | 'balcao' | 'cofre' | 'estante' | 'tapete' | 'luminaria' | 'arquivo';
+  | 'cafeteira' | 'balcao' | 'cofre' | 'estante' | 'tapete' | 'luminaria' | 'arquivo' | 'moodboard';
 
 export interface Furniture {
   kind: FurnitureKind;
@@ -125,9 +125,13 @@ export const deskSeat = (d: HumanDesk): Vec2 => ({ x: d.x, z: d.z + 1.1 });
 export const ARCHIVE_SLOTS = 12;
 export const ARCHIVE: Furniture & { w: number; d: number } = { kind: 'arquivo', x: -18.4, z: -17.62, w: 14.4, d: 0.6, solid: true, panel: 'arquivo', label: 'Arquivo dos clientes' };
 
+/** Cavaletes de moodboard no estúdio de design, na divisa com a ilha de vídeo, deixando a passagem livre à direita. */
+export const MOODBOARD_SLOTS = 3;
+export const MOODBOARD: Furniture & { w: number; d: number } = { kind: 'moodboard', x: 15, z: 8.6, w: 9.6, d: 0.5, solid: true, panel: 'moodboard', label: 'Moodboards' };
+
 /** Distância de um ponto até a borda do móvel (o arquivo é comprido: vale o armário mais perto, não o centro). */
 export const distToFurniture = (f: Furniture, p: Vec2) => {
-  if (f.kind !== 'arquivo') return Math.hypot(f.x - p.x, f.z - p.z);
+  if (f.kind !== 'arquivo' && f.kind !== 'moodboard') return Math.hypot(f.x - p.x, f.z - p.z);
   const b = FURN_BOX(f);
   return Math.hypot(Math.max(b.x0 - p.x, 0, p.x - b.x1), Math.max(b.z0 - p.z, 0, p.z - b.z1)) + 0.6;
 };
@@ -147,6 +151,7 @@ export const FURNITURE: Furniture[] = [
   { kind: 'mesa', x: 21.75, z: 3.6, solid: true },
   // design
   { kind: 'mesa', x: 21.75, z: 12.75, solid: true },
+  MOODBOARD,
   // redação
   { kind: 'mesa', x: -18, z: -9.75, solid: true },
   ARCHIVE,

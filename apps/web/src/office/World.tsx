@@ -13,6 +13,7 @@ import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
 import { LiveScreens } from './LiveScreens';
 import { ClientArchive, cabinets, openArchive } from './Archive';
+import { MoodboardWall } from './MoodboardWall';
 import { DESKS, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALLS, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
@@ -628,6 +629,8 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       <Floor p={p} />
       {FURNITURE.map((f, i) => f.kind === 'arquivo' ? (
         <ClientArchive key={i} f={f} p={p} onUse={(x, id) => { if (droneBlocksClick()) return; walkTo({ x, z: f.z + 1.3 }); openArchive(id); }} />
+      ) : f.kind === 'moodboard' ? (
+        <MoodboardWall key={i} f={f} p={p} />
       ) : (
         <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; walkTo({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}

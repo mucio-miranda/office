@@ -43,6 +43,9 @@ flowchart LR
 - **Processos** (`PROCESSES` em `packages/shared`): uma demanda com processo tem uma tarefa só, uma sessão do Claude Code na
   pasta do cliente. Cada parada e cada ajuste retoma a sessão. A mesa não exige caminho de saída: `changedFiles` olha o que
   mudou nas pastas reais em cada rodada, sem intermediários, e `newerFiles` nota edições à mão. Vídeos renderizam um por vez.
+- **Moodboards** (`clients/moodboard.ts`): só leem. O nicho vem de `REFERENCIAS\\indice.json`, mantido pela skill
+  `arte-referencia`; o cliente, de pastas cujo nome começa com REFERENCIA e do `marca.json`. A tela busca as fontes da marca no
+  Google Fonts; sem internet, usa uma fonte genérica.
 - **Backup**: `VACUUM INTO` diário em `dados/backups`, com `integrity_check` e os 14 últimos; a segunda cópia opcional usa um
   arquivo por dia da semana e não apaga nada na pasta de destino.
 - **Arquivos**: `/fs`, `/media` e `/probe` só enxergam a pasta raiz do escritório e as pastas extras.

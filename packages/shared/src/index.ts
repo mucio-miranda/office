@@ -48,6 +48,8 @@ export interface Client {
   folder: string | null;
   /** Pasta do cliente no Drive (relativa a driveRoot), lembrada do último envio. */
   driveFolder: string | null;
+  /** Nicho na biblioteca de referências da agência (REFERENCIAS\\<nicho>); sem valor, é deduzido da marca. */
+  niche?: string | null;
   monthlyFee: number;
   status: 'ativo' | 'pausado' | 'encerrado';
   color: string;
@@ -96,6 +98,42 @@ export const STAGE_LABEL: Record<Stage, string> = {
 export const STAGE_AGENT: Partial<Record<Stage, string>> = {
   briefing: 'gerente', pauta: 'copywriter', copy: 'copywriter', arte: 'designer', video: 'editor-de-video',
 };
+
+/** Cores e tipografia que um moodboard veste: as da marca do cliente ou as medidas nas referências do nicho. */
+export interface MoodboardTheme {
+  bg: string;
+  fg: string;
+  accent: string;
+  swatches: string[];
+  titleFont: string | null;
+  bodyFont: string | null;
+}
+
+export interface MoodboardSummary {
+  /** `nicho:<id>` ou `cliente:<id>` */
+  key: string;
+  name: string;
+  count: number;
+  theme: MoodboardTheme;
+  covers: string[];
+  niche: string | null;
+}
+
+export interface MoodboardItem {
+  id: string;
+  file: string;
+  layout: string | null;
+  tema: string | null;
+  tags: string[];
+  paleta: string[];
+  nota: number | null;
+  obs: string;
+  origem: string;
+  width: number | null;
+  height: number | null;
+  /** Subpasta de onde veio, nas referências do cliente. */
+  group: string | null;
+}
 
 /**
  * Processo: um método validado da casa. O funcionário abre dentro da pasta do cliente, usa a skill e para nas decisões
