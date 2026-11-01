@@ -42,7 +42,64 @@ function speckle(g: CanvasRenderingContext2D, n: number, colors: string[], seed:
   for (let i = 0; i < n; i++) px(g, Math.floor(r() * S), Math.floor(r() * S), colors[Math.floor(r() * colors.length)], size, size);
 }
 
+/** Placas polidas: reflexo diagonal e juntas finas, a cada metro. */
+function polished(g: CanvasRenderingContext2D, base: string, joint: string, shine: string) {
+  px(g, 0, 0, base, S, S);
+  for (let i = -S; i < S; i += 32) for (let k = 0; k < 8; k++) for (let y = 0; y < S; y += 2) px(g, i + y + k + 10, y, shine, 1, 2);
+  for (const o of [31, 63]) { px(g, 0, o, joint, S, 1); px(g, o, 0, joint, 1, S); }
+}
+
+/** Pisos translúcidos: o chão mostra a laje por baixo. */
+export const GLASS_FLOORS = new Set(['vidro', 'vidro-fume']);
+
 export const FLOOR_MATERIALS: FloorMaterial[] = [
+  { id: 'vidro', name: 'Vidro', draw: (g) => polished(g, '#bfe6f2', '#7fb4c6', '#e4f6fb') },
+  { id: 'vidro-fume', name: 'Vidro fumê', draw: (g) => polished(g, '#3e4c55', '#1f272d', '#5b6c77') },
+  { id: 'branco-polido', name: 'Branco polido', draw: (g) => polished(g, '#f7f7f5', '#dcdcd8', '#ffffff') },
+  { id: 'preto-polido', name: 'Preto polido', draw: (g) => polished(g, '#16171a', '#050506', '#26282d') },
+  {
+    id: 'marmore-preto', name: 'Mármore preto',
+    draw: (g) => {
+      px(g, 0, 0, '#141416', S, S);
+      const r = rand(61);
+      for (let v = 0; v < 6; v++) {
+        let x = Math.floor(r() * S), y = Math.floor(r() * S);
+        const c = r() < 0.5 ? '#c9b98a' : '#8f8f93';
+        for (let k = 0; k < 46; k++) { px(g, ((x % S) + S) % S, ((y % S) + S) % S, c); x += 1; y += r() < 0.5 ? 0 : r() < 0.5 ? 1 : -1; }
+      }
+      px(g, 0, 63, '#000000', S, 1);
+      px(g, 63, 0, '#000000', 1, S);
+    },
+  },
+  {
+    id: 'microcimento-claro', name: 'Microcimento claro',
+    draw: (g) => {
+      px(g, 0, 0, '#dedcd6', S, S);
+      const r = rand(67);
+      for (let i = 0; i < 26; i++) px(g, Math.floor(r() * S), Math.floor(r() * S), r() < 0.5 ? '#e6e4de' : '#d5d3cd', 4 + Math.floor(r() * 12), 3 + Math.floor(r() * 7));
+      speckle(g, 140, ['#d1cfc9', '#e9e7e1'], 71);
+    },
+  },
+  {
+    id: 'microcimento-grafite', name: 'Microcimento grafite',
+    draw: (g) => {
+      px(g, 0, 0, '#3b3d40', S, S);
+      const r = rand(73);
+      for (let i = 0; i < 26; i++) px(g, Math.floor(r() * S), Math.floor(r() * S), r() < 0.5 ? '#44464a' : '#343639', 4 + Math.floor(r() * 12), 3 + Math.floor(r() * 7));
+      speckle(g, 140, ['#303235', '#4a4c50'], 79);
+    },
+  },
+  { id: 'resina-branca', name: 'Resina branca contínua', draw: (g) => { px(g, 0, 0, '#f1f2f3', S, S); speckle(g, 60, ['#ebecee', '#f7f8f9'], 83); } },
+  { id: 'resina-cinza', name: 'Resina cinza contínua', draw: (g) => { px(g, 0, 0, '#8d9196', S, S); speckle(g, 60, ['#868a8f', '#959a9f'], 89); } },
+  {
+    id: 'porcelanato-grafite', name: 'Porcelanato grafite',
+    draw: (g) => {
+      px(g, 0, 0, '#2c2e33', S, S);
+      speckle(g, 160, ['#26282c', '#33353b'], 97);
+      px(g, 0, 63, '#151619', S, 1);
+      px(g, 63, 0, '#151619', 1, S);
+    },
+  },
   { id: 'tabuas-claras', name: 'Tábuas de carvalho claro', draw: (g) => drawPlanks(g, '#dcb98a', '#cfa877') },
   { id: 'tabuas-nogueira', name: 'Tábuas de nogueira', draw: (g) => drawPlanks(g, '#7a5236', '#6b4630', 1, 8, 13) },
   {

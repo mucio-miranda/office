@@ -2,10 +2,39 @@
 
 export type ID = string;
 
+/** Aparência do avatar; o que não for escolhido sai do id da pessoa, para ninguém ficar igual. */
+export interface AvatarLook {
+  skin?: string;
+  hair?: string;
+  hairStyle?: 'curto' | 'topete' | 'longo' | 'coque' | 'careca' | 'black';
+  beard?: boolean;
+  glasses?: boolean;
+  outfit?: 'camiseta' | 'blazer' | 'jaleco';
+  pants?: string;
+  shoes?: string;
+}
+
+/** Tipos de parede; `removida` tira a parede e a colisão. Sem registro no mapa, vale a `alvenaria` do prédio. */
+export const WALL_TYPES = ['alvenaria', 'branca', 'preta', 'concreto', 'madeira', 'vidro', 'vidro-fume', 'removida'] as const;
+export type WallType = (typeof WALL_TYPES)[number];
+
+/** Sala criada no escritório: um anexo a leste do prédio, com porta para o vizinho. */
+export interface CustomRoom {
+  id: string;
+  officeId: ID;
+  name: string;
+  emoji: string;
+  floor: string;
+  /** Posição na grade de anexos: 3 salas por coluna. */
+  slot: number;
+}
+export const MAX_CUSTOM_ROOMS = 12;
+
 export interface User {
   id: ID;
   name: string;
   color: string;
+  look?: AvatarLook | null;
   createdAt: string;
   /** Precisa escolher uma senha nova antes de continuar (conta antiga sem senha ou com PIN curto). */
   mustChangePin?: boolean;
@@ -308,6 +337,11 @@ export interface AgentProfile {
   role: string;
   /** Mesa/sala do escritório onde o avatar fica. */
   room: RoomId;
+  /** Onde ele senta quando não é a mesa padrão da sala (funcionários criados ou mudados de sala). */
+  seat?: Vec2 | null;
+  /** Modelo de que veio, nos funcionários criados no escritório: dá as permissões e as skills. */
+  base?: string | null;
+  look?: AvatarLook | null;
   color: string;
   skills: string[];
   tools: string[];
@@ -391,7 +425,7 @@ export const APPROVAL_MARKER = '[[AGUARDANDO_APROVACAO]]';
 
 // ---------- mundo 3D ----------
 
-export type RoomId = 'recepcao' | 'reuniao' | 'video' | 'design' | 'copy' | 'gerencia' | 'copa';
+export type RoomId = string;
 
 /**
  * Item de decoração do mapa (editável no modo Decorar). `rot` é o giro em quartos de volta (0–3), como no Habbo.
@@ -416,6 +450,7 @@ export interface Presence {
   userId: ID;
   name: string;
   color: string;
+  look?: AvatarLook | null;
   pos: Vec2;
   /** Direção em radianos. */
   dir: number;
@@ -442,7 +477,7 @@ export type ServerMsg =
   | { t: 'chat'; from: ID; name: string; text: string; room: RoomId | null; at: string }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' }
+  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
   /** Aviso para todo mundo do escritório (ex.: peça esperando aprovação). */
   | { t: 'notice'; text: string; demandId?: ID; agentId?: ID }
   | { t: 'job'; job: AgentJob }

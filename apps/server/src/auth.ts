@@ -34,7 +34,7 @@ export function createSession(userId: string) {
 export function userFromToken(token: string | undefined) {
   if (!token) return undefined;
   return one<User>(
-    'SELECT u.id, u.name, u.color, u.must_change_pin, u.created_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?',
+    'SELECT u.id, u.name, u.color, u.look, u.must_change_pin, u.created_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token = ? AND s.expires_at > ?',
     digest(token), now(),
   );
 }

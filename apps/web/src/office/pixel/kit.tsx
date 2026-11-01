@@ -401,9 +401,9 @@ export function screenTexture(glow: string) {
   });
 }
 
-export const useFloorTextures = (p: PixelPalette, rooms: { id: string; x0: number; x1: number; z0: number; z1: number }[]) =>
+export const useFloorTextures = (p: PixelPalette, rooms: { id: string; x0: number; x1: number; z0: number; z1: number; floor?: string }[]) =>
   useMemo(() => Object.fromEntries(rooms.map((r) => {
-    const t = floorTexture(r.id, p.floors[r.id] ?? ['#bbbbbb', '#aaaaaa']).clone();
+    const t = floorTexture(r.id, p.floors[r.id] ?? [r.floor ?? '#bbbbbb', shade(r.floor ?? '#bbbbbb', 0.93)]).clone();
     t.repeat.set((r.x1 - r.x0) / FLOOR_TILE_M, (r.z1 - r.z0) / FLOOR_TILE_M);
     t.needsUpdate = true;
     return [r.id, t];

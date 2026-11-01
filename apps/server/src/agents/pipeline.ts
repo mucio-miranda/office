@@ -45,6 +45,10 @@ const getOffice = (id: string) => one<Office>('SELECT * FROM offices WHERE id = 
 const getClient = (id: string | null) => (id ? one<Client>('SELECT * FROM clients WHERE id = ?', id) : undefined);
 const agentBySlug = (officeId: string, s: string) => one<AgentProfile>('SELECT * FROM agents WHERE office_id = ? AND slug = ?', officeId, s);
 
+/** Quem faz um processo: o funcionário do modelo ou um criado a partir dele, de preferência quem está livre. */
+const agentForProcess = (officeId: string, s: string) =>
+  all<AgentProfile>('SELECT * FROM agents WHERE office_id = ? AND (slug = ? OR base = ?)', officeId, s, s).sort((a, b) => Number(b.status === 'livre') - Number(a.status === 'livre'))[0];
+
 function patchDemand(d: Demand, patch: Partial<Demand>) {
   update('demands', d.id, { ...patch, updatedAt: now() });
   invalidate(d.officeId, 'demands');
@@ -186,7 +190,7 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
   }
   const proc = processById(d.process);
   const agentSlug = proc ? proc.agent : STAGE_AGENT[stage];
-  const agent = agentSlug ? agentBySlug(d.officeId, agentSlug) : undefined;
+  const agent = !agentSlug ? undefined : proc ? agentForProcess(d.officeId, agentSlug) : agentBySlug(d.officeId, agentSlug);
   if (!agent) {
     patchDemand(d, { stage, auto: false });
     return `Nenhum funcionário de IA faz a etapa ${STAGE_LABEL[stage]}.`;

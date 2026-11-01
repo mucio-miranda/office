@@ -48,7 +48,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 
 ### 🗺️ Escritório 3D navegável
 - **Pixel art isométrica** (padrão), inspirada nos mundos de pixel do Habbo e do Gather: câmera 2:1, contorno escuro, sombreamento em 3 tons, andar aberto de 54 × 36 m (só a sala de reunião e a ilha de vídeo têm paredes; divisórias verdes e tapetes separam as outras áreas), piso de tacos, carpetes e ladrilhos por área, paredes com papel de parede e janelas, avatares em blocos que andam, sentam e digitam e etiquetas de nome em pílula. Tudo desenhado por código, sem assets de terceiros
-- **Modo Decorar** (<kbd>X</kbd> ou o botão Decorar), no espírito do catálogo de mobis do Habbo: 74 peças em 10 categorias, inspiradas em escritórios de startup (madeira clara e vidro da Apple Park, cabines acústicas, armários coloridos e bicicletas do Google, arquibancada e neon do Nubank, horta e escada vermelha do iFood, cabanas, tijolinho e bar de cereais da Pixar) e no lado biofílico (árvores e jardins internos das Amazon Spheres: sofá orgânico curvo, banco com jardineira, divisória verde, plantas suspensas e quadro de musgo). A aba **Pisos** troca o piso de uma sala inteira: tábuas de carvalho ou nogueira, parquet, cimento queimado, porcelanato, granilite, ladrilho hidráulico, deck, grama, pedra, carpete em placas e xadrez, com prévia ao passar o mouse. Clique para selecionar, arraste para mover, <kbd>R</kbd> gira, troca de cor, duplicar, remover e desfazer (<kbd>Ctrl</kbd>+<kbd>Z</kbd>). A peça fica verde onde cabe e vermelha onde bloquearia uma porta, uma cadeira ou outro móvel; quadros, neons e revestimentos deslizam pelas paredes. A decoração é salva no servidor e aparece na hora para todo mundo do escritório
+- **Modo Decorar** (<kbd>X</kbd> ou o botão Decorar), no espírito do catálogo de mobis do Habbo: dezenas de peças por categoria, inspiradas em escritórios de startup (madeira clara e vidro da Apple Park, cabines acústicas, armários coloridos e bicicletas do Google, arquibancada e neon do Nubank, horta e escada vermelha do iFood, cabanas, tijolinho e bar de cereais da Pixar) e no lado biofílico (árvores e jardins internos das Amazon Spheres: sofá orgânico curvo, banco com jardineira, divisória verde, plantas suspensas e quadro de musgo). A aba **Pisos** troca o piso de uma sala inteira: tábuas de carvalho ou nogueira, parquet, cimento queimado, porcelanato, granilite, ladrilho hidráulico, deck, grama, pedra, carpete em placas e xadrez, com prévia ao passar o mouse. Clique para selecionar, arraste para mover, <kbd>R</kbd> gira, troca de cor, duplicar, remover e desfazer (<kbd>Ctrl</kbd>+<kbd>Z</kbd>). A peça fica verde onde cabe e vermelha onde bloquearia uma porta, uma cadeira ou outro móvel; quadros, neons e revestimentos deslizam pelas paredes. A decoração é salva no servidor e aparece na hora para todo mundo do escritório
 - Ou a **maquete isométrica minimalista** (botão ao lado do tema ou `Ctrl+K` → "Mundo em maquete"), em tema claro e escuro, com as mesmas 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
 - **WASD** ou clique para andar (como no Habbo: um cursor quadrado marca o ladrilho sob o mouse e o avatar vai até ele reto ou na diagonal, contornando paredes e móveis), **Shift** para correr, **1–7** para teletransportar
 - **Ctrl+K**: vá para qualquer sala, painel, cliente, demanda ou funcionário
@@ -92,6 +92,10 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   postar e fecha o ciclo com "Marcar como publicado"
 - **Processos da casa**: a demanda segue um método validado (arte de feed, Reels, story, tratamento de fotos, roteiro). O
   funcionário abre dentro da pasta do cliente, usa a skill e continua na mesma conversa a cada decisão e ajuste.
+- **Do seu jeito**: crie salas novas (com vidro, por exemplo), contrate mais funcionários a partir dos modelos e mude nome e
+  aparência de qualquer avatar: pele, cabelo, barba, óculos e roupa.
+- **Paredes e pisos**: no modo Decorar, cada parede pode ser removida ou virar vidro, vidro fumê, branca, preta, concreto ou
+  madeira, uma a uma ou na sala inteira. Os pisos ganharam vidro, branco e preto polidos, mármore preto, microcimento e resina.
 - **Moodboards**: um por nicho, da biblioteca `REFERENCIAS`, e um por cliente, das pastas de referência dele, cada um com as
   cores e a tipografia da marca. Aparecem em cavaletes no estúdio de design e dão início a uma arte com a referência escolhida.
 - **Mesa de trabalho**: o que está esperando você, peça por peça, com os caminhos reais de cada arquivo. Você responde,
@@ -295,6 +299,7 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 | clique no chão | ir até lá, desviando dos obstáculos |
 | botão direito (ou `Espaço`) + arrastar | **modo drone**: sobrevoa o escritório sem mover o personagem (o botão do meio do mouse também arrasta) |
 | dois dedos no touchpad | move a câmera para os lados e para cima/baixo, como no Figma (o personagem fica parado) |
+| `N` / `L` | abre a Mesa de trabalho / os Moodboards |
 | pinça no touchpad / roda do mouse | zoom (`Shift` + roda move para os lados) |
 | `X` | modo Decorar |
 | `Esc` | volta a câmera para você (ou fecha o painel) |
@@ -389,6 +394,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Login seguro, acesso de fora por VPN privada e backup diário do banco
 - [x] Processos da casa na pasta do cliente, sessão contínua por peça e mesa de trabalho
 - [x] Moodboards por nicho e por cliente, no painel e no estúdio de design
+- [x] Salas e funcionários novos, avatares personalizados, paredes removíveis e de vidro, pisos modernos
 - [x] Demandas, calendário, financeiro e métricas
 - [x] Funcionários de IA com Claude Code e aprovação
 - [x] Engine de vídeo com timeline

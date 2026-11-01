@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Group, Mesh } from 'three';
+import type { AvatarLook } from '@office/shared';
 import { registerAnchor } from '../Labels';
 import { usePixel } from '../../lib/theme';
 import type { AvatarProps } from '../Avatar';
@@ -9,17 +10,25 @@ import { PBox } from './kit';
 /** Tons de cabelo e pele variando pela cor da pessoa, para os avatares não saírem iguais. */
 const HAIRS = ['#4a2f1e', '#1f1a17', '#c98b3c', '#8a3b1d', '#e3c27a', '#5a5a66'];
 const SKINS = ['#f2c49b', '#e0a878', '#c68a5e', '#8d5a3b', '#f5d3b3'];
-const pick = (list: string[], seed: string, salt: number) => {
+const pick = <T,>(list: readonly T[], seed: string, salt: number) => {
   let h = salt;
   for (const ch of seed) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
   return list[h % list.length];
 };
 
+/** A aparência completa: o que a pessoa escolheu e, no que faltar, o sorteio fixo pelo id. */
+export function resolveLook(seed: string, look?: AvatarLook | null): AvatarLook {
+  return {
+    hair: pick(HAIRS, seed, 7), skin: pick(SKINS, seed, 3), hairStyle: pick(['curto', 'topete', 'longo', 'coque'] as const, seed, 11),
+    glasses: pick(['', '', 'oculos'], seed, 5) === 'oculos', beard: false, outfit: 'camiseta', ...look,
+  };
+}
+
 /**
  * Avatar em blocos, no espírito do Habbo: cabeça grande, cabelo, olhos, camiseta na cor da pessoa,
  * braços e pernas que balançam ao andar e postura sentada na mesa.
  */
-export function PixelAvatar({ anchorId, color, getState, ring, pulse, typing, seated, onClick }: AvatarProps) {
+export function PixelAvatar({ anchorId, color, look, getState, ring, pulse, typing, seated, onClick }: AvatarProps) {
   const p = usePixel();
   const root = useRef<Group>(null);
   const body = useRef<Group>(null);
@@ -32,10 +41,9 @@ export function PixelAvatar({ anchorId, color, getState, ring, pulse, typing, se
   const stateRef = useRef(getState);
   stateRef.current = getState;
   useEffect(() => registerAnchor(anchorId, () => stateRef.current()), [anchorId]);
-  const hair = pick(HAIRS, anchorId, 7);
-  const skin = pick(SKINS, anchorId, 3);
-  const style = pick(['curto', 'topete', 'longo', 'coque'], anchorId, 11);
-  const glasses = pick(['', '', 'oculos'], anchorId, 5) === 'oculos';
+  const { hair = '#1f1a17', skin = '#f2c49b', hairStyle: style = 'curto', glasses, beard, outfit, pants = p.pants, shoes = p.shoes } = resolveLook(anchorId, look);
+  // no blazer e no jaleco, a cor da pessoa vira a camisa de baixo
+  const torso = outfit === 'jaleco' ? '#f4f4f2' : outfit === 'blazer' ? pants : color;
 
   useFrame((_, dt) => {
     const s = stateRef.current();
@@ -91,32 +99,44 @@ export function PixelAvatar({ anchorId, color, getState, ring, pulse, typing, se
       <group ref={body} scale={1.18}>
         {/* pernas (giram no quadril) */}
         <group ref={legL} position={[-0.11, 0.6, 0]}>
-          <PBox p={p} out={0.022} pos={[0, -0.27, 0]} size={[0.16, 0.5, 0.18]} color={p.pants} />
-          <PBox p={p} out={0.022} pos={[0, -0.54, 0.03]} size={[0.17, 0.08, 0.24]} color={p.shoes} />
+          <PBox p={p} out={0.022} pos={[0, -0.27, 0]} size={[0.16, 0.5, 0.18]} color={pants} />
+          <PBox p={p} out={0.022} pos={[0, -0.54, 0.03]} size={[0.17, 0.08, 0.24]} color={shoes} />
         </group>
         <group ref={legR} position={[0.11, 0.6, 0]}>
-          <PBox p={p} out={0.022} pos={[0, -0.27, 0]} size={[0.16, 0.5, 0.18]} color={p.pants} />
-          <PBox p={p} out={0.022} pos={[0, -0.54, 0.03]} size={[0.17, 0.08, 0.24]} color={p.shoes} />
+          <PBox p={p} out={0.022} pos={[0, -0.27, 0]} size={[0.16, 0.5, 0.18]} color={pants} />
+          <PBox p={p} out={0.022} pos={[0, -0.54, 0.03]} size={[0.17, 0.08, 0.24]} color={shoes} />
         </group>
-        {/* tronco com a camiseta na cor da pessoa */}
-        <PBox p={p} out={0.022} pos={[0, 0.86, 0]} size={[0.46, 0.52, 0.26]} color={color} />
-        <PBox p={p} out={0.022} pos={[0, 0.63, 0]} size={[0.46, 0.06, 0.27]} color={p.pants} outline={false} />
+        {/* tronco com a roupa */}
+        <PBox p={p} out={0.022} pos={[0, 0.86, 0]} size={[0.46, 0.52, 0.26]} color={torso} />
+        <PBox p={p} out={0.022} pos={[0, 0.63, 0]} size={[0.46, 0.06, 0.27]} color={pants} outline={false} />
+        {outfit !== 'camiseta' && <PBox p={p} out={0.022} pos={[0, 0.9, 0.132]} size={[0.14, 0.42, 0.01]} color={color} outline={false} cast={false} />}
         {/* gola e barra da camiseta */}
         <PBox p={p} out={0.022} pos={[0, 1.105, 0.02]} size={[0.24, 0.04, 0.24]} color={skin} outline={false} cast={false} />
         <PBox p={p} out={0.022} pos={[0, 1.07, 0.131]} size={[0.16, 0.06, 0.01]} color={skin} outline={false} cast={false} />
         {/* braços (giram no ombro), mãos na cor da pele */}
         <group ref={armL} position={[-0.3, 1.08, 0]}>
-          <PBox p={p} out={0.022} pos={[0, -0.2, 0]} size={[0.13, 0.4, 0.15]} color={color} />
+          <PBox p={p} out={0.022} pos={[0, -0.2, 0]} size={[0.13, 0.4, 0.15]} color={torso} />
           <PBox p={p} out={0.022} pos={[0, -0.44, 0]} size={[0.12, 0.1, 0.13]} color={skin} />
         </group>
         <group ref={armR} position={[0.3, 1.08, 0]}>
-          <PBox p={p} out={0.022} pos={[0, -0.2, 0]} size={[0.13, 0.4, 0.15]} color={color} />
+          <PBox p={p} out={0.022} pos={[0, -0.2, 0]} size={[0.13, 0.4, 0.15]} color={torso} />
           <PBox p={p} out={0.022} pos={[0, -0.44, 0]} size={[0.12, 0.1, 0.13]} color={skin} />
         </group>
         {/* cabeça grande, cabelo e olhos */}
         <PBox p={p} out={0.022} pos={[0, 1.33, 0]} size={[0.4, 0.38, 0.36]} color={skin} />
-        <PBox p={p} out={0.022} pos={[0, 1.54, -0.02]} size={[0.44, 0.12, 0.4]} color={hair} />
-        <PBox p={p} out={0.022} pos={[0, 1.38, -0.17]} size={[0.44, 0.3, 0.08]} color={hair} />
+        {style !== 'careca' && (
+          <>
+            <PBox p={p} out={0.022} pos={[0, 1.54, -0.02]} size={[0.44, 0.12, 0.4]} color={hair} />
+            <PBox p={p} out={0.022} pos={[0, 1.38, -0.17]} size={[0.44, 0.3, 0.08]} color={hair} />
+          </>
+        )}
+        {style === 'black' && <PBox p={p} out={0.022} pos={[0, 1.6, -0.03]} size={[0.62, 0.34, 0.56]} color={hair} />}
+        {beard && (
+          <>
+            <PBox p={p} out={0.022} pos={[0, 1.2, 0.17]} size={[0.34, 0.13, 0.04]} color={hair} outline={false} cast={false} />
+            <PBox p={p} out={0.022} pos={[0, 1.27, 0.19]} size={[0.16, 0.03, 0.01]} color={hair} outline={false} cast={false} />
+          </>
+        )}
         {style === 'topete' && <PBox p={p} out={0.022} pos={[0.04, 1.63, 0.08]} size={[0.3, 0.1, 0.22]} color={hair} rot={[0.3, 0, 0]} />}
         {style === 'longo' && (
           <>

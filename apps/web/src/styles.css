@@ -859,3 +859,22 @@ label.check input { width: auto; height: auto; }
   .mood-zoom-inner > img { max-height: 60vh; margin: 0 auto; }
 }
 
+/* editor de avatar */
+.modal.av-editor { max-width: 720px; width: 100%; }
+.av-body { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 20px; }
+.av-preview { display: flex; flex-direction: column; align-items: center; gap: 10px; position: sticky; top: 0; align-self: start; }
+.av-canvas { width: 220px !important; height: 280px !important; border-radius: 10px; background: var(--muted); image-rendering: pixelated; }
+.av-label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--muted-foreground); }
+.av-swatches { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; }
+.av-swatches button { width: 24px; height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: 50%; cursor: pointer; }
+.av-swatches button.on { outline: 2px solid var(--foreground); outline-offset: 1px; }
+.av-swatches input[type=color] { width: 28px; height: 26px; padding: 0; border: 0; background: none; cursor: pointer; }
+@media (max-width: 620px) { .av-body { grid-template-columns: 1fr; } .av-preview { position: static; } }
+
+/* ferramenta de paredes */
+.wall-panel { position: fixed; top: 110px; right: 16px; z-index: 30; display: flex; flex-direction: column; gap: 10px; width: 270px; max-width: calc(100vw - 32px); padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--background); box-shadow: 0 8px 28px rgba(0,0,0,.18); font-size: 13px; }
+.wall-types { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.wall-types button { display: flex; align-items: center; justify-content: flex-start; gap: 8px; height: 34px; padding: 0 8px; font-size: 12px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: inherit; cursor: pointer; }
+.wall-types button.on { border-color: var(--foreground); }
+.wall-types i { flex: none; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border-strong); }
+

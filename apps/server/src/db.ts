@@ -102,6 +102,15 @@ const MIGRATIONS: string[] = [
    ALTER TABLE jobs ADD COLUMN turn_started_at TEXT;`,
   // v0.8: nicho do cliente, para o moodboard e a biblioteca de referências
   `ALTER TABLE clients ADD COLUMN niche TEXT;`,
+  // v0.9: salas novas, funcionários novos e aparência dos avatares
+  `CREATE TABLE office_rooms (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+     name TEXT NOT NULL, emoji TEXT NOT NULL, floor TEXT NOT NULL, slot INTEGER NOT NULL, UNIQUE (office_id, slot));
+   ALTER TABLE users ADD COLUMN look TEXT;
+   ALTER TABLE agents ADD COLUMN look TEXT;
+   ALTER TABLE agents ADD COLUMN seat TEXT;
+   ALTER TABLE agents ADD COLUMN base TEXT;
+   ALTER TABLE offices ADD COLUMN walls TEXT NOT NULL DEFAULT '{}';`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -144,7 +153,7 @@ const camel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
-const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish']);
+const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls']);
 const BOOL_COLS = new Set(['paid', 'auto', 'must_change_pin']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {

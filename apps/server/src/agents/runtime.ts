@@ -43,7 +43,9 @@ function systemPrompt(agent: AgentProfile, office: Office, toolHints: string[]) 
   const tools = toolHints.length
     ? `\n\n## Suas ferramentas criativas (MCP)\n${toolHints.join('\n')}\nCada servidor lista os próprios comandos (\`command_list\` ou equivalente): consulte antes de usar.`
     : '';
-  return `${fill(agent.persona)}\n\n${fill(houseRules())}\n\nSkills que você domina: ${agent.skills.join(', ') || 'nenhuma específica'}.${tools}`;
+  // o funcionário pode ter sido renomeado: a persona ainda pode trazer o nome do modelo
+  const named = agent.persona.includes(agent.name) ? '' : `Neste escritório, você se chama **${agent.name}** (${agent.role}). Se o texto abaixo usar outro nome, vale este.\n\n`;
+  return `${named}${fill(agent.persona)}\n\n${fill(houseRules())}\n\nSkills que você domina: ${agent.skills.join(', ') || 'nenhuma específica'}.${tools}`;
 }
 
 function addMessage(jobId: string, officeId: string, role: JobMessage['role'], text: string) {
@@ -116,7 +118,10 @@ export function cancelJob(jobId: string) {
 }
 
 /** Render e transcrição disputam a máquina inteira: duas edições juntas levam muito mais que uma depois da outra. */
-const isHeavy = (jobId: string) => one<{ slug: string }>('SELECT a.slug FROM jobs j JOIN agents a ON a.id = j.agent_id WHERE j.id = ?', jobId)?.slug === 'editor-de-video';
+const isHeavy = (jobId: string) => {
+  const a = one<{ slug: string; base: string | null }>('SELECT a.slug, a.base FROM jobs j JOIN agents a ON a.id = j.agent_id WHERE j.id = ?', jobId);
+  return a?.slug === 'editor-de-video' || a?.base === 'editor-de-video';
+};
 
 function pump() {
   for (let i = 0; i < queue.length && running.size < config.maxConcurrentJobs;) {

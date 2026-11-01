@@ -8,7 +8,7 @@ import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { Tour, startTour, tourSeen } from './office/Tour';
-import { DESKS, HUMAN_DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
+import { HUMAN_DESKS, ROOMS, BOUNDS, agentSeat, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
 import { ThemeToggle, WorldStyleToggle } from './lib/ui';
 import { DecorUI, enterDecorate } from './office/decor/DecorUI';
@@ -287,6 +287,7 @@ function MiniMap({ floating = false, onClose }: { floating?: boolean; onClose?: 
   const [collapsed, setCollapsed] = useState(() => { try { return localStorage.getItem('office.mmCollapsed') === '1'; } catch { return false; } });
   useEffect(() => { const id = setInterval(() => force((x) => x + 1), 200); return () => clearInterval(id); }, []);
   const toggle = () => setCollapsed((c) => { try { localStorage.setItem('office.mmCollapsed', c ? '0' : '1'); } catch { /* ok */ } return !c; });
+  useStore((s) => s.mapRev);
   const W = BOUNDS.x1 - BOUNDS.x0, H = BOUNDS.z1 - BOUNDS.z0;
   const waiting = agents.filter((a) => a.status === 'aguardando').length;
 
@@ -309,8 +310,8 @@ function MiniMap({ floating = false, onClose }: { floating?: boolean; onClose?: 
       {agents.map((a) => (
         <g key={a.id} className={`mm-dot st-${a.status}`} onClick={() => goToAgent(a)}>
           <title>Ir até {a.name} · {AGENT_LABEL[a.status]}</title>
-          {a.status !== 'livre' && <circle className="mm-ring" cx={DESKS[a.room].x} cy={DESKS[a.room].z} r={1.3} />}
-          <circle cx={DESKS[a.room].x} cy={DESKS[a.room].z} r={0.7} fill={a.color} />
+          {a.status !== 'livre' && <circle className="mm-ring" cx={agentSeat(a).x} cy={agentSeat(a).z} r={1.3} />}
+          <circle cx={agentSeat(a).x} cy={agentSeat(a).z} r={0.7} fill={a.color} />
         </g>
       ))}
       {members.map((m) => {

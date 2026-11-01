@@ -46,6 +46,8 @@ flowchart LR
 - **Moodboards** (`clients/moodboard.ts`): só leem. O nicho vem de `REFERENCIAS\\indice.json`, mantido pela skill
   `arte-referencia`; o cliente, de pastas cujo nome começa com REFERENCIA e do `marca.json`. A tela busca as fontes da marca no
   Google Fonts; sem internet, usa uma fonte genérica.
+- **Planta** (`office/layout.ts`): as salas novas são anexos a leste do prédio, em colunas de três. `setCustomRooms`,
+  `setWallStyles` e `setAgentDesks` alteram no lugar as listas de salas, paredes e colisões; o mapa remonta quando `mapRev` muda.
 - **Backup**: `VACUUM INTO` diário em `dados/backups`, com `integrity_check` e os 14 últimos; a segunda cópia opcional usa um
   arquivo por dia da semana e não apaga nada na pasta de destino.
 - **Arquivos**: `/fs`, `/media` e `/probe` só enxergam a pasta raiz do escritório e as pastas extras.

@@ -1,4 +1,4 @@
-import type { RoomId, Vec2 } from '@office/shared';
+import type { CustomRoom, RoomId, Vec2, WallType } from '@office/shared';
 import type { PanelId } from '../lib/store';
 
 /**
@@ -14,6 +14,9 @@ import type { PanelId } from '../lib/store';
  *         │          ◀          ·  DESIGN  │
  *   z=18  └──────────┴────▼─────┴──────────┘
  *       x=-27      x=-9       x=9        x=27
+ *
+ * Salas novas são anexos a leste de x=27, em colunas de três (ver setCustomRooms). As constantes abaixo são
+ * alteradas no lugar: quem desenha a planta remonta o mapa quando `mapRev` muda na store.
  */
 
 export interface Room {
@@ -59,15 +62,20 @@ const WALL_DEFS: WallDef[] = [
   { a: { x: 9, z: -3 }, b: { x: 9, z: 7.5 }, doors: [2.2] },
 ];
 
-export interface WallSeg { x: number; z: number; w: number; d: number }
+export interface WallSeg { key: string; x: number; z: number; w: number; d: number }
+const coord = (n: number) => String(Math.round(n * 10) / 10);
+/** Divisas entre as salas: a parede é cortada nelas para cada sala poder ter a sua (vidro numa, alvenaria na outra). */
+const ROOM_LINES_X = [-9, 9];
+const ROOM_LINES_Z = [-3, 7.5];
 
 /** Vãos das portas, com uma faixa de passagem de cada lado (o modo Decorar não deixa bloquear). */
-export const DOOR_ZONES: Box[] = WALL_DEFS.flatMap(({ a, b, doors }) => doors.map((c) => (a.z === b.z
+const doorZones = ({ a, b, doors }: WallDef): Box[] => doors.map((c) => (a.z === b.z
   ? { x0: c - DOOR / 2, x1: c + DOOR / 2, z0: a.z - 1.2, z1: a.z + 1.2 }
-  : { x0: a.x - 1.2, x1: a.x + 1.2, z0: c - DOOR / 2, z1: c + DOOR / 2 })));
+  : { x0: a.x - 1.2, x1: a.x + 1.2, z0: c - DOOR / 2, z1: c + DOOR / 2 }));
+export const DOOR_ZONES: Box[] = WALL_DEFS.flatMap(doorZones);
 
 /** Quebra cada parede em blocos retangulares, deixando os vãos das portas. */
-export const WALLS: WallSeg[] = WALL_DEFS.flatMap(({ a, b, doors }) => {
+const wallSegs = ({ a, b, doors }: WallDef): WallSeg[] => {
   const horizontal = a.z === b.z;
   const from = horizontal ? a.x : a.z;
   const to = horizontal ? b.x : b.z;
@@ -77,11 +85,17 @@ export const WALLS: WallSeg[] = WALL_DEFS.flatMap(({ a, b, doors }) => {
   for (let i = 0; i < points.length; i += 2) {
     const s = points[i], e = points[i + 1];
     if (e - s < 0.05) continue;
-    const mid = (s + e) / 2;
-    segs.push(horizontal ? { x: mid, z: a.z, w: e - s, d: WALL_T } : { x: a.x, z: mid, w: WALL_T, d: e - s });
+    const lines = (horizontal ? ROOM_LINES_X : ROOM_LINES_Z).filter((v) => v > s + 0.05 && v < e - 0.05);
+    const stops = [s, ...lines, e];
+    for (let k = 0; k + 1 < stops.length; k++) {
+      const mid = (stops[k] + stops[k + 1]) / 2, len = stops[k + 1] - stops[k];
+      const [x, z] = horizontal ? [mid, a.z] : [a.x, mid];
+      segs.push({ key: `${coord(x)}:${coord(z)}`, x, z, ...(horizontal ? { w: len, d: WALL_T } : { w: WALL_T, d: len }) });
+    }
   }
   return segs;
-});
+};
+export const WALLS: WallSeg[] = WALL_DEFS.flatMap(wallSegs);
 
 export type FurnitureKind =
   | 'mesa' | 'cadeira' | 'sofa' | 'planta' | 'quadro' | 'calendario' | 'tv' | 'mesa-reuniao'
@@ -165,7 +179,7 @@ export const FURNITURE: Furniture[] = [
 ];
 
 /** Onde cada funcionário de IA senta, por sala. */
-export const DESKS: Record<RoomId, Vec2> = {
+export const DESKS: Record<string, Vec2> = {
   video: { x: 21.75, z: 4.7 },
   design: { x: 21.75, z: 13.85 },
   copy: { x: -18, z: -8.65 },
@@ -176,6 +190,14 @@ export const DESKS: Record<RoomId, Vec2> = {
 };
 
 export const SPAWN: Vec2 = { x: 0, z: 10.5 };
+
+/** Onde o funcionário senta: o lugar dele, a mesa padrão da sala ou, sem nenhum dos dois, o meio da sala. */
+export const agentSeat = (a: { room: string; seat?: Vec2 | null }): Vec2 => {
+  if (a.seat) return a.seat;
+  if (DESKS[a.room]) return DESKS[a.room];
+  const r = ROOMS.find((x) => x.id === a.room);
+  return r ? roomCenter(r) : SPAWN;
+};
 
 export function roomAt(p: Vec2): Room | null {
   return ROOMS.find((r) => p.x >= r.x0 && p.x < r.x1 && p.z >= r.z0 && p.z < r.z1) ?? null;
@@ -194,17 +216,108 @@ export const FURN_BOX = (f: Furniture): Box => {
   return { x0: f.x - w / 2, z0: f.z - d / 2, x1: f.x + w / 2, z1: f.z + d / 2 };
 };
 
-export const WALL_BOXES: Box[] = WALLS.map((w) => ({ x0: w.x - w.w / 2, z0: w.z - w.d / 2, x1: w.x + w.w / 2, z1: w.z + w.d / 2 }));
+const wallBox = (w: WallSeg): Box => ({ x0: w.x - w.w / 2, z0: w.z - w.d / 2, x1: w.x + w.w / 2, z1: w.z + w.d / 2 });
+export const WALL_BOXES: Box[] = WALLS.map(wallBox);
 const SOLIDS: Box[] = [
   ...WALL_BOXES,
   ...FURNITURE.filter((f) => f.solid).map(FURN_BOX),
 ];
 /** Peças da decoração que bloqueiam a passagem (atualizadas pelo modo Decorar). */
 let decorSolids: Box[] = [];
-export const setDecorSolids = (b: Box[]) => { decorSolids = b; grid = new Uint8Array(COLS * ROWS); corners = new Uint8Array((COLS + 1) * (ROWS + 1)); };
+export const setDecorSolids = (b: Box[]) => { decorSolids = b; resetGrid(); };
+
+// ---------------------------------------------------------------- planta que muda: anexos, paredes e mesas extras
+
+const MAIN = { rooms: [...ROOMS], furniture: [...FURNITURE], desks: [...HUMAN_DESKS], x1: BOUNDS.x1, walls: WALL_DEFS };
+const ANNEX_W = 14, ANNEX_D = 12, ANNEX_ROWS = 3;
+const annexRect = (slot: number) => {
+  const col = Math.floor(slot / ANNEX_ROWS), row = slot % ANNEX_ROWS;
+  const x0 = MAIN.x1 + col * ANNEX_W, z0 = BOUNDS.z0 + row * ANNEX_D;
+  return { col, row, x0, x1: x0 + ANNEX_W, z0, z1: z0 + ANNEX_D };
+};
+
+let wallStyles: Record<string, WallType> = {};
+let agentDesks: Box[] = [];
+export const wallTypeOf = (key: string): WallType => wallStyles[key] ?? 'alvenaria';
+
+function rebuildSolids() {
+  WALL_BOXES.length = 0;
+  WALL_BOXES.push(...WALLS.filter((w) => wallStyles[w.key] !== 'removida').map(wallBox));
+  SOLIDS.length = 0;
+  SOLIDS.push(...WALL_BOXES, ...FURNITURE.filter((f) => f.solid).map(FURN_BOX), ...agentDesks);
+  resetGrid();
+}
+
+/** Tipo de cada trecho de parede; a removida deixa de bloquear a passagem. */
+export function setWallStyles(map: Record<string, WallType>) {
+  wallStyles = map;
+  rebuildSolids();
+}
+
+/** Mesas dos funcionários que não usam a mesa padrão da sala. */
+export function setAgentDesks(agents: { seat?: Vec2 | null }[]) {
+  agentDesks = agents.filter((a) => a.seat).map((a) => FURN_BOX({ kind: 'mesa', x: a.seat!.x, z: a.seat!.z - 1.1 }));
+  rebuildSolids();
+}
+
+/** Salas novas: cada uma ganha paredes próprias, porta para o vizinho e duas mesas para pessoas. */
+export function setCustomRooms(list: CustomRoom[]) {
+  const taken = new Map(list.map((r) => [r.slot, r]));
+  const has = (col: number, row: number) => row >= 0 && row < ANNEX_ROWS && col >= 0 && taken.has(col * ANNEX_ROWS + row);
+  ROOMS.length = 0;
+  ROOMS.push(...MAIN.rooms, ...list.map((r): Room => {
+    const a = annexRect(r.slot);
+    return { id: r.id, label: r.name, emoji: r.emoji, x0: a.x0, x1: a.x1, z0: a.z0, z1: a.z1, floor: r.floor, key: r.slot < 2 ? String(8 + r.slot) : '' };
+  }));
+  const extra: WallDef[] = [];
+  for (const r of list) {
+    const { col, row, x0, x1, z0, z1 } = annexRect(r.slot);
+    const xc = (x0 + x1) / 2, zc = (z0 + z1) / 2;
+    if (!has(col, row - 1)) extra.push({ a: { x: x0, z: z0 }, b: { x: x1, z: z0 }, doors: [] });
+    extra.push({ a: { x: x0, z: z1 }, b: { x: x1, z: z1 }, doors: has(col, row + 1) ? [xc] : [] });
+    extra.push({ a: { x: x1, z: z0 }, b: { x: x1, z: z1 }, doors: has(col + 1, row) ? [zc] : [] });
+    if (col > 0 && !has(col - 1, row)) extra.push({ a: { x: x0, z: z0 }, b: { x: x0, z: z1 }, doors: [] });
+  }
+  // a parede leste do prédio abre uma porta para cada sala da primeira coluna
+  const eastDoors = [0, 1, 2].filter((row) => has(0, row)).map((row) => BOUNDS.z0 + (row + 0.5) * ANNEX_D);
+  const defs = [...MAIN.walls.map((d) => (d.a.x === MAIN.x1 && d.b.x === MAIN.x1 && d.a.z === BOUNDS.z0 ? { ...d, doors: eastDoors } : d)), ...extra];
+  WALLS.length = 0;
+  WALLS.push(...defs.flatMap(wallSegs));
+  DOOR_ZONES.length = 0;
+  DOOR_ZONES.push(...defs.flatMap(doorZones));
+  const desks = list.flatMap((r): HumanDesk[] => {
+    const a = annexRect(r.slot);
+    return [{ id: `${r.id}-1`, room: r.id, x: a.x0 + 3.5, z: a.z0 + 3 }, { id: `${r.id}-2`, room: r.id, x: a.x1 - 3.5, z: a.z0 + 3 }];
+  });
+  HUMAN_DESKS.length = 0;
+  HUMAN_DESKS.push(...MAIN.desks, ...desks);
+  FURNITURE.length = 0;
+  FURNITURE.push(...MAIN.furniture, ...desks.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true })));
+  BOUNDS.x1 = list.reduce((m, r) => Math.max(m, annexRect(r.slot).x1), MAIN.x1);
+  COLS = Math.round((BOUNDS.x1 - BOUNDS.x0) / CELL);
+  rebuildSolids();
+}
+
+/**
+ * Lugar para mais um funcionário: varre a sala atrás de um espaço para a mesa e a cadeira. Devolve onde ele senta,
+ * ou null se a sala estiver cheia.
+ */
+export function findDeskSpot(roomId: string): Vec2 | null {
+  const r = ROOMS.find((x) => x.id === roomId);
+  if (!r) return null;
+  const hit = (b: Box, list: Box[]) => list.some((s) => b.x0 < s.x1 && b.x1 > s.x0 && b.z0 < s.z1 && b.z1 > s.z0);
+  for (let z = r.z0 + 3.2; z < r.z1 - 1.5; z += 1.5)
+    for (let x = r.x0 + 2.2; x < r.x1 - 2.1; x += 1.5) {
+      const box = { x0: x - 1.6, x1: x + 1.6, z0: z - 2, z1: z + 1 };
+      if (!hit(box, SOLIDS) && !hit(box, decorSolids) && !hit(box, DOOR_ZONES)) return { x, z };
+    }
+  return null;
+}
 
 const RADIUS = 0.35;
 export function blocked(p: Vec2) {
+  // a leste do prédio, só dentro das salas que existem: o espaço entre elas é vazio
+  if (p.x > MAIN.x1 && !ROOMS.some((r) => r.x0 >= MAIN.x1 && p.x >= r.x0 - 0.2 && p.x <= r.x1 + 0.2 && p.z >= r.z0 && p.z <= r.z1)) return true;
   if (p.x < BOUNDS.x0 + RADIUS || p.x > BOUNDS.x1 - RADIUS || p.z < BOUNDS.z0 + RADIUS || p.z > BOUNDS.z1 - RADIUS) return true;
   const hit = (b: Box) => p.x > b.x0 - RADIUS && p.x < b.x1 + RADIUS && p.z > b.z0 - RADIUS && p.z < b.z1 + RADIUS;
   return SOLIDS.some(hit) || decorSolids.some(hit);
@@ -247,7 +360,7 @@ function clearLine(a: Vec2, b: Vec2, pad = CLEARANCE) {
 }
 
 const CELL = 0.25;
-const COLS = Math.round((BOUNDS.x1 - BOUNDS.x0) / CELL);
+let COLS = Math.round((BOUNDS.x1 - BOUNDS.x0) / CELL);
 const ROWS = Math.round((BOUNDS.z1 - BOUNDS.z0) / CELL);
 const cellOf = (p: Vec2) => [Math.floor((p.x - BOUNDS.x0) / CELL), Math.floor((p.z - BOUNDS.z0) / CELL)] as const;
 const cellCenter = (c: number, r: number): Vec2 => ({ x: BOUNDS.x0 + (c + 0.5) * CELL, z: BOUNDS.z0 + (r + 0.5) * CELL });
@@ -255,6 +368,7 @@ const cellCenter = (c: number, r: number): Vec2 => ({ x: BOUNDS.x0 + (c + 0.5) *
 let grid = new Uint8Array(COLS * ROWS);
 /** O mesmo para os cantos entre as células: a diagonal passa por eles e não pode cortar a quina de um móvel. */
 let corners = new Uint8Array((COLS + 1) * (ROWS + 1));
+function resetGrid() { grid = new Uint8Array(COLS * ROWS); corners = new Uint8Array((COLS + 1) * (ROWS + 1)); }
 const cornerFree = (c: number, r: number) => {
   const k = r * (COLS + 1) + c;
   if (!corners[k]) corners[k] = blocked({ x: BOUNDS.x0 + c * CELL, z: BOUNDS.z0 + r * CELL }) ? 2 : 1;

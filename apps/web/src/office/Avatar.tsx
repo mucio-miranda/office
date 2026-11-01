@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { useFrame } from '@react-three/fiber';
 import type { Group, Mesh } from 'three';
+import type { AvatarLook } from '@office/shared';
 import { registerAnchor } from './Labels';
 import { useWorldStyle, type ScenePalette } from '../lib/theme';
 import { PixelAvatar } from './pixel/Avatar';
@@ -9,6 +10,8 @@ export interface AvatarProps {
   /** Chave do rótulo em LabelLayer (user:<id> ou agent:<id>). */
   anchorId: string;
   color: string;
+  /** Aparência escolhida; sem ela, sai do id para ninguém ficar igual. */
+  look?: AvatarLook | null;
   p: ScenePalette;
   /** Lido a cada quadro: posição e direção atuais. */
   getState: () => { x: number; z: number; dir: number; moving: boolean; seated?: boolean };

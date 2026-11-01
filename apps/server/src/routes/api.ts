@@ -5,15 +5,15 @@ import { createReadStream, existsSync, statSync, readdirSync, readFileSync } fro
 import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import {
-  BRIEFING_FIELDS, DEMAND_COLUMNS, NETWORKS, PROCESSES, processById, uid,
-  type AgentJob, type AgentProfile, type CalendarEvent, type Client, type Demand, type JobMessage, type Member, type Office, type Transaction, type User,
+  BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, PROCESSES, WALL_TYPES, processById, uid,
+  type AgentJob, type AgentProfile, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
 import {
   MIN_PIN, attemptKeys, blocked, checkPin, checkResetCode, clearFails, createResetCode, createSession, hashPin, isLocal, membership, noteFail,
   requireMember, requireOwner, requireUser, revokeSession, revokeSessions, sessionCookie, setPin,
 } from '../auth.ts';
-import { disconnectUser, invalidate, onlineUsers } from '../realtime.ts';
+import { disconnectUser, invalidate, onlineUsers, refreshPresence } from '../realtime.ts';
 import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts';
 import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
@@ -37,7 +37,29 @@ const pinField = z.string().max(128);
 
 /** Valida o corpo com zod e responde 400 com mensagem legível. */
 const members = (officeId: string) =>
-  all<Member>('SELECT u.id, u.name, u.color, u.created_at, m.role, m.desk FROM office_members m JOIN users u ON u.id = m.user_id WHERE m.office_id = ?', officeId);
+  all<Member>('SELECT u.id, u.name, u.color, u.look, u.created_at, m.role, m.desk FROM office_members m JOIN users u ON u.id = m.user_id WHERE m.office_id = ?', officeId);
+
+const hexColor = z.string().regex(/^#[0-9a-f]{6}$/i);
+const lookSchema = z.object({
+  skin: hexColor.optional(), hair: hexColor.optional(), hairStyle: z.enum(['curto', 'topete', 'longo', 'coque', 'careca', 'black']).optional(),
+  beard: z.boolean().optional(), glasses: z.boolean().optional(), outfit: z.enum(['camiseta', 'blazer', 'jaleco']).optional(), pants: hexColor.optional(), shoes: hexColor.optional(),
+});
+const personSchema = z.object({ name: z.string().trim().min(2).max(40).optional(), color: hexColor.optional(), look: lookSchema.nullable().optional() });
+const BASE_ROOMS = ['recepcao', 'reuniao', 'video', 'design', 'copy', 'gerencia', 'copa'];
+const validRoom = (officeId: string, room: string) => BASE_ROOMS.includes(room) || !!one('SELECT id FROM office_rooms WHERE id = ? AND office_id = ?', room, officeId);
+
+/** Nome e aparência de uma pessoa: o nome também é o do login, então não pode repetir. */
+function updatePerson(userId: string, b: z.infer<typeof personSchema>, reply: FastifyReply) {
+  if (b.name && one('SELECT id FROM users WHERE name = ? AND id != ?', b.name, userId)) {
+    reply.code(409).send({ error: 'Já existe uma conta com esse nome.' });
+    return null;
+  }
+  update('users', userId, b);
+  const user = one<User>('SELECT id, name, color, look, created_at FROM users WHERE id = ?', userId)!;
+  refreshPresence(user);
+  for (const m of all<{ officeId: string }>('SELECT office_id FROM office_members WHERE user_id = ?', userId)) invalidate(m.officeId, 'members');
+  return user;
+}
 
 function body<T extends z.ZodTypeAny>(schema: T, req: FastifyRequest, reply: FastifyReply): z.infer<T> | undefined {
   const r = schema.safeParse(req.body ?? {});
@@ -55,7 +77,8 @@ function body<T extends z.ZodTypeAny>(schema: T, req: FastifyRequest, reply: Fas
 export function syncAgentTools() {
   const templates = new Map(loadTemplates().map((t) => [t.slug, t]));
   for (const a of all<AgentProfile>('SELECT * FROM agents')) {
-    const t = templates.get(a.slug);
+    // funcionários criados no escritório seguem as permissões do modelo de que vieram
+    const t = templates.get(a.base ?? a.slug);
     if (!t) continue;
     // versões antigas salvaram as permissões com aspas ("Bash(python:*)"), e assim elas não valiam
     const unquote = (s: string) => s.replace(/^"|"$/g, '');
@@ -169,6 +192,13 @@ export async function api(app: FastifyInstance) {
       };
     });
 
+    // nome e aparência do próprio avatar; o nome novo vale também para entrar
+    r.patch('/api/me', async (req, reply) => {
+      const b = body(personSchema, req, reply);
+      if (!b) return;
+      return updatePerson(req.user.id, b, reply) ?? undefined;
+    });
+
     r.post('/api/auth/sair', async (req, reply) => {
       revokeSession(req.token);
       reply.header('Set-Cookie', sessionCookie('').replace(/Max-Age=\d+/, 'Max-Age=0'));
@@ -278,6 +308,76 @@ export async function api(app: FastifyInstance) {
       update('offices', officeId, { inviteCode });
       logActivity(officeId, `user:${req.user.id}`, 'trocou o código de convite');
       return { inviteCode };
+    });
+
+    r.patch('/api/offices/:officeId/members/:userId', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId, userId } = req.params as { officeId: string; userId: string };
+      if (!membership(officeId, userId)) return reply.code(404).send({ error: 'Essa pessoa não está no escritório.' });
+      const b = body(personSchema, req, reply);
+      if (!b) return;
+      return updatePerson(userId, b, reply) ?? undefined;
+    });
+
+    // paredes: tipo de cada trecho (quem decora o mapa também mexe nelas)
+    r.get('/api/offices/:officeId/walls', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return one<{ walls: Record<string, string> }>('SELECT walls FROM offices WHERE id = ?', (req.params as any).officeId)?.walls ?? {};
+    });
+    r.put('/api/offices/:officeId/walls', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as { officeId: string };
+      if (membership(officeId, req.user.id)?.role === 'convidado') return reply.code(403).send({ error: 'Convidados não mudam as paredes.' });
+      const b = body(z.record(z.string().regex(/^-?[\d.]+:-?[\d.]+$/).max(24), z.enum(WALL_TYPES)).refine((m) => Object.keys(m).length <= 600, 'Paredes demais.'), req, reply);
+      if (!b) return;
+      db.prepare('UPDATE offices SET walls = ? WHERE id = ?').run(JSON.stringify(b), officeId);
+      invalidate(officeId, 'walls');
+      return { ok: true };
+    });
+
+    // salas novas: anexos a leste do prédio
+    r.get('/api/offices/:officeId/rooms', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return all<CustomRoom>('SELECT * FROM office_rooms WHERE office_id = ? ORDER BY slot', (req.params as any).officeId);
+    });
+    const roomSchema = z.object({ name: z.string().trim().min(2).max(40), emoji: z.string().trim().min(1).max(8).default('🚪'), floor: hexColor.default('#e8e4dc') });
+    r.post('/api/offices/:officeId/rooms', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId } = req.params as { officeId: string };
+      const b = body(roomSchema, req, reply);
+      if (!b) return;
+      const used = new Set(all<{ slot: number }>('SELECT slot FROM office_rooms WHERE office_id = ?', officeId).map((x) => x.slot));
+      const slot = Array.from({ length: MAX_CUSTOM_ROOMS }, (_, i) => i).find((i) => !used.has(i));
+      if (slot === undefined) return reply.code(409).send({ error: `O limite é de ${MAX_CUSTOM_ROOMS} salas novas.` });
+      const room: CustomRoom = { id: `sala-${randomBytes(4).toString('hex')}`, officeId, ...b, slot };
+      insert('office_rooms', room as never);
+      logActivity(officeId, `user:${req.user.id}`, 'criou a sala', room.name);
+      invalidate(officeId, 'rooms');
+      return room;
+    });
+    r.patch('/api/offices/:officeId/rooms/:id', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId, id } = req.params as { officeId: string; id: string };
+      if (!one('SELECT id FROM office_rooms WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Sala não encontrada' });
+      const b = body(roomSchema.partial(), req, reply);
+      if (!b) return;
+      update('office_rooms', id, b);
+      invalidate(officeId, 'rooms');
+      return { ok: true };
+    });
+    r.delete('/api/offices/:officeId/rooms/:id', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId, id } = req.params as { officeId: string; id: string };
+      const room = one<CustomRoom>('SELECT * FROM office_rooms WHERE id = ? AND office_id = ?', id, officeId);
+      if (!room) return { ok: true };
+      const inside = all<{ name: string }>('SELECT name FROM agents WHERE office_id = ? AND room = ?', officeId, id);
+      if (inside.length) return reply.code(409).send({ error: `Mude ${inside.map((a) => a.name).join(' e ')} de sala antes.` });
+      db.prepare("UPDATE office_members SET desk = NULL WHERE office_id = ? AND desk LIKE ?").run(officeId, `${id}-%`);
+      db.prepare('DELETE FROM office_rooms WHERE id = ?').run(id);
+      logActivity(officeId, `user:${req.user.id}`, 'removeu a sala', room.name);
+      invalidate(officeId, 'rooms');
+      invalidate(officeId, 'members');
+      return { ok: true };
     });
 
     r.post('/api/offices/:officeId/members/:userId/redefinir', async (req, reply) => {
@@ -670,6 +770,7 @@ export async function api(app: FastifyInstance) {
     });
 
     // ---------------- funcionários de IA ----------------
+    const seatSchema = z.object({ x: z.number().min(-200).max(200), z: z.number().min(-200).max(200) });
     r.get('/api/offices/:officeId/agents', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       return all<AgentProfile>('SELECT * FROM agents WHERE office_id = ? ORDER BY name', (req.params as any).officeId);
@@ -677,11 +778,47 @@ export async function api(app: FastifyInstance) {
 
     r.patch('/api/offices/:officeId/agents/:id', async (req, reply) => {
       if (!requireOwner(req, reply)) return;
-      const b = body(z.object({ name: z.string().optional(), role: z.string().optional(), persona: z.string().optional(), color: z.string().optional(), allowedTools: z.array(z.string()).optional(), skills: z.array(z.string()).optional(), mcp: z.array(z.string().regex(/^!?[a-z0-9-]+$/)).optional(), live: z.array(z.string().regex(/^[a-z0-9-]+$/)).optional() }), req, reply);
+      const b = body(z.object({ name: z.string().optional(), role: z.string().optional(), persona: z.string().optional(), color: z.string().optional(), allowedTools: z.array(z.string()).optional(), skills: z.array(z.string()).optional(), mcp: z.array(z.string().regex(/^!?[a-z0-9-]+$/)).optional(), live: z.array(z.string().regex(/^[a-z0-9-]+$/)).optional(), look: lookSchema.nullable().optional(), room: z.string().min(1).max(40).optional(), seat: seatSchema.nullable().optional() }), req, reply);
       if (!b) return;
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM agents WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Funcionário não encontrado' });
+      if (b.room && !validRoom(officeId, b.room)) return reply.code(400).send({ error: 'Essa sala não existe.' });
       update('agents', id, b);
+      invalidate(officeId, 'agents');
+      return { ok: true };
+    });
+
+    // funcionário novo: herda permissões, skills e jeito de trabalhar de um dos modelos
+    r.post('/api/offices/:officeId/agents', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId } = req.params as any;
+      const b = body(z.object({
+        base: z.string().min(1), name: z.string().trim().min(2).max(40), role: z.string().trim().max(80).default(''), room: z.string().min(1).max(40), seat: seatSchema.nullable().default(null),
+        color: hexColor.default('#7c5cff'), look: lookSchema.nullable().default(null),
+      }), req, reply);
+      if (!b) return;
+      const t = loadTemplates().find((x) => x.slug === b.base);
+      if (!t) return reply.code(400).send({ error: 'Esse modelo de funcionário não existe.' });
+      if (!validRoom(officeId, b.room)) return reply.code(400).send({ error: 'Essa sala não existe.' });
+      const agent = {
+        id: uid(), officeId, slug: `${t.slug}-${randomBytes(3).toString('hex')}`, base: t.slug, name: b.name, role: b.role || t.role, room: b.room, seat: b.seat, color: b.color, look: b.look,
+        skills: t.skills, tools: t.tools, persona: t.persona.replaceAll(t.name, b.name), allowedTools: t.allowedTools, mcp: t.mcp, live: [], status: 'livre',
+      };
+      insert('agents', agent as never);
+      logActivity(officeId, `user:${req.user.id}`, 'contratou', `${agent.name} (${agent.role})`);
+      invalidate(officeId, 'agents');
+      return agent;
+    });
+
+    r.delete('/api/offices/:officeId/agents/:id', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const a = one<AgentProfile>('SELECT * FROM agents WHERE id = ? AND office_id = ?', id, officeId);
+      if (!a) return { ok: true };
+      if (!a.base) return reply.code(409).send({ error: 'Os funcionários originais não saem: a esteira conta com eles. Dá para mudar o nome e a aparência.' });
+      if (one("SELECT id FROM jobs WHERE agent_id = ? AND status IN ('fila','rodando','aguardando')", id)) return reply.code(409).send({ error: `${a.name} está com uma tarefa em andamento.` });
+      db.prepare('DELETE FROM agents WHERE id = ?').run(id);
+      logActivity(officeId, `user:${req.user.id}`, 'desligou', a.name);
       invalidate(officeId, 'agents');
       return { ok: true };
     });

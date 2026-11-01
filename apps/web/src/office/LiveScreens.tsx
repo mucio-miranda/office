@@ -4,7 +4,7 @@ import type { LiveSession } from '@office/shared';
 import { useStore } from '../lib/store';
 import { useWorldStyle } from '../lib/theme';
 import { useLiveFrame } from '../panels/Tools';
-import { DESKS } from './layout';
+import { agentSeat } from './layout';
 
 /** Ferramentas de vídeo e áudio também aparecem na TV grande da ilha de edição. */
 const VIDEO_TOOLS = new Set(['filmcraft', 'effectcraft', 'soundcraft']);
@@ -76,7 +76,7 @@ export function LiveScreens() {
       {[...byAgent.values()].map((s) => {
         const a = agents.find((x) => x.id === s.agentId);
         if (!a) return null;
-        const desk = DESKS[a.room];
+        const desk = agentSeat(a);
         // o monitor da mesa fica 1,1 atrás da cadeira e 0,3 para dentro da mesa
         return <Screen key={s.id} s={s} pos={[desk.x, monitorY, desk.z - 1.1 - 0.3 + 0.017]} size={[0.76, 0.44]} />;
       })}

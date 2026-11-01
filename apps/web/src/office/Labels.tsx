@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import { useStore } from '../lib/store';
 import { useWorldStyle } from '../lib/theme';
-import { DESKS, ROOMS } from './layout';
+import { ROOMS } from './layout';
 
 /**
  * Rótulos (nomes, balões de status e nomes das salas) em DOM puro, fora do Canvas.
@@ -16,9 +16,6 @@ export const registerAnchor = (id: string, a: Anchor) => {
   anchors.set(id, a);
   return () => { anchors.delete(id); };
 };
-
-// salas: âncora fixa no chão, perto da parede do fundo
-for (const r of ROOMS) anchors.set(`room:${r.id}`, () => ({ x: (r.x0 + r.x1) / 2, z: r.z0 + 1.2, y: 0.02 }));
 
 /** Altura do rótulo acima do chão: o avatar em pixel art é maior que o peão da maquete. */
 const head = () => (useWorldStyle.getState().style === 'pixel' ? 2.1 : 1.75);
@@ -56,6 +53,9 @@ export function LabelLayer() {
   const open = useStore((s) => s.open);
 
   const members = useStore((s) => s.members);
+  useStore((s) => s.mapRev);
+  // salas: âncora fixa no chão, perto da parede do fundo
+  for (const r of ROOMS) anchors.set(`room:${r.id}`, () => ({ x: (r.x0 + r.x1) / 2, z: r.z0 + 1.2, y: 0.02 }));
   type Item = {
     id: string; name: string; sub?: string; color: string; status?: string | null; statusClass?: string; emoji?: string;
     onClick?: () => void; me?: boolean; desk?: boolean; away?: boolean;
@@ -65,8 +65,7 @@ export function LabelLayer() {
   for (const p of Object.values(presences))
     items.push({ id: `user:${p.userId}`, name: p.name, color: p.color, emoji: emotes[p.userId]?.emoji, status: PRESENCE_STATUS[p.status], statusClass: 'st-livre' });
   for (const a of agents)
-    if (DESKS[a.room])
-      items.push({ id: `agent:${a.id}`, name: a.name, sub: a.role, color: a.color, status: AGENT_STATUS[a.status], statusClass: `st-${a.status}`, onClick: () => open('agente', a.id) });
+    items.push({ id: `agent:${a.id}`, name: a.name, sub: a.role, color: a.color, status: AGENT_STATUS[a.status], statusClass: `st-${a.status}`, onClick: () => open('agente', a.id) });
   // plaquinha das mesas com dono (o mundo esconde quando o dono está sentado nela)
   for (const m of members) {
     if (!m.desk) continue;

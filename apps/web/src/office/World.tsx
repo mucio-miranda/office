@@ -14,7 +14,9 @@ import { FurnitureMesh } from './Furniture';
 import { LiveScreens } from './LiveScreens';
 import { ClientArchive, cabinets, openArchive } from './Archive';
 import { MoodboardWall } from './MoodboardWall';
-import { DESKS, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALLS, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+
+const MAQUETE_WALL: Record<string, string> = { branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f', vidro: '#bfe6f5', 'vidro-fume': '#39444c' };
+import { agentSeat, wallTypeOf, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALLS, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -95,7 +97,7 @@ export function goTo(target: Vec2, face?: Vec2) {
 
 /** Vai até a mesa de um funcionário de IA. Chega pela direita da tela, para os nomes não se encobrirem. */
 export function goToAgent(a: AgentProfile) {
-  const d = DESKS[a.room];
+  const d = agentSeat(a);
   goTo({ x: d.x + 1.5, z: d.z - 0.4 }, d);
 }
 
@@ -290,7 +292,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       else if (owner.id === st.user?.id && !player.seated) best = { d, key: `d:${hd.id}:minha`, n: { label: 'Sentar na sua mesa', action: () => sitAt(hd) } };
     }
     for (const a of st.agents) {
-      const desk = DESKS[a.room];
+      const desk = agentSeat(a);
       const d = Math.hypot(desk.x - player.x, desk.z - player.z);
       if (d < 2.2 && (!best || d < best.d)) best = { d, key: `a:${a.id}`, n: { label: `Falar com ${a.name}`, action: () => st.open('agente', a.id) } };
     }
@@ -314,7 +316,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     cam.realZoom = ortho.zoom;
   });
 
-  return <Avatar anchorId={`user:${user.id}`} color={user.color} p={p} ring={p.screen} getState={() => player} />;
+  return <Avatar anchorId={`user:${user.id}`} color={user.color} look={user.look} p={p} ring={p.screen} getState={() => player} />;
 }
 
 export function useFurniture(f: Furniture) {
@@ -338,15 +340,15 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
     cur.current.moving = target.current.moving;
     cur.current.seated = target.current.seated;
   });
-  return <Avatar anchorId={`user:${pr.userId}`} color={pr.color} p={p} getState={() => cur.current} />;
+  return <Avatar anchorId={`user:${pr.userId}`} color={pr.color} look={pr.look} p={p} getState={() => cur.current} />;
 }
 
 function AgentNPC({ a, p }: { a: AgentProfile; p: ScenePalette }) {
   const open = useStore((s) => s.open);
-  const desk = DESKS[a.room];
+  const desk = agentSeat(a);
   const state = useMemo(() => ({ x: desk.x, z: desk.z, dir: Math.PI, moving: false }), [desk.x, desk.z]);
   return (
-    <Avatar anchorId={`agent:${a.id}`} seated typing={a.status === 'trabalhando'} color={a.color} p={p}
+    <Avatar anchorId={`agent:${a.id}`} seated typing={a.status === 'trabalhando'} color={a.color} look={a.look} p={p}
       ring={STATUS_RING[a.status]} pulse={a.status === 'aguardando'} getState={() => state} onClick={() => { if (!droneBlocksClick()) open('agente', a.id); }} />
   );
 }
@@ -464,6 +466,7 @@ const leaveFloor = () => { tileHover.on = false; };
 function Floor({ p }: { p: ScenePalette }) {
   const pixel = useWorldStyle((s) => s.style) === 'pixel';
   const px = usePixel();
+  useStore((s) => s.walls);
   if (pixel) return <PixelRoom p={px} onWalk={walk} onHover={hoverFloor} onLeave={leaveFloor} />;
   return (
     <group>
@@ -487,18 +490,24 @@ function Floor({ p }: { p: ScenePalette }) {
         <planeGeometry args={[54, 36]} />
         <shadowMaterial transparent opacity={p.shadow + 0.04} />
       </mesh>
-      {WALLS.map((w, i) => (
-        <mesh key={i} position={[w.x, WALL_H / 2, w.z]} castShadow receiveShadow>
-          <boxGeometry args={[w.w, WALL_H, w.d]} />
-          <meshStandardMaterial color={p.wall} roughness={1} />
-        </mesh>
-      ))}
+      {WALLS.filter((w) => wallTypeOf(w.key) !== 'removida').map((w) => {
+        const type = wallTypeOf(w.key);
+        return (
+          <mesh key={`${w.key}:${type}`} position={[w.x, WALL_H / 2, w.z]} castShadow receiveShadow>
+            <boxGeometry args={[w.w, WALL_H, w.d]} />
+            <meshStandardMaterial color={MAQUETE_WALL[type] ?? p.wall} roughness={1} transparent={type.startsWith('vidro')} opacity={type.startsWith('vidro') ? 0.35 : 1} />
+          </mesh>
+        );
+      })}
     </group>
   );
 }
 
 /** Mundo 3D. Com `active=false` (uma página aberta por cima) o render só acontece sob demanda. */
 export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => void; active: boolean }) {
+  const mapRev = useStore((s) => s.mapRev);
+  // a sala em que a pessoa estava pode ter saído do mapa
+  useEffect(() => { if (blocked(player)) { const q = freeSpotNear(SPAWN); player.x = q.x; player.z = q.z; player.dirty = true; } }, [mapRev]);
   const presences = useStore((s) => s.presences);
   const agents = useStore((s) => s.agents);
   const p = useScene();
@@ -607,7 +616,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
 
   return (
     // Pixel: a cena sai em resolução menor e o CSS amplia sem suavizar (image-rendering: pixelated)
-    <Canvas key={pixel ? 'pixel' : 'maquete'} flat shadows={pixel ? 'basic' : 'soft'} dpr={pixel ? window.devicePixelRatio / PIXEL_SIZE : [1, 2]}
+    <Canvas key={`${pixel ? 'pixel' : 'maquete'}:${mapRev}`} flat shadows={pixel ? 'basic' : 'soft'} dpr={pixel ? window.devicePixelRatio / PIXEL_SIZE : [1, 2]}
       gl={{ antialias: !pixel }} className={`world ${pixel ? 'pixel' : ''}`} frameloop={active ? 'always' : 'demand'}>
       <color attach="background" args={[pixel ? px.void : p.background]} />
       <OrthographicCamera makeDefault zoom={cam.zoom} near={-100} far={200} position={[30, 34, 30]} />
@@ -627,6 +636,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         </>
       )}
       <Floor p={p} />
+      {agents.filter((a) => a.seat).map((a) => <FurnitureMesh key={`mesa-${a.id}`} f={{ kind: 'mesa', x: a.seat!.x, z: a.seat!.z - 1.1, solid: true }} p={p} onUse={() => {}} />)}
       {FURNITURE.map((f, i) => f.kind === 'arquivo' ? (
         <ClientArchive key={i} f={f} p={p} onUse={(x, id) => { if (droneBlocksClick()) return; walkTo({ x, z: f.z + 1.3 }); openArchive(id); }} />
       ) : f.kind === 'moodboard' ? (

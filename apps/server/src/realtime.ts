@@ -28,6 +28,15 @@ export function disconnectUser(userId: string, except?: string) {
   for (const c of conns) if (c.presence.userId === userId && c.token !== except) c.ws.close(4001, 'sessão encerrada');
 }
 
+/** A pessoa mudou de nome ou aparência: quem está no escritório vê na hora. */
+export function refreshPresence(user: { id: string; name: string; color: string; look?: unknown }) {
+  for (const c of conns) {
+    if (c.presence.userId !== user.id) continue;
+    Object.assign(c.presence, { name: user.name, color: user.color, look: user.look ?? null });
+    broadcast(c.officeId, { t: 'presence', presence: c.presence });
+  }
+}
+
 /** Ponto de entrada de cada aba aberta. A primeira mensagem precisa ser `join`. */
 export function handleSocket(ws: WebSocket) {
   let conn: Conn | null = null;
@@ -50,7 +59,7 @@ export function handleSocket(ws: WebSocket) {
         ws,
         token: msg.token,
         officeId: msg.officeId,
-        presence: { userId: user.id, name: user.name, color: user.color, pos: { x: 0, z: 9 }, dir: Math.PI, moving: false, room: 'recepcao', status: 'disponivel' },
+        presence: { userId: user.id, name: user.name, color: user.color, look: user.look ?? null, pos: { x: 0, z: 9 }, dir: Math.PI, moving: false, room: 'recepcao', status: 'disponivel' },
       };
       conns.add(conn);
       send({ t: 'welcome', you: user.id, presences: onlineUsers(msg.officeId) });

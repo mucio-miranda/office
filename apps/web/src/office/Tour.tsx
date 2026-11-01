@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import type { Vec2 } from '@office/shared';
 import { useStore } from '../lib/store';
 import { beacon, cam, myDesk, player, recenter } from './World';
-import { DESKS, HUMAN_DESKS, deskSeat } from './layout';
+import { HUMAN_DESKS, agentSeat, deskSeat } from './layout';
 
 /**
  * Tour guiado do primeiro acesso: a gerente (Rafa) apresenta o escritório em poucos passos.
@@ -34,7 +34,7 @@ function useSteps(): Step[] {
     {
       title: `Oi, ${user?.name.split(' ')[0]}! Eu sou ${rafa ? `a ${rafa.name}` : 'a gerente'}.`,
       body: <>Cuido da gerência e das contas do <b>{office?.name}</b>. Em um minuto te mostro onde fica cada coisa.</>,
-      focus: rafa ? DESKS[rafa.room] : { x: 0, z: -9 }, zoom: 46, spot: true,
+      focus: rafa ? agentSeat(rafa) : { x: 0, z: -9 }, zoom: 46, spot: true,
     },
     {
       title: 'O escritório tem 7 salas',

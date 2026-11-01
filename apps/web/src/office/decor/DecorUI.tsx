@@ -7,6 +7,8 @@ import { useTheme, useWorldStyle, usePixel } from '../../lib/theme';
 import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
+import { ROOMS } from '../layout';
+import { WALL_LABEL, WALL_OPTIONS, applyWall, saveWalls, useWallTool, wallsOfRoom } from './walls';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
 } from './state';
@@ -199,8 +201,44 @@ function TopBar() {
       <button className="ghost small pill" onClick={() => { if (confirm('Voltar à decoração padrão do Office? Dá para desfazer depois.')) restoreDefault(); }} title="Decoração padrão">
         <RotateCcw size={14} /> Padrão
       </button>
+      <WallToolButton />
       <button className="primary small decor-done" onClick={() => setEditing(false)}><Check size={14} /> Concluir <kbd>X</kbd></button>
     </div>
+  );
+}
+
+const WALL_SWATCH: Record<string, string> = {
+  alvenaria: 'linear-gradient(#e7dfd2, #cbbda7)', branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f',
+  vidro: 'linear-gradient(135deg, #e4f6fb 40%, #a9d5e5)', 'vidro-fume': 'linear-gradient(135deg, #5b6c77 40%, #2b3338)', removida: 'repeating-linear-gradient(45deg, #fff 0 4px, #ff5c8a 4px 6px)',
+};
+
+/** Paredes: escolha um tipo e clique nas paredes, ou aplique na sala inteira. Parede removida deixa passar. */
+function WallToolButton() {
+  const { tool, setTool } = useWallTool();
+  const [room, setRoom] = useState(ROOMS[0]?.id ?? '');
+  useEffect(() => () => setTool(null), [setTool]);
+  return (
+    <>
+      <button className={`ghost small ${tool ? 'on' : ''}`} onClick={() => setTool(tool ? null : 'vidro')}>Paredes</button>
+      {tool && (
+        <div className="wall-panel">
+          <b>Paredes</b>
+          <div className="wall-types">
+            {WALL_OPTIONS.map((t) => (
+              <button key={t} className={tool === t ? 'on' : ''} onClick={() => setTool(t)}><i style={{ background: WALL_SWATCH[t] }} />{WALL_LABEL[t]}</button>
+            ))}
+          </div>
+          <p className="muted small" style={{ margin: 0 }}>Clique numa parede para aplicar {WALL_LABEL[tool].toLowerCase()}. As removidas aparecem em rosa enquanto este painel estiver aberto.</p>
+          <label>Sala inteira
+            <select value={room} onChange={(e) => setRoom(e.target.value)}>{ROOMS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select>
+          </label>
+          <div className="row gap">
+            <button className="primary small" onClick={() => applyWall(wallsOfRoom(room), tool)}>Aplicar na sala</button>
+            <button className="ghost small" onClick={() => { if (confirm('Voltar todas as paredes ao padrão?')) saveWalls({}); }}>Tudo padrão</button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
