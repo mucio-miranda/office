@@ -1,8 +1,8 @@
-import { useState } from 'react';
-import { FileText, Film, Workflow } from 'lucide-react';
-import { STAGE_LABEL, processById, type Demand } from '@office/shared';
+import { useEffect, useState } from 'react';
+import { Check, FileText, Film, Workflow, X } from 'lucide-react';
+import { STAGE_LABEL, processById, type Demand, type Learning } from '@office/shared';
 import { useStore } from '../lib/store';
-import { mediaUrl } from '../lib/api';
+import { api, mediaUrl } from '../lib/api';
 import { ReviewDesk, versionsOf } from './ReviewDesk';
 
 /**
@@ -13,6 +13,35 @@ import { ReviewDesk, versionsOf } from './ReviewDesk';
 const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const VID = /\.(mp4|mov|webm)$/i;
 const MAX_DONE = 12;
+
+function Learnings() {
+  const { office, clients, jobs, notify } = useStore();
+  const [items, setItems] = useState<Learning[]>([]);
+  const base = `/api/offices/${office!.id}/aprendizados`;
+  const load = () => api<Learning[]>(base).then(setItems).catch(() => setItems([]));
+  // uma tarefa que termina pode ter trazido novos
+  const finished = jobs.filter((j) => j.status === 'concluido' || j.status === 'aguardando').length;
+  useEffect(() => { load(); }, [base, finished]); // eslint-disable-line react-hooks/exhaustive-deps
+  const decide = async (id: string, approve: boolean) => {
+    try { await api(`${base}/${id}`, { body: { approve } }); await load(); } catch (e) { notify((e as Error).message); }
+  };
+  if (!items.length) return null;
+  return (
+    <section>
+      <div className="section-label" style={{ padding: 0, marginBottom: 8 }}>Aprendizados para aprovar · {items.length}</div>
+      <p className="muted small" style={{ marginTop: 0 }}>Aprovado, entra em INSIGHTS-PRODUCAO.md, a caixa de entrada das skills.</p>
+      <div className="learnings">
+        {items.map((l) => (
+          <div key={l.id} className="learning">
+            <span className="grow">{l.text}<small className="muted"> · {clients.find((c) => c.id === l.clientId)?.name ?? 'sem cliente'}</small></span>
+            <button className="ghost small" onClick={() => decide(l.id, false)}><X size={13} /> Descartar</button>
+            <button className="small" onClick={() => decide(l.id, true)}><Check size={13} /> Aprovar</button>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
 
 export function Mesa() {
   const { demands, jobs, clients, agents, office } = useStore();
@@ -73,8 +102,9 @@ export function Mesa() {
         </select>
       </div>
       {!asking.length && !working.length && !stopped.length && !done.length && (
-        <div className="empty"><Workflow size={22} /><p>Nada na mesa ainda. Comece uma demanda com um processo em Demandas, e as peças aparecem aqui.</p></div>
+        <div className="empty"><Workflow size={22} /><p>Nada na mesa ainda. Peça algo na conversa do cliente, em Clientes, e as peças aparecem aqui.</p></div>
       )}
+      <Learnings />
       {section('Esperando você', asking)}
       {section('Em produção', working)}
       {section('Paradas', stopped)}

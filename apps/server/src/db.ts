@@ -111,6 +111,16 @@ const MIGRATIONS: string[] = [
    ALTER TABLE agents ADD COLUMN seat TEXT;
    ALTER TABLE agents ADD COLUMN base TEXT;
    ALTER TABLE offices ADD COLUMN walls TEXT NOT NULL DEFAULT '{}';`,
+  // v0.10: conversa contínua por cliente e aprendizados para aprovar
+  `ALTER TABLE clients ADD COLUMN session_id TEXT;
+   ALTER TABLE clients ADD COLUMN session_dirs TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE clients ADD COLUMN session_cost REAL NOT NULL DEFAULT 0;
+   ALTER TABLE jobs ADD COLUMN client_id TEXT;
+   ALTER TABLE jobs ADD COLUMN session_cost REAL NOT NULL DEFAULT 0;
+   UPDATE jobs SET client_id = (SELECT client_id FROM demands WHERE demands.id = jobs.demand_id) WHERE stage IS NOT NULL;
+   CREATE TABLE learnings (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE, client_id TEXT, demand_id TEXT,
+     agent_id TEXT NOT NULL, text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pendente', created_at TEXT NOT NULL);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -153,7 +163,7 @@ const camel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
-const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls']);
+const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls', 'session_dirs']);
 const BOOL_COLS = new Set(['paid', 'auto', 'must_change_pin']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {

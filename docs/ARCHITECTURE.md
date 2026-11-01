@@ -122,3 +122,13 @@ Quem quiser endurecer o binário pode desligá-lo e apontar `OFFICE_RENDER_CMD` 
 - `OfficeView.tsx`: HUD (contadores), dock, minimapa clicável (teleporte), chat, paleta `Ctrl+K` e atalhos.
 - `panels/`: Demandas (kanban com cronômetro e delegação para IA), Calendário, Financeiro, Funcionário de IA,
   Estúdio de vídeo (timeline), Equipe e Atividade.
+
+## Conversa do cliente
+
+Cada cliente tem uma sessão do Claude Code (`clients.session_id`), retomada com `--resume` por toda tarefa dele, na pasta dele. O funcionário só muda o rótulo e a persona da rodada. A aprovação pela IA é a exceção: sessão própria e leitura apenas.
+
+- `clientMessage` (`agents/pipeline.ts`) decide o destino da mensagem: interrompe o que roda, responde a uma decisão, continua o cartão aberto ou abre outro. `/skill` vira pedido da skill (`agents/skills.ts`).
+- A fila (`agents/queue.ts`) ordena por prioridade e roda uma tarefa por cliente, um vídeo e uma arte por vez, porque o tunning divide o Chrome e a pasta Downloads. O limite geral é `OFFICE_MAX_JOBS` (4).
+- Pastas citadas pelo dono entram em `clients.session_dirs` e valem até a próxima **Nova conversa**.
+- `total_cost_usd` é acumulado por sessão: o custo de cada rodada é a diferença (`turnCost`).
+- O bloco `Aprendizados:` vira um item na tabela `learnings`; aprovado, entra em `.claude/skills/INSIGHTS-PRODUCAO.md`.

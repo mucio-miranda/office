@@ -3,7 +3,8 @@
 Cada arquivo `.md` aqui é um **modelo de funcionário**. Quando você cria um escritório, o Office copia estes
 modelos para o banco do escritório, e cada um vira um avatar sentado na sua sala.
 
-- Quem é dono do escritório pode criar mais funcionários em Equipe: cada um herda as skills, as permissões e os processos de um destes modelos.
+- Quem é dono do escritório pode criar mais funcionários em Equipe.
+- **A função é só um rótulo do tipo de trabalho.** Todos têm as mesmas permissões e todas as skills, somadas a partir dos modelos, e o trabalho de um cliente segue numa conversa só, seja quem for o funcionário. Só a aprovação pela IA roda à parte, sem poder alterar nada.
 - O **frontmatter** define nome, cargo, sala, cor, skills, ferramentas e permissões (`allowedTools`).
 - `mcp` lista as **ferramentas criativas** do funcionário (`photocraft`, `vectorcraft`, `lightcraft`, `designcraft`,
   `filmcraft`, `effectcraft`, `soundcraft`, `pdfcraft`, `officecli`): quando estão instaladas, cada tarefa sobe esses

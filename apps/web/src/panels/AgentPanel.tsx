@@ -73,7 +73,7 @@ export function AgentPanel() {
               <div className="muted small">{agent.role}</div>
             </div>
           </div>
-          <div className="chips">{agent.skills.map((s) => <span key={s} className="badge">{s}</span>)}</div>
+          <p className="muted small" style={{ margin: 0 }}>Tem todas as skills da casa. A função só indica o tipo de trabalho que costuma atender.</p>
           <div className="chips">{agent.tools.map((s) => <span key={s} className="badge outline">{s}</span>)}</div>
           <AgentTools agent={agent} />
           <button className="ghost small" onClick={() => goToAgent(agent)}><Navigation size={13} /> Ir até a mesa de {agent.name}</button>

@@ -157,7 +157,7 @@ function Pipeline({ d }: { d: Demand }) {
           {active && <button type="button" className="ghost small" onClick={() => open('agente', active.agentId)}><Bot size={13} /> {agents.find((a) => a.id === active.agentId)?.name} {active.status === 'aguardando' ? 'precisa de você' : 'trabalhando'}</button>}
           {!finished && !active && !waitingHuman && (
             <button type="button" className="primary small" disabled={busy} onClick={() => act('esteira')} title={nextAgent ? (proc ? `${nextAgent.name} começa pela skill ${proc.skill}, na pasta do cliente` : `${nextAgent.name} começa a etapa ${STAGE_LABEL[next!]}`) : undefined}>
-              <Play size={13} /> {d.stage ? 'Continuar' : proc ? 'Começar' : 'Ligar esteira'}
+              <Play size={13} /> {d.stage ? 'Continuar' : 'Começar'}
             </button>
           )}
           {d.auto && !finished && <button type="button" className="ghost small" disabled={busy} onClick={() => act('pausar')} title="Termina a etapa atual e não começa a próxima"><Pause size={13} /> Pausar</button>}
@@ -226,7 +226,7 @@ function DemandForm({ d, onClose }: { d: Partial<Demand>; onClose: () => void })
           {!f.stage && (
             <label>Processo <span className="muted">(o método validado que o funcionário segue, na pasta do cliente)</span>
               <select value={f.process ?? ''} onChange={(e) => { const p = processById(e.target.value); setF({ ...f, process: p?.id ?? null, kind: p?.kind ?? f.kind }); }}>
-                <option value="">Sem processo (esteira por etapas)</option>
+                <option value="">Pedido livre (o funcionário escolhe as skills)</option>
                 {PROCESSES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
               </select>
             </label>

@@ -6,7 +6,10 @@
   cliente (ex.: `VIDEOS\EDITADOS\<nome>\`, `FOTOS\EDITADAS\`, `DOCUMENTOS\ARTES\`), ou para onde o `CLAUDE.md` da raiz mandar
   o trabalho em andamento. Registre o que fez.
 - **Nunca apague arquivos.** Nunca mova nem renomeie brutos de cliente.
-- **Nunca publique nem envie** nada para fora (Drive, redes, e-mail) sem aprovação explícita.
+- **Nunca publique nem envie** nada para fora (Drive, redes, e-mail) sem aprovação explícita. Se o diretor de arte pedir na conversa
+  ("aprovado, vai pro drive"), essa é a aprovação daquele envio: copie sem sobrescrever e confira.
+- **A conversa é do cliente** e continua de um pedido para o outro: o que já foi feito aqui vale como contexto. Mude só o que foi
+  pedido e, quando for corrigido, não refaça o resto. Decisões e caminhos importantes também ficam registrados na pasta do trabalho.
 - Se existir uma skill para a tarefa em `.claude/skills`, **use a skill** e siga as pausas de aprovação dela. **Não altere as
   skills**: elas valem para todos os clientes. Se aprendeu algo que sirva para outros, escreva um bloco `Aprendizados:` no resumo final.
 - **Checkpoint de aprovação**: quando precisar de uma decisão humana (escolher takes, aprovar roteiro, aprovar

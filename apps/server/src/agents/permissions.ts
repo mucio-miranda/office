@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 /** Nunca liberado, mesmo que um modelo de funcionário peça. */
@@ -24,6 +24,25 @@ export function ruleRoot(dir: string) {
 export function deniedTools(rootPath: string) {
   const skills = `${ruleRoot(rootPath)}/.claude/skills/**`;
   return [...ALWAYS_DENIED, `Edit(${skills})`, `Write(${skills})`, `NotebookEdit(${skills})`];
+}
+
+/**
+ * Pastas citadas num pedido, como o cartão de memória de onde chegam os brutos. Pasta com espaço pode vir sem aspas:
+   * tenta do trecho mais longo para o mais curto até achar algo que exista. Raiz de disco nunca conta.
+ */
+export function mentionedDirs(text: string) {
+  const found = new Set<string>();
+  for (const m of text.replaceAll('`', '').matchAll(/[A-Za-z]:[\\/][^\r\n"<>|?*]*/g)) {
+    const words = m[0].split(' ');
+    for (let n = words.length; n > 0; n--) {
+      const p = path.normalize(words.slice(0, n).join(' ').replace(/[,;.)]+$/, ''));
+      if (!existsSync(p)) continue;
+      const dir = statSync(p).isDirectory() ? p : path.dirname(p);
+      if (path.parse(dir).root !== path.resolve(dir)) found.add(dir.replace(/[\\/]+$/, ''));
+      break;
+    }
+  }
+  return [...found];
 }
 
 /** Pastas extras que existem agora. Um HD desconectado não pode impedir o funcionário de começar. */

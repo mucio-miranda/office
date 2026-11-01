@@ -1,21 +1,23 @@
-import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
   APPROVAL_MARKER, BRIEFING_FIELDS, NETWORK_LABEL, STAGE_AGENT, STAGE_LABEL, processById, uid,
   type AgentJob, type AgentProfile, type Briefing, type CalendarEvent, type Client, type Demand, type DemandKind, type Network, type Office,
-  type ProcessDef, type Publish, type ReviewMark, type Stage, type StageLogEntry,
+  type Learning, type ProcessDef, type Publish, type ReviewMark, type Stage, type StageLogEntry,
 } from '@office/shared';
 import { all, insert, logActivity, now, one, update } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { clientDir, folderName, indexClient, indexSummary, writeNew } from '../clients/folder.ts';
 import { nicheOf } from '../clients/moodboard.ts';
 import { clientDriveFolder, driveInfo, driveSubdir, sendToDrive, type DriveItem } from '../clients/drive.ts';
-import { enqueueJob, replyToJob } from './runtime.ts';
-import { baseCheck, captionFrom, isInsideAny, latestFiles, marksText, newerFiles, processFiles, producedFiles, slug, stageOutput } from './outputs.ts';
+import { enqueueJob, interruptJob, replyToJob } from './runtime.ts';
+import { baseCheck, captionFrom, isInsideAny, latestFiles, marksText, newerFiles, processFiles, slug } from './outputs.ts';
+import { mentionedDirs } from './permissions.ts';
+import { expandCommand, guessKind, listSkills, parseLearnings } from './skills.ts';
 
 /**
- * Esteira de produção: cada demanda passa por etapas (pauta → copy → arte/vídeo → aprovação → pronto para
- * agendar). Quando o funcionário de uma etapa termina, a próxima começa sozinha com o resumo das anteriores.
+ * Andamento de uma demanda: produção → aprovação → pronto para agendar. A produção é uma etapa só, na conversa contínua
+ * do cliente, do início ao fim: pauta, copy e arte acontecem nela, sem trocar de sessão nem perder contexto.
  * A aprovação é de uma pessoa ou do gerente de IA, conforme o cliente.
  */
 
@@ -24,14 +26,10 @@ const MAX_JOBS_PER_DEMAND = 12;
 /** Voltas de ajuste que a aprovação por IA pode pedir antes de chamar uma pessoa. */
 const MAX_AI_ROUNDS = 2;
 
+/** A etapa só nomeia o trabalho e define o funcionário que aparece atendendo. */
 export function defaultPipeline(kind: DemandKind): Stage[] {
-  switch (kind) {
-    case 'video': return ['pauta', 'copy', 'video', 'aprovacao', 'agendado'];
-    case 'design': case 'foto': return ['pauta', 'copy', 'arte', 'aprovacao', 'agendado'];
-    case 'copy': return ['pauta', 'copy', 'aprovacao', 'agendado'];
-    case 'estrategia': return ['pauta', 'aprovacao', 'agendado'];
-    default: return ['copy', 'aprovacao', 'agendado'];
-  }
+  const work: Stage = kind === 'video' ? 'video' : kind === 'design' || kind === 'foto' ? 'arte' : 'copy';
+  return [work, 'aprovacao', 'agendado'];
 }
 
 const statusFor = (stage: Stage) => (stage === 'aprovacao' ? 'aprovacao' : stage === 'agendado' ? 'entregue' : 'em_producao');
@@ -100,40 +98,17 @@ ${idx}
 ${done || 'Nada ainda: esta é a primeira etapa.'}`;
 }
 
-function stageTask(stage: Stage, d: Demand, dir: string, version: number) {
-  const out = stageOutput(stage, d, dir)?.path ?? dir;
-  const v = version > 1
-    ? `\nEsta é a **versão ${version}**: grave os arquivos novos com o sufixo \`-v${version}\` no nome (por exemplo \`${path.basename(out, path.extname(out))}-v${version}${path.extname(out) || '.png'}\`), na mesma pasta, sem apagar nem sobrescrever as versões anteriores.`
-    : '';
-  switch (stage) {
-    case 'pauta':
-      return `Crie a **pauta** da peça: objetivo, ideia central, formato (Reels, carrossel, post, story), gancho, mensagem principal e referências da pasta que vale usar. Salve em \`${out}\`.${v}`;
-    case 'copy':
-      return d.kind === 'video'
-        ? `Escreva o **roteiro** a partir da pauta (falas, takes e textos na tela), seguindo o guia de roteiro da casa, e a legenda do post com CTA numa seção \`## Legenda\`. Salve em \`${out}\`.${v}`
-        : `Escreva a **copy** a partir da pauta: os textos que vão na arte (título, apoio, CTA) e a legenda do post com CTA e hashtags numa seção \`## Legenda\`. Salve em \`${out}\`.${v}`;
-    case 'arte':
-      return `Produza a **arte** a partir da copy, na identidade do cliente, usando as skills de arte da casa e as suas ferramentas criativas. Use fotos do ensaio da pasta quando fizer sentido, sem alterar os originais. Salve os arquivos (PNG para a prévia e o PSD com camadas, ou equivalentes) em \`${out}\`.${v}`;
-    case 'video':
-      return `**Edite o vídeo** a partir do roteiro, com os brutos da pasta (skill editar-video e as suas ferramentas). Resultado em \`${out}\`.${v}`;
-    default:
-      return '';
-  }
-}
-
 /** Versão que a próxima tarefa desta etapa vai produzir. */
 const nextVersion = (d: Demand, stage: Stage) => (d.stageLog ?? []).filter((e) => e.stage === stage && e.result === 'feito').length + 1;
 
-const AUTO_RULES = `Esta tarefa está na **esteira automática**: não pare nos checkpoints intermediários das skills. Decida pelo briefing e pelas etapas anteriores, e só pare (com a linha \`${APPROVAL_MARKER}\`) se faltar algo essencial, como um arquivo que não existe. Ao terminar, responda com um resumo curto: o que fez e os caminhos completos dos arquivos.`;
-
-/** Pedido inicial de um processo: o método está na skill; aqui vai só a demanda e como devolver o trabalho para a mesa. */
-function processPrompt(d: Demand, p: ProcessDef, office: Office, client?: Client) {
+/** Pedido na conversa do cliente: o método está nas skills; aqui vai só a demanda e como devolver o trabalho para a mesa. */
+function processPrompt(d: Demand, p: ProcessDef | undefined, office: Office, client?: Client) {
   const dir = outDir(office, client);
-  const missing = baseCheck(dir, p.needs).filter((n) => !n.ok).map((n) => n.label);
+  const missing = p ? baseCheck(dir, p.needs).filter((n) => !n.ok).map((n) => n.label) : [];
   const niche = client ? nicheOf(office, client) : null;
   return `## Demanda: ${d.title}
 Cliente: ${client?.name ?? '—'} · Pasta: ${dir}
-Processo: ${p.label} · Prioridade: ${d.priority} · Prazo: ${d.dueDate ?? '—'}${niche ? `\nNicho: ${niche} (biblioteca em ${path.join(office.rootPath, 'REFERENCIAS', niche)})` : ''}
+${p ? `Processo: ${p.label} · ` : ''}Prioridade: ${d.priority} · Prazo: ${d.dueDate ?? '—'}${niche ? `\nNicho: ${niche} (biblioteca em ${path.join(office.rootPath, 'REFERENCIAS', niche)})` : ''}
 
 ${d.description || '(sem descrição)'}
 
@@ -141,10 +116,10 @@ ${d.description || '(sem descrição)'}
 ${briefingText(client?.briefing)}
 ${missing.length ? `\n## Não encontrei na pasta do cliente\n${missing.map((m) => `- ${m}`).join('\n')}\nSe for essencial, pare e peça em vez de inventar.\n` : ''}
 ## Como trabalhar
-- Use a skill \`${p.skill}\` e siga o método e as paradas dela. Veja antes como as entregas anteriores deste cliente foram feitas.
+- ${p ? `Comece pela skill \`${p.skill}\` e siga o método e as paradas dela; use as outras que o pedido precisar.` : 'Escolha as skills de `.claude/skills` que o pedido precisa, combine-as e siga o método e as paradas delas.'} Veja antes como as entregas anteriores deste cliente foram feitas.
 - Grave nas pastas reais do cliente, seguindo o padrão que já existe aqui. Não crie uma estrutura nova sem precisar. Se o CLAUDE.md da raiz mandar o trabalho em andamento para outra pasta (um HD, por exemplo), siga o CLAUDE.md: as peças citadas com caminho completo aparecem na mesa, desde que a pasta esteja liberada no escritório. Se ela estiver indisponível, pare e peça para conectar.
 - Quando precisar de uma decisão (proposta, referência, amostra), pare com a linha \`${APPROVAL_MARKER}\` e cite os caminhos completos do que mostrar: as peças aparecem na mesa do diretor de arte.
-- Não envie ao Drive nem publique: isso sai pela mesa, depois da aprovação.
+- Só envie ao Drive quando o diretor de arte pedir nesta conversa: copie sem sobrescrever e confira depois. Não publique em rede nenhuma.
 - Ao terminar, responda com um resumo curto e os caminhos completos das peças finais. Se aprendeu algo que valha para outros clientes, acrescente um bloco \`Aprendizados:\`. Não altere as skills.`;
 }
 
@@ -210,7 +185,7 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
   }
   const proc = processById(d.process);
   const agentSlug = proc ? proc.agent : STAGE_AGENT[stage];
-  const agent = !agentSlug ? undefined : proc ? agentForProcess(d.officeId, agentSlug) : agentBySlug(d.officeId, agentSlug);
+  const agent = agentSlug ? agentForProcess(d.officeId, agentSlug) : undefined;
   if (!agent) {
     patchDemand(d, { stage, auto: false });
     return `Nenhum funcionário de IA faz a etapa ${STAGE_LABEL[stage]}.`;
@@ -218,30 +193,23 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
   const jobs = (all<{ id: string }>('SELECT id FROM jobs WHERE demand_id = ?', d.id)).length;
   if (jobs >= MAX_JOBS_PER_DEMAND) {
     patchDemand(d, { auto: false });
-    notice(d.officeId, `A esteira de "${d.title}" parou: já foram ${jobs} tarefas de IA. Veja o que está travando.`, { demandId: d.id });
+    notice(d.officeId, `"${d.title}" parou: já foram ${jobs} tarefas de IA. Veja o que está travando.`, { demandId: d.id });
     return 'Limite de tarefas desta demanda.';
   }
   const fresh = patchDemand(d, { stage, status: statusFor(stage), assignee: `agent:${agent.id}`, auto: true });
-  // processo da casa: o ajuste continua a mesma conversa, como no terminal, sem começar do zero
-  if (proc && feedback) {
+  // o ajuste continua a mesma conversa, como no terminal, sem começar do zero
+  if (feedback) {
     const last = one<AgentJob>('SELECT * FROM jobs WHERE demand_id = ? AND stage = ? ORDER BY created_at DESC LIMIT 1', d.id, stage);
-    if (last?.sessionId) {
+    if (last && (last.sessionId || client?.sessionId)) {
       const manual = manualEdits(fresh);
-      replyToJob(last.id, `## Ajustes pedidos\n${feedback}\n${manual.length ? `\nO diretor de arte editou estes arquivos à mão; trabalhe em cima deles:\n${manual.map((f) => `- ${f}`).join('\n')}\n` : ''}\nMude só o que foi pedido, numa versão nova, sem apagar nem sobrescrever a anterior. Ao terminar, cite os caminhos completos.`);
+      replyToJob(last.id, `## Ajustes pedidos\n${feedback}\n${manual.length ? `\nO diretor de arte editou estes arquivos à mão; trabalhe em cima deles:\n${manual.map((f) => `- ${f}`).join('\n')}\n` : ''}\nMude só o que foi pedido, numa versão nova, sem apagar nem sobrescrever a anterior. Ao terminar, cite os caminhos completos.`, feedback);
       return null;
     }
   }
-  const prompt = proc
-    ? `${processPrompt(fresh, proc, office, client)}${feedback ? `\n\n## Ajustes pedidos\n${feedback}` : ''}`
-    : stage === 'briefing' && client
+  const prompt = stage === 'briefing' && client
     ? (isDraft(fresh) ? draftPrompt(client, office) : briefingPrompt(client, office))
-    : `${context(fresh, stage, office, client)}
-
-## Sua tarefa nesta etapa (${STAGE_LABEL[stage]})
-${stageTask(stage, fresh, outDir(office, client), nextVersion(fresh, stage))}
-${feedback ? `\n## Ajustes pedidos\n${feedback}\nRefaça só o que foi pedido, mantendo o resto.\n` : ''}
-${AUTO_RULES}`;
-  enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, prompt, createdBy: by, stage, cwd: jobCwd(office, client) });
+    : `${processPrompt(fresh, proc, office, client)}${feedback ? `\n\n## Ajustes pedidos\n${feedback}` : ''}`;
+  enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, clientId: d.clientId, prompt, display: feedback ?? (d.description || d.title), createdBy: by, stage, cwd: jobCwd(office, client) });
   return null;
 }
 
@@ -259,7 +227,7 @@ function approvalStage(d: Demand, by: string): string | null {
     const rafa = agentBySlug(d.officeId, 'gerente');
     if (rafa) {
       patchDemand(fresh, { assignee: `agent:${rafa.id}` });
-      enqueueJob({ officeId: d.officeId, agentId: rafa.id, demandId: d.id, prompt: reviewPrompt(fresh, getOffice(d.officeId), client), createdBy: by, stage: 'aprovacao', cwd: jobCwd(getOffice(d.officeId), client) });
+      enqueueJob({ officeId: d.officeId, agentId: rafa.id, demandId: d.id, clientId: d.clientId, prompt: reviewPrompt(fresh, getOffice(d.officeId), client), createdBy: by, stage: 'aprovacao', cwd: jobCwd(getOffice(d.officeId), client) });
       return null;
     }
   }
@@ -272,6 +240,8 @@ function approvalStage(d: Demand, by: string): string | null {
 /** Próxima etapa depois da atual (a atual já terminou). */
 function nextAfter(d: Demand, stage: Stage | null): Stage | null {
   const i = stage ? d.pipeline.indexOf(stage) : -1;
+  // demanda antiga, de pauta → copy → arte: a conversa já fez tudo, então a produção termina na primeira etapa
+  if (stage && stage !== 'briefing' && STAGE_AGENT[stage] && d.pipeline.includes('aprovacao')) return 'aprovacao';
   return d.pipeline[i + 1] ?? null;
 }
 
@@ -288,15 +258,99 @@ function productionStage(d: Demand): Stage | null {
 export function startPipeline(demandId: string, by: string) {
   let d = getDemand(demandId);
   if (!d) return 'Demanda não encontrada.';
-  if (!d.pipeline?.length) d = patchDemand(d, { pipeline: defaultPipeline(d.kind) });
+  if (!d.pipeline?.length || (!d.stage && !d.process && d.pipeline.includes('pauta'))) d = patchDemand(d, { pipeline: defaultPipeline(d.kind) });
   if (all<AgentJob>("SELECT id FROM jobs WHERE demand_id = ? AND status IN ('fila','rodando','aguardando')", d.id).length)
     return 'Um funcionário já está nesta demanda. Espere ele terminar (ou cancele a tarefa).';
   let stage = d.stage ?? d.pipeline[0];
   const last = d.stageLog?.at(-1);
   if (last && last.stage === stage && last.result === 'feito' && stage !== 'agendado') stage = nextAfter(d, stage) ?? stage;
   if (stage === 'agendado' && d.status === 'entregue') return 'Esta demanda já terminou a esteira.';
-  logActivity(d.officeId, by, 'ligou a esteira de', d.title);
+  logActivity(d.officeId, by, 'começou', d.title);
+  if (d.clientId) grantDirs(d.officeId, d.clientId, by, d.description);
   return runStage(d, stage, by);
+}
+
+/** Pasta fora do escritório citada pelo dono, como o cartão de memória, fica liberada enquanto durar a conversa. */
+export function grantDirs(officeId: string, clientId: string, by: string, text: string) {
+  const userId = by.replace(/^user:/, '');
+  if (one<{ role: string }>('SELECT role FROM office_members WHERE office_id = ? AND user_id = ?', officeId, userId)?.role !== 'dono') return;
+  const client = getClient(clientId);
+  const found = mentionedDirs(text);
+  if (client && found.length) update('clients', clientId, { sessionDirs: [...new Set([...(client.sessionDirs ?? []), ...found])] });
+}
+
+/**
+ * Mensagem na conversa do cliente, que serve para tudo: corrige o que está rodando, responde a uma decisão, continua o
+ * cartão em aberto ou abre um pedido novo. Assim um pedido pequeno não vira um cartão a mais no quadro.
+ */
+export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest = false): string | null {
+  const client = getClient(clientId);
+  if (!client) return 'Cliente não encontrado.';
+  const office = getOffice(officeId);
+  const text = expandCommand(raw, listSkills(office.rootPath).map((s) => s.name));
+  grantDirs(officeId, clientId, by, raw);
+  const jobs = all<AgentJob>("SELECT * FROM jobs WHERE client_id = ? AND (stage IS NULL OR stage != 'aprovacao') ORDER BY created_at DESC", clientId);
+  try {
+    if (!newRequest) {
+      const active = jobs.find((j) => ['fila', 'rodando', 'aguardando'].includes(j.status));
+      if (active) {
+        if (active.status === 'aguardando') replyToJob(active.id, text, raw);
+        else interruptJob(active.id, text, raw);
+        return null;
+      }
+      const open = jobs.find((j) => {
+        const d = getDemand(j.demandId ?? '');
+        return d && d.status !== 'entregue' && d.pipeline?.[0] !== 'briefing';
+      });
+      if (open) {
+        const d = getDemand(open.demandId!)!;
+        patchDemand(d, { stage: open.stage, status: 'em_producao', auto: true });
+        replyToJob(open.id, text, raw);
+        return null;
+      }
+    }
+  } catch (e) {
+    return (e as Error).message;
+  }
+  const kind = guessKind(raw) as DemandKind;
+  const d: Demand = {
+    id: uid(), officeId, clientId, title: raw.trim().split(/\r?\n/)[0].slice(0, 80), description: text,
+    kind, status: 'a_fazer', priority: 'media', assignee: null, dueDate: null, trackedSeconds: 0, timerStartedAt: null,
+    position: Date.now(), createdAt: now(), updatedAt: now(), pipeline: defaultPipeline(kind), stage: null, auto: true, stageLog: [], reviewRounds: 0, publish: null,
+  };
+  insert('demands', d as never);
+  invalidate(officeId, 'demands');
+  logActivity(officeId, by, 'pediu', d.title);
+  return runStage(d, d.pipeline[0], by);
+}
+
+/** Nova conversa: o próximo pedido começa do zero. O histórico fica nas tarefas antigas. */
+export function resetConversation(clientId: string): string | null {
+  if (all('SELECT id FROM jobs WHERE client_id = ? AND status IN (\'fila\', \'rodando\', \'aguardando\')', clientId).length) return 'Um funcionário ainda está nesta conversa. Espere ele terminar ou pare a tarefa.';
+  update('clients', clientId, { sessionId: null, sessionDirs: [], sessionCost: 0 });
+  return null;
+}
+
+function saveLearnings(job: AgentJob, d: Demand, finalText: string) {
+  const items = parseLearnings(finalText);
+  const known = new Set(all<Pick<Learning, 'text'>>('SELECT text FROM learnings WHERE office_id = ?', d.officeId).map((l) => l.text));
+  const fresh = items.filter((text) => !known.has(text));
+  for (const text of fresh) insert('learnings', { id: uid(), officeId: d.officeId, clientId: d.clientId, demandId: d.id, agentId: job.agentId, text, status: 'pendente', createdAt: now() } as never);
+  if (fresh.length) notice(d.officeId, `${fresh.length} aprendizado(s) para aprovar na Mesa`, { demandId: d.id });
+}
+
+/** Aprovado, o aprendizado entra na caixa de entrada das skills, de onde vai para a skill certa na rotina de manutenção. */
+export function decideLearning(l: Learning, approve: boolean, by: string) {
+  update('learnings', l.id, { status: approve ? 'aprovado' : 'recusado' });
+  if (!approve) return;
+  const office = getOffice(l.officeId);
+  const dir = path.join(office.rootPath, '.claude', 'skills');
+  const file = path.join(dir, 'INSIGHTS-PRODUCAO.md');
+  const heading = '## Aprovados no Office';
+  mkdirSync(dir, { recursive: true });
+  const has = existsSync(file) && readFileSync(file, 'utf8').includes(heading);
+  appendFileSync(file, `${has ? '' : `\n\n${heading}\n`}\n- ${now().slice(0, 10)} (${getClient(l.clientId)?.name ?? 'sem cliente'}): ${l.text}`, 'utf8');
+  logActivity(l.officeId, by, 'aprovou um aprendizado', l.text.slice(0, 120));
 }
 
 export function pausePipeline(demandId: string) {
@@ -373,7 +427,8 @@ export function adoptFiles(demandId: string, files: string[], by: string) {
 export function onJobCheckpoint(job: AgentJob, finalText: string) {
   if (!job.demandId || !job.stage) return;
   const d = getDemand(job.demandId);
-  if (!d?.process) return;
+  if (!d || job.stage === 'briefing' || job.stage === 'aprovacao') return;
+  saveLearnings(job, d, finalText);
   const office = getOffice(d.officeId);
   const files = processFiles({ finalText, since: job.turnStartedAt ?? job.createdAt, clientDir: outDir(office, getClient(d.clientId)), inside: isInsideAny(office) });
   if (files.length) addLog(d, { stage: job.stage, by: `agent:${job.agentId}`, jobId: job.id, text: finalText.replace(APPROVAL_MARKER, '').trim().slice(0, 2500), result: 'parcial', files, version: nextVersion(d, job.stage) });
@@ -393,7 +448,7 @@ export function onJobFinished(job: AgentJob, finalText: string, ok: boolean) {
   const summary = finalText.replace(APPROVAL_MARKER, '').trim().slice(0, 2500);
   if (!ok) {
     addLog(d, { stage: job.stage, by, jobId: job.id, text: summary || 'A tarefa parou com erro.', result: 'erro' }, { auto: false });
-    notice(d.officeId, `A esteira de "${d.title}" parou com erro na etapa ${STAGE_LABEL[job.stage]}`, { demandId: d.id, agentId: job.agentId });
+    notice(d.officeId, `"${d.title}" parou com erro na etapa ${STAGE_LABEL[job.stage]}`, { demandId: d.id, agentId: job.agentId });
     return;
   }
   if (job.stage === 'briefing') return finishBriefing(job, d, finalText);
@@ -417,9 +472,8 @@ export function onJobFinished(job: AgentJob, finalText: string, ok: boolean) {
   }
   const office = getOffice(d.officeId);
   const dir = outDir(office, getClient(d.clientId));
-  const files = d.process
-    ? processFiles({ finalText, since: job.turnStartedAt ?? job.createdAt, clientDir: dir, inside: isInsideAny(office) })
-    : producedFiles({ finalText, since: job.createdAt, stage: job.stage, d, clientDir: dir, inside: isInsideAny(office) });
+  saveLearnings(job, d, finalText);
+  const files = processFiles({ finalText, since: job.turnStartedAt ?? job.createdAt, clientDir: dir, inside: isInsideAny(office) });
   const fresh = addLog(d, { stage: job.stage, by, jobId: job.id, text: summary, result: 'feito', files, version: nextVersion(d, job.stage) });
   if (!fresh.auto) return;
   const next = nextAfter(fresh, job.stage);
@@ -477,7 +531,7 @@ export function publishDraft(demandId: string) {
   const d = getDemand(demandId);
   if (!d) return null;
   const { byStage, final } = latestFiles(d);
-  const copy = byStage.copy?.find((f) => f.toLowerCase().endsWith('.md'));
+  const copy = [...(byStage.copy ?? []), ...final].find((f) => f.toLowerCase().endsWith('.md'));
   return { files: final, caption: d.publish?.caption ?? captionFrom(copy) };
 }
 

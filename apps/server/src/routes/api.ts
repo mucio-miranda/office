@@ -6,7 +6,7 @@ import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import {
   BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, PROCESSES, WALL_TYPES, processById, uid,
-  type AgentJob, type AgentProfile, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Member, type Office, type Transaction, type User,
+  type AgentJob, type AgentProfile, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
 import {
@@ -20,7 +20,8 @@ import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
 import { driveDirs, existingDriveFolders } from '../clients/drive.ts';
 import { discoverClients } from '../clients/discover.ts';
-import { adoptFiles, approveDemand, defaultPipeline, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { listSkills } from '../agents/skills.ts';
+import { adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, resetConversation, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
@@ -599,6 +600,47 @@ export async function api(app: FastifyInstance) {
       return { created, skipped, errors };
     });
 
+    // a conversa do cliente: corrige, responde ou pede. Os comandos são as skills do escritório
+    r.get('/api/offices/:officeId/skills', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return listSkills(one<Office>('SELECT root_path FROM offices WHERE id = ?', (req.params as any).officeId)!.rootPath);
+    });
+    r.post('/api/offices/:officeId/clients/:id/conversa', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const b = body(z.object({ text: z.string().trim().min(1).max(20000), newRequest: z.boolean().default(false) }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      const err = clientMessage(officeId, id, b.text, `user:${req.user.id}`, b.newRequest);
+      if (err) return reply.code(409).send({ error: err });
+      return { ok: true };
+    });
+    r.post('/api/offices/:officeId/clients/:id/conversa/nova', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      const err = resetConversation(id);
+      if (err) return reply.code(409).send({ error: err });
+      invalidate(officeId, 'clients');
+      return { ok: true };
+    });
+
+    // o que os funcionários sugerem guardar: vale para todos só depois que o dono aprova
+    r.get('/api/offices/:officeId/aprendizados', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return all<Learning>("SELECT * FROM learnings WHERE office_id = ? AND status = 'pendente' ORDER BY created_at DESC", (req.params as any).officeId);
+    });
+    r.post('/api/offices/:officeId/aprendizados/:id', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const b = body(z.object({ approve: z.boolean() }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      const l = one<Learning>("SELECT * FROM learnings WHERE id = ? AND office_id = ? AND status = 'pendente'", id, officeId);
+      if (!l) return reply.code(404).send({ error: 'Aprendizado não encontrado' });
+      try { decideLearning(l, b.approve, `user:${req.user.id}`); } catch (e) { return reply.code(500).send({ error: (e as Error).message }); }
+      return { ok: true };
+    });
+
     r.post('/api/offices/:officeId/clients/:id/folder', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const { officeId, id } = req.params as any;
@@ -977,6 +1019,7 @@ export async function api(app: FastifyInstance) {
         const job = one<AgentJob>('SELECT demand_id FROM jobs WHERE id = ?', (req.params as any).id);
         const demand = job?.demandId ? one<Demand>('SELECT * FROM demands WHERE id = ?', job.demandId) : undefined;
         const manual = demand ? manualEdits(demand) : [];
+        if (demand?.clientId) grantDirs(demand.officeId, demand.clientId, `user:${req.user.id}`, b.text);
         replyToJob((req.params as any).id, [b.text, marksText(b.marks ?? []), manual.length ? `O diretor de arte editou estes arquivos à mão; trabalhe em cima deles:\n${manual.map((f) => `- ${f}`).join('\n')}` : ''].filter(Boolean).join('\n\n'));
         return { ok: true };
       } catch (e) {

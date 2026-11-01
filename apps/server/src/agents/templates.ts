@@ -37,8 +37,9 @@ export function parseFrontmatter(src: string) {
   return { data, body: m[2].trim() };
 }
 
+/** A função é só um rótulo: todo funcionário tem as mesmas permissões, para qualquer skill rodar com qualquer um. */
 export function loadTemplates(dir = config.agentTemplatesDir): AgentTemplate[] {
-  return readdirSync(dir)
+  const list = readdirSync(dir)
     .filter((f) => f.endsWith('.md') && !f.startsWith('_') && f !== 'README.md')
     .map((f) => {
       const { data, body } = parseFrontmatter(readFileSync(path.join(dir, f), 'utf8'));
@@ -56,6 +57,9 @@ export function loadTemplates(dir = config.agentTemplatesDir): AgentTemplate[] {
         persona: body,
       };
     });
+  const allowed = [...new Set(list.flatMap((t) => t.allowedTools))];
+  const skills = [...new Set(list.flatMap((t) => t.skills))];
+  return list.map((t) => ({ ...t, allowedTools: allowed, skills }));
 }
 
 export function houseRules(dir = config.agentTemplatesDir) {

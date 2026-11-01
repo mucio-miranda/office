@@ -80,8 +80,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - Cliente, tipo, prioridade, prazo e responsável (pessoa **ou** IA)
 - **Cronômetro** por demanda (▶/⏸) que alimenta as horas por cliente
 - **🤖 Delegar**: escolha o funcionário, e o briefing e a pasta do cliente vão juntos
-- **Esteira**: pauta → copy → arte ou vídeo → aprovação → pronto para agendar. Cada etapa passa sozinha para o
-  próximo funcionário, levando o briefing, o índice da pasta e o resumo das etapas anteriores
+- **Andamento**: produção → aprovação → pronto para agendar. A produção é uma etapa só, na conversa do cliente, sem trocar de sessão nem perder contexto
 - **Aprovação por cliente**: uma pessoa (Aprovar / Pedir ajustes) ou o gerente de IA, que confere a peça com o
   briefing e devolve para ajuste até duas vezes antes de chamar alguém
 - **Mesa do diretor de arte**: as peças de cada etapa e versão (pauta, copy, arte v1, v2…) com prévia de imagem,
@@ -107,6 +106,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   prévia de imagem, vídeo, áudio, PDF e texto. Editar um PDF vira uma tarefa para o funcionário com o PdfCraft
 
 ### 🧾 Clientes
+- **Uma conversa contínua por cliente**: pedidos, correções e aprovações na mesma conversa, com memória de um dia para o outro. Digite `/` para os comandos, que são as skills do escritório (`/start-conteudo`), e escreva enquanto o agente trabalha para corrigir na hora. **Nova conversa** começa do zero.
 - **Importar da pasta** lista o que já existe em `CLIENTES\` e ainda não é cliente no Office, sem criar, mover nem renomear nada lá. Opcionalmente, o gerente lê cada pasta e preenche um rascunho do briefing para a equipe conferir.
 - **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com DOCUMENTOS, FOTOS e VIDEOS); só cria
   as pastas que faltam, nada é movido nem apagado

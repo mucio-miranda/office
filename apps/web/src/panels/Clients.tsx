@@ -5,6 +5,7 @@ import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
 import { PathField } from '../lib/PathPicker';
 import { StageTrack } from './Demands';
+import { Conversa } from './Conversa';
 
 interface IndexedFile { rel: string; size: number; mtime: string; kind: 'imagem' | 'video' | 'audio' | 'doc' | 'design' | 'outro' }
 interface FileGroup { key: string; label: string; count: number; size: number; files: IndexedFile[] }
@@ -99,6 +100,8 @@ function ClientDetail({ c }: { c: Client }) {
           </div>
         </div>
       </div>
+
+      <Conversa c={c} />
 
       <div className="client-grid">
         <BriefingCard c={c} onInterview={interview} interviewing={running} save={(b) => patch({ briefing: b })} />

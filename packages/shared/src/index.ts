@@ -86,6 +86,11 @@ export interface Client {
   briefing: Briefing;
   /** Quem aprova as peças na esteira: uma pessoa ou o gerente de IA. */
   approvalMode: 'humano' | 'ia';
+  /** A conversa contínua do cliente: a sessão do Claude Code que passa de um pedido para o outro. */
+  sessionId?: string | null;
+  sessionCost?: number;
+  /** Pastas fora do escritório que o dono citou nesta conversa (um cartão de memória, por exemplo). */
+  sessionDirs?: string[];
 }
 
 export interface Briefing {
@@ -393,6 +398,18 @@ export interface LiveSession {
 
 export type JobStatus = 'fila' | 'rodando' | 'aguardando' | 'concluido' | 'erro' | 'cancelado';
 
+/** O que um funcionário aprendeu e sugeriu guardar: só vale para todos depois que uma pessoa aprova. */
+export interface Learning {
+  id: ID;
+  officeId: ID;
+  clientId: ID | null;
+  demandId: ID | null;
+  agentId: ID;
+  text: string;
+  status: 'pendente' | 'aprovado' | 'recusado';
+  createdAt: string;
+}
+
 export interface AgentJob {
   id: ID;
   officeId: ID;
@@ -400,10 +417,14 @@ export interface AgentJob {
   demandId: ID | null;
   /** Etapa da esteira que esta tarefa faz (null = tarefa avulsa). */
   stage: Stage | null;
+  /** Cliente cuja conversa esta tarefa continua (null = tarefa avulsa, com sessão própria). */
+  clientId?: ID | null;
   prompt: string;
   status: JobStatus;
   sessionId: string | null;
   costUsd: number;
+  /** Total que o Claude Code informou para a sessão na última rodada. */
+  sessionCost?: number;
   /** Pasta onde o funcionário roda: a do cliente, quando existe. */
   cwd?: string | null;
   /** Início da rodada atual (cada resposta a um checkpoint abre uma rodada na mesma sessão). */
