@@ -72,7 +72,7 @@ export function producedFiles(opts: { finalText: string; since: string; stage: S
 }
 
 /** Pastas que não são entrega: intermediários, originais e o que a própria peça guarda de antes. */
-const NOT_DELIVERY = /^(_trabalho|_fonte|_motor|_script|scripts|tmp|temp|node_modules|__pycache__|descartadas|BRUTOS|BRUTAS|MUSICAS|REFERENCIAS)$|^VERSAO ANTERIOR/i;
+const NOT_DELIVERY = /^(_trabalho|_fonte|_motor|_script|_recortes|_lastro|scripts|tmp|temp|entrada|node_modules|__pycache__|descartadas|BRUTOS|BRUTAS|MUSICAS|REFERENCIAS)$|^VERSAO ANTERIOR|^VERSOES ANTIGAS/i;
 const PIECE = /\.(png|jpe?g|webp|gif|mp4|mov|webm|pdf|md|txt|srt|psd)$/i;
 const MAX_PIECES = 60;
 

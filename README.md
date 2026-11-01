@@ -334,7 +334,8 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 
 - Os funcionários rodam com `--permission-mode acceptEdits` e uma lista de ferramentas por funcionário.
 - **Sempre negados**: `rm`, `del`, `rmdir`, `mv`, `move`, `ren`, `Remove-Item`, `Move-Item`, `Rename-Item`, `git push`,
-  lixeira e compartilhamento do Google Drive e exclusão no Notion.
+  lixeira e compartilhamento do Google Drive e exclusão no Notion. Editar as skills da pasta raiz também é negado: o funcionário usa, não altera, e sugere melhorias num bloco `Aprendizados:` no resumo.
+- Uma pasta extra que sumiu, como um HD desconectado, não impede a tarefa de começar: fica de fora, com um aviso no chat.
 - O navegador de arquivos e o servidor de mídia só enxergam a pasta raiz do escritório e as pastas extras que você liberou.
 - Renders nunca sobrescrevem arquivos.
 - Conta nova só com o **código de convite**, e toda conta tem senha de pelo menos 8 caracteres. Tentativas erradas bloqueiam
@@ -393,6 +394,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Escritório 3D, multi-escritório, presença na LAN
 - [x] Login seguro, acesso de fora por VPN privada e backup diário do banco
 - [x] Processos da casa na pasta do cliente, sessão contínua por peça e mesa de trabalho
+- [x] Trabalho em andamento no HD com as peças na mesa, e skills protegidas contra edição pelos funcionários
 - [x] Moodboards por nicho e por cliente, no painel e no estúdio de design
 - [x] Salas e funcionários novos, avatares personalizados, paredes removíveis e de vidro, pisos modernos
 - [x] Demandas, calendário, financeiro e métricas

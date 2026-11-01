@@ -10,6 +10,7 @@ import { houseRules } from './templates.ts';
 import { mcpConfig } from './tools.ts';
 import { openLiveForJob, releaseLiveForJob } from './live.ts';
 import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
+import { availableDirs, deniedTools } from './permissions.ts';
 
 /**
  * Cada funcionário de IA é uma sessão do Claude Code em modo headless (`claude -p`). Ela roda dentro da pasta do
@@ -17,15 +18,6 @@ import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
  * e as skills do escritório. Sem cliente, roda na pasta raiz. A saída `stream-json` vira mensagens no chat do
  * funcionário e muda o estado do avatar no mundo 3D.
  */
-
-/** Nunca liberado, mesmo que um modelo de funcionário peça. */
-const ALWAYS_DENIED = [
-  'Bash(rm:*)', 'Bash(rmdir:*)', 'Bash(del:*)', 'Bash(rd:*)', 'Bash(format:*)', 'Bash(git push:*)',
-  'Bash(mv:*)', 'Bash(move:*)', 'Bash(ren:*)',
-  'PowerShell(Remove-Item:*)', 'PowerShell(Move-Item:*)', 'PowerShell(Rename-Item:*)', 'PowerShell(Clear-Content:*)',
-  'mcp__claude_ai_Google_Drive__trash_file', 'mcp__claude_ai_Google_Drive__share_file',
-  'mcp__claude_ai_Notion__notion-delete-pages', 'mcp__claude_ai_Notion__notion-delete-databases',
-];
 
 const running = new Map<string, ChildProcess | null>();
 const queue: { jobId: string; input: string; resume: boolean }[] = [];
@@ -172,14 +164,16 @@ async function start(jobId: string, input: string, resume: boolean) {
     '--append-system-prompt-file', sysFile,
     '--permission-mode', 'acceptEdits',
     '--allowedTools', ...agent.allowedTools, ...mcpIds.map((id) => `mcp__${id}`),
-    '--disallowedTools', ...ALWAYS_DENIED,
+    '--disallowedTools', ...deniedTools(office.rootPath),
   ];
   if (mcpIds.length) {
     const mcpFile = path.join(dir, 'mcp.json');
     writeFileSync(mcpFile, JSON.stringify({ mcpServers: mcp.servers }, null, 2), 'utf8');
     args.push('--mcp-config', mcpFile);
   }
-  for (const d of office.extraDirs) args.push('--add-dir', d);
+  const dirs = availableDirs(office.extraDirs);
+  for (const d of dirs.ok) args.push('--add-dir', d);
+  if (dirs.missing.length) addMessage(jobId, office.id, 'sistema', `Pasta indisponível: ${dirs.missing.join(', ')}. Se o trabalho depende dela, conecte o disco antes de continuar.`);
   // a sessão retomada precisa da mesma pasta; se ela sumiu, volta para a raiz
   const cwd = job.cwd && existsSync(job.cwd) ? job.cwd : office.rootPath;
   // as skills ficam na raiz, fora da pasta do cliente

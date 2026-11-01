@@ -74,7 +74,10 @@ flowchart LR
 6. Concluído com demanda ligada: a demanda vai para a coluna **Aprovação**.
 
 **Segurança**: comandos de apagar, mover e renomear, `git push` e as ferramentas de lixeira e compartilhamento do
-Drive estão sempre negados, seja qual for o modelo. O `CLAUDE.md` da pasta raiz continua valendo.
+Drive estão sempre negados, seja qual for o modelo, assim como editar `.claude/skills` da pasta raiz (`agents/permissions.ts`).
+O bloqueio vale para as ferramentas de edição: um script rodado pelo funcionário não passa por ele, e por isso a regra também está
+em `_regras-da-casa.md`. Uma pasta extra que sumiu, como um HD desconectado, fica de fora da tarefa com um aviso no chat.
+O `CLAUDE.md` da pasta raiz continua valendo.
 
 ## Engine de vídeo (`packages/video-engine`)
 

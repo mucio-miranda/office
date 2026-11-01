@@ -84,6 +84,23 @@ test('a mesa vê o que mudou nas pastas reais e deixa de fora intermediários e 
   rmSync(dir, { recursive: true, force: true });
 });
 
+test('a mesa ignora as cópias de entrada, os recortes e as versões antigas de um trabalho no HD', () => {
+  const dir = mkdtempSync(path.join(tmpdir(), 'office-hd-'));
+  const put = (rel: string) => {
+    const f = path.join(dir, ...rel.split('/'));
+    mkdirSync(path.dirname(f), { recursive: true });
+    writeFileSync(f, 'x');
+    return f;
+  };
+  const peca = put('saida/composicao/18/18-tunning.png');
+  put('entrada/18_carrossel.png');
+  put('saida/_recortes/foto.png');
+  put('VERSOES ANTIGAS/18_carrossel.png');
+  put('versoes antigas de outubro/17.png');
+  assert.deepEqual(changedFiles(dir, Date.now() - 60_000), [peca]);
+  rmSync(dir, { recursive: true, force: true });
+});
+
 test('peças de uma rodada: junta a pasta do cliente e o que foi citado em outra pasta liberada', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'office-rodada-'));
   const cli = path.join(dir, 'cliente');

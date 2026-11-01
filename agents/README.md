@@ -13,7 +13,7 @@ modelos para o banco do escritório, e cada um vira um avatar sentado na sua sal
 - O **corpo** é a persona: o jeito de trabalhar, que entra como prompt de sistema do Claude Code.
 - Os funcionários rodam com `claude -p` (headless) **dentro da pasta do cliente**, quando ela existe, como quem abre o
   Claude Code lá: vale a memória dessa pasta e, das pastas acima, o `CLAUDE.md` e as skills de `.claude/skills`. Sem
-  cliente, rodam na pasta raiz do escritório.
+  cliente, rodam na pasta raiz do escritório. Eles usam as skills, mas não as alteram.
 
 Placeholders disponíveis no corpo: `{{OFFICE_NAME}}`, `{{OFFICE_ROOT}}`, `{{OFFICE_RENDER}}` (comando da engine
 de vídeo), `{{APPROVAL_MARKER}}`, `{{TODAY}}`.

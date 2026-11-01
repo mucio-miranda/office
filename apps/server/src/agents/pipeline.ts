@@ -142,10 +142,10 @@ ${briefingText(client?.briefing)}
 ${missing.length ? `\n## Não encontrei na pasta do cliente\n${missing.map((m) => `- ${m}`).join('\n')}\nSe for essencial, pare e peça em vez de inventar.\n` : ''}
 ## Como trabalhar
 - Use a skill \`${p.skill}\` e siga o método e as paradas dela. Veja antes como as entregas anteriores deste cliente foram feitas.
-- Grave nas pastas reais do cliente, seguindo o padrão que já existe aqui. Não crie uma estrutura nova sem precisar.
+- Grave nas pastas reais do cliente, seguindo o padrão que já existe aqui. Não crie uma estrutura nova sem precisar. Se o CLAUDE.md da raiz mandar o trabalho em andamento para outra pasta (um HD, por exemplo), siga o CLAUDE.md: as peças citadas com caminho completo aparecem na mesa, desde que a pasta esteja liberada no escritório. Se ela estiver indisponível, pare e peça para conectar.
 - Quando precisar de uma decisão (proposta, referência, amostra), pare com a linha \`${APPROVAL_MARKER}\` e cite os caminhos completos do que mostrar: as peças aparecem na mesa do diretor de arte.
 - Não envie ao Drive nem publique: isso sai pela mesa, depois da aprovação.
-- Ao terminar, responda com um resumo curto e os caminhos completos das peças finais.`;
+- Ao terminar, responda com um resumo curto e os caminhos completos das peças finais. Se aprendeu algo que valha para outros clientes, acrescente um bloco \`Aprendizados:\`. Não altere as skills.`;
 }
 
 function reviewPrompt(d: Demand, office: Office, client?: Client) {
