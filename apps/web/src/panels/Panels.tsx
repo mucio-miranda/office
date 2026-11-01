@@ -1,5 +1,6 @@
 import { useStore } from '../lib/store';
 import { Demands } from './Demands';
+import { Mesa } from './Mesa';
 import { Clients } from './Clients';
 import { CalendarPanel } from './CalendarPanel';
 import { Finance } from './Finance';
@@ -10,6 +11,7 @@ import { Archive } from './Archive';
 
 export const PAGE_TITLE = {
   escritorio: 'Escritório',
+  mesa: 'Mesa de trabalho',
   clientes: 'Clientes',
   demandas: 'Demandas',
   calendario: 'Calendário',
@@ -27,6 +29,7 @@ export function Pages() {
   const flush = panel === 'agente' || panel === 'video' || panel === 'arquivo';
   return (
     <div className={`page-body ${flush ? 'flush' : ''}`} style={{ position: 'absolute', inset: 0 }}>
+      {panel === 'mesa' && <Mesa />}
       {panel === 'clientes' && <Clients />}
       {panel === 'demandas' && <Demands />}
       {panel === 'calendario' && <CalendarPanel />}

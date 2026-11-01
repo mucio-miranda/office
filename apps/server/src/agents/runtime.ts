@@ -1,5 +1,6 @@
 import { spawn, type ChildProcess } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
 import path from 'node:path';
 import { APPROVAL_MARKER, uid, type AgentJob, type AgentProfile, type JobMessage, type Office, type Stage } from '@office/shared';
 import { config } from '../config.ts';
@@ -8,11 +9,12 @@ import { broadcast, invalidate } from '../realtime.ts';
 import { houseRules } from './templates.ts';
 import { mcpConfig } from './tools.ts';
 import { openLiveForJob, releaseLiveForJob } from './live.ts';
-import { onJobFinished } from './pipeline.ts';
+import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
 
 /**
- * Cada funcionário de IA é uma sessão do Claude Code em modo headless (`claude -p`),
- * rodando na pasta raiz do escritório. A saída `stream-json` vira mensagens no chat do
+ * Cada funcionário de IA é uma sessão do Claude Code em modo headless (`claude -p`). Ela roda dentro da pasta do
+ * cliente, como quando alguém abre o Claude Code lá: vale a memória dessa pasta e, das pastas acima, o CLAUDE.md
+ * e as skills do escritório. Sem cliente, roda na pasta raiz. A saída `stream-json` vira mensagens no chat do
  * funcionário e muda o estado do avatar no mundo 3D.
  */
 
@@ -79,10 +81,10 @@ function describeTool(name: string, input: Record<string, unknown>) {
   return name;
 }
 
-export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string; stage?: Stage }) {
+export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string; stage?: Stage; cwd?: string | null }) {
   const job: AgentJob & { createdBy: string } = {
     id: uid(), officeId: params.officeId, agentId: params.agentId, demandId: params.demandId, stage: params.stage ?? null,
-    prompt: params.prompt, status: 'fila', sessionId: null, costUsd: 0,
+    prompt: params.prompt, status: 'fila', sessionId: null, costUsd: 0, cwd: params.cwd ?? null,
     createdBy: params.createdBy, createdAt: now(), updatedAt: now(),
   };
   insert('jobs', job as never);
@@ -113,9 +115,14 @@ export function cancelJob(jobId: string) {
   setAgentStatus(job.agentId, job.officeId, 'livre');
 }
 
+/** Render e transcrição disputam a máquina inteira: duas edições juntas levam muito mais que uma depois da outra. */
+const isHeavy = (jobId: string) => one<{ slug: string }>('SELECT a.slug FROM jobs j JOIN agents a ON a.id = j.agent_id WHERE j.id = ?', jobId)?.slug === 'editor-de-video';
+
 function pump() {
-  while (running.size < config.maxConcurrentJobs && queue.length) {
-    const next = queue.shift()!;
+  for (let i = 0; i < queue.length && running.size < config.maxConcurrentJobs;) {
+    const next = queue[i];
+    if (isHeavy(next.jobId) && [...running.keys()].some(isHeavy)) { i++; continue; }
+    queue.splice(i, 1);
     void start(next.jobId, next.input, next.resume);
   }
 }
@@ -129,8 +136,10 @@ async function start(jobId: string, input: string, resume: boolean) {
 
   const dir = path.join(config.dataDir, 'jobs', jobId);
   mkdirSync(dir, { recursive: true });
+  // um processo da casa roda só com as skills, como no terminal: sem app aberto na tela nem servidores extras
+  const isProcess = !!(job.demandId && one<{ process: string | null }>('SELECT process FROM demands WHERE id = ?', job.demandId)?.process);
   // modo ao vivo: o app abre na tela e o servidor MCP vira uma ponte para a janela
-  const liveIds = (agent.live ?? []).filter((id) => (agent.mcp ?? []).includes(id));
+  const liveIds = isProcess ? [] : (agent.live ?? []).filter((id) => (agent.mcp ?? []).includes(id));
   let bridges = {};
   if (liveIds.length) {
     setJob(jobId, { status: 'rodando' });
@@ -148,7 +157,7 @@ async function start(jobId: string, input: string, resume: boolean) {
     }
   }
   // ferramentas criativas instaladas: um servidor MCP por ferramenta, com as pastas do escritório
-  const mcp = mcpConfig(agent.mcp ?? [], office, bridges);
+  const mcp = mcpConfig(isProcess ? [] : agent.mcp ?? [], office, bridges);
   const mcpIds = Object.keys(mcp.servers);
   const sysFile = path.join(dir, 'system.md');
   writeFileSync(sysFile, systemPrompt(agent, office, mcp.hints), 'utf8');
@@ -166,9 +175,15 @@ async function start(jobId: string, input: string, resume: boolean) {
     args.push('--mcp-config', mcpFile);
   }
   for (const d of office.extraDirs) args.push('--add-dir', d);
+  // a sessão retomada precisa da mesma pasta; se ela sumiu, volta para a raiz
+  const cwd = job.cwd && existsSync(job.cwd) ? job.cwd : office.rootPath;
+  // as skills ficam na raiz, fora da pasta do cliente
+  if (path.resolve(cwd) !== path.resolve(office.rootPath)) args.push('--add-dir', office.rootPath);
+  // tunning no navegador: usa a extensão do Chrome, e a imagem gerada cai em Downloads
+  if (agent.allowedTools.includes('mcp__claude-in-chrome')) args.push('--chrome', '--add-dir', path.join(homedir(), 'Downloads'));
   if (resume && job.sessionId) args.push('--resume', job.sessionId);
 
-  setJob(jobId, { status: 'rodando' });
+  setJob(jobId, { status: 'rodando', turnStartedAt: now() });
   setAgentStatus(agent.id, office.id, 'trabalhando');
   logActivity(office.id, `agent:${agent.slug}`, resume ? 'retomou' : 'começou', job.prompt.slice(0, 120));
 
@@ -176,7 +191,7 @@ async function start(jobId: string, input: string, resume: boolean) {
   try {
     // CLAUDE_BIN pode apontar para um script .mjs (um Claude de mentira, nos testes da esteira)
     const [bin, pre] = /\.m?js$/.test(config.claudeBin) ? [process.execPath, [config.claudeBin]] : [config.claudeBin, []];
-    child = spawn(bin, [...pre, ...args], { cwd: office.rootPath, windowsHide: true, env: { ...process.env, OFFICE_JOB_ID: jobId } });
+    child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, OFFICE_JOB_ID: jobId } });
   } catch (e) {
     addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o Claude Code: ${(e as Error).message}`);
     setJob(jobId, { status: 'erro' });
@@ -232,9 +247,11 @@ async function start(jobId: string, input: string, resume: boolean) {
       setAgentStatus(agent.id, office.id, 'erro');
       onJobFinished(failed, '', false);
     } else if (finalText.includes(APPROVAL_MARKER)) {
-      setJob(jobId, { status: 'aguardando' });
+      const waiting = setJob(jobId, { status: 'aguardando' });
       setAgentStatus(agent.id, office.id, 'aguardando');
       logActivity(office.id, `agent:${agent.slug}`, 'pediu aprovação', job.prompt.slice(0, 120));
+      // o que já existe vai para a mesa junto com a pergunta
+      try { onJobCheckpoint(waiting, finalText); } catch (e) { addMessage(jobId, office.id, 'sistema', `Não consegui mostrar as peças na mesa: ${(e as Error).message}`); }
     } else {
       const done = setJob(jobId, { status: isError ? 'erro' : 'concluido' });
       const stillBusy = all<AgentJob>("SELECT id FROM jobs WHERE agent_id = ? AND status IN ('rodando','aguardando')", agent.id).length > 0;

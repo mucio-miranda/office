@@ -96,6 +96,10 @@ const MIGRATIONS: string[] = [
      user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE, code_hash TEXT NOT NULL, expires_at TEXT NOT NULL);
    UPDATE offices SET invite_code = hex(randomblob(6));
    ALTER TABLE offices ADD COLUMN backup_dir TEXT;`,
+  // v0.7: processos da casa, funcionário dentro da pasta do cliente e sessão contínua por peça
+  `ALTER TABLE demands ADD COLUMN process TEXT;
+   ALTER TABLE jobs ADD COLUMN cwd TEXT;
+   ALTER TABLE jobs ADD COLUMN turn_started_at TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

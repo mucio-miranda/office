@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Grid2x2,
-  Paintbrush, Briefcase, Archive as ArchiveIcon,
+  Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
@@ -19,6 +19,7 @@ import { desktop } from './lib/desktop';
 type NavId = Exclude<PanelId, 'agente'>;
 const NAV: { id: NavId; icon: typeof Box; label: string; key: string }[] = [
   { id: null, icon: Box, label: 'Escritório', key: 'O' },
+  { id: 'mesa', icon: Inbox, label: 'Mesa', key: 'N' },
   { id: 'clientes', icon: Briefcase, label: 'Clientes', key: 'K' },
   { id: 'arquivo', icon: ArchiveIcon, label: 'Arquivo', key: 'J' },
   { id: 'demandas', icon: KanbanSquare, label: 'Demandas', key: 'B' },
@@ -163,6 +164,8 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
   const online = Object.values(presences);
   const [status, setStatus] = useState<'disponivel' | 'ocupado' | 'foco' | 'ausente'>('disponivel');
   const openCount = demands.filter((d) => d.status !== 'entregue').length;
+  // o que está parado esperando uma pessoa: decisão pedida no meio ou aprovação
+  const deskCount = demands.filter((d) => jobs.some((j) => j.demandId === d.id && j.status === 'aguardando') || (d.stage === 'aprovacao' && d.status === 'aprovacao' && !jobs.some((j) => j.demandId === d.id && ['fila', 'rodando'].includes(j.status)))).length;
   const waiting = jobs.filter((j) => j.status === 'aguardando').length;
   const go = (id: PanelId, arg?: string) => { open(id, arg); onNavigate(); };
   return (
@@ -183,6 +186,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
             <button key={n.label} className={`nav-item ${panel === n.id ? 'active' : ''}`} onClick={() => go(n.id)}>
               <n.icon size={16} /> {n.label}
               {n.id === 'demandas' && openCount > 0 && <span className="count">{openCount}</span>}
+              {n.id === 'mesa' && deskCount > 0 && <span className="count">{deskCount}</span>}
             </button>
           ))}
         </nav>

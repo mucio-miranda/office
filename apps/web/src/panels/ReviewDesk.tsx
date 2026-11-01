@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Check, CloudUpload, CornerLeftUp, ExternalLink, FileText, FolderOpen, Megaphone, RotateCcw, Trash2, X } from 'lucide-react';
+import { CalendarClock, Check, Clock, CloudUpload, CornerLeftUp, ExternalLink, FileText, FolderOpen, Megaphone, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { NETWORKS, NETWORK_LABEL, STAGE_LABEL, type Demand, type Network, type ReviewMark, type StageLogEntry } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, getToken, mediaUrl } from '../lib/api';
@@ -17,7 +17,7 @@ const TXT = /\.(md|txt)$/i;
 const base = (f: string) => f.split(/[\\/]/).pop() ?? f;
 
 /** Entradas da esteira que produziram peças (cada uma é uma versão daquela etapa). */
-export const versionsOf = (d: Demand) => (d.stageLog ?? []).filter((e) => e.result === 'feito' && e.files?.length);
+export const versionsOf = (d: Demand) => (d.stageLog ?? []).filter((e) => (e.result === 'feito' || e.result === 'parcial') && e.files?.length);
 
 export const openFile = (p: string) => {
   if (!desktop) return useStore.getState().notify(`Arquivo: ${p}`);
@@ -61,8 +61,28 @@ function MarkableImage({ src, marks, onMark, offset = 0 }: { src: string; marks:
   );
 }
 
+/** A prancha (referência | composição | tunada) vem primeiro; a comparação do tunning, depois das peças. */
+const fileRank = (f: string) => (/_PRANCHA/i.test(f) ? 0 : /comparacao\.jpg$/i.test(f) ? 2 : IMG.test(f) || VID.test(f) ? 1 : 3);
+const ordered = (files: string[]) => [...files].sort((a, b) => fileRank(a) - fileRank(b) || a.localeCompare(b));
+
+const clock = (s: number) => `${String(Math.floor(s / 60)).padStart(2, '0')}:${String(Math.floor(s % 60)).padStart(2, '0')}`;
+
+/** Vídeo com o botão que leva o tempo atual para o comentário ("Corte esse take dos 4-6s"). */
+function VideoNote({ src, onTime }: { src: string; onTime?: (time: string) => void }) {
+  const ref = useRef<HTMLVideoElement>(null);
+  return (
+    <div className="col gap-s">
+      <video ref={ref} src={src} controls preload="metadata" />
+      {onTime && <button type="button" className="ghost small self-start" onClick={() => { ref.current?.pause(); onTime(clock(ref.current?.currentTime ?? 0)); }}><Clock size={13} /> Comentar neste tempo</button>}
+    </div>
+  );
+}
+
+interface DeskInfo { folder: string; base: { label: string; ok: boolean }[]; newer: string[] }
+
 export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
-  const { office, agents, members, jobs, notify } = useStore();
+  const { office, agents, members, jobs, notify, messages, loadMessages } = useStore();
+  const [info, setInfo] = useState<DeskInfo | null>(null);
   const versions = useMemo(() => versionsOf(d), [d]);
   const [sel, setSel] = useState(Math.max(0, versions.length - 1));
   const [marks, setMarks] = useState<ReviewMark[]>([]);
@@ -75,6 +95,16 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
   const v: StageLogEntry | undefined = versions[sel];
   const active = jobs.find((j) => j.demandId === d.id && ['fila', 'rodando', 'aguardando'].includes(j.status));
   const waiting = d.stage === 'aprovacao' && d.status === 'aprovacao' && !active;
+  // o funcionário parou no meio para pedir uma decisão: a resposta continua a mesma conversa
+  const asking = active?.status === 'aguardando' ? active : null;
+  const canMark = (waiting || !!asking) && sel === versions.length - 1;
+  const question = asking ? [...(messages[asking.id] ?? [])].reverse().find((m) => m.role === 'agente')?.text : null;
+  useEffect(() => { if (asking) loadMessages(asking.id); }, [asking?.id, asking?.updatedAt]);
+  useEffect(() => {
+    let alive = true;
+    api<DeskInfo>(`/api/offices/${office!.id}/demands/${d.id}/mesa`).then((r) => alive && setInfo(r)).catch(() => { /* a mesa funciona sem o resumo */ });
+    return () => { alive = false; };
+  }, [office, d.id, d.stageLog?.length, active?.status]);
   // ajustes pedidos antes, com as áreas que marcaram nesta versão
   const past = (d.stageLog ?? []).filter((e) => e.result === 'ajustes' || e.result === 'aprovado');
   const pastMarks = (file: string) => past.flatMap((e) => e.marks ?? []).filter((m) => m.file === file);
@@ -86,6 +116,18 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
   const act = async (name: string, body: object = {}) => {
     setBusy(true);
     try { await api(`/api/offices/${office!.id}/demands/${d.id}/${name}`, { body }); return true; } catch (e) { notify((e as Error).message); return false; } finally { setBusy(false); }
+  };
+  const answer = async (reply: string) => {
+    setBusy(true);
+    try {
+      await api(`/api/offices/${office!.id}/jobs/${asking!.id}/reply`, { body: { text: reply, marks } });
+      setMarks([]);
+      setText('');
+      notify('Resposta enviada: o funcionário continua de onde parou');
+    } catch (e) { notify((e as Error).message); } finally { setBusy(false); }
+  };
+  const adopt = async () => {
+    if (await act('adotar', { files: info!.newer })) notify('Sua edição virou a versão atual');
   };
   const sendChanges = async () => {
     const ok = await act('ajustes', { text: text.trim() || 'Ajustes nas áreas marcadas.', marks });
@@ -105,7 +147,7 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
               <div className="review-tabs">
                 {versions.map((e, i) => (
                   <button key={i} type="button" className={i === sel ? 'on' : ''} onClick={() => { setSel(i); setPending(null); }}>
-                    {STAGE_LABEL[e.stage]} v{e.version ?? 1}
+                    {STAGE_LABEL[e.stage]} v{e.version ?? 1}{e.result === 'parcial' ? ' · prévia' : ''}
                   </button>
                 ))}
               </div>
@@ -113,22 +155,23 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
             {!v && <p className="muted">Nenhuma peça registrada ainda. Elas aparecem aqui quando um funcionário termina uma etapa.</p>}
             {v && (
               <div className="review-files">
-                {v.files!.map((f) => (
+                {ordered(v.files!).map((f) => (
                   <figure key={f} className="review-file">
                     {IMG.test(f) ? (
                       <MarkableImage src={mediaUrl(office!.id, f)} offset={0}
                         marks={[...pastMarks(f), ...marks.filter((m) => m.file === f)]}
-                        onMark={waiting && sel === versions.length - 1 ? (r) => { setPending({ ...r, file: f }); setNote(''); } : undefined} />
+                        onMark={canMark ? (r) => { setPending({ ...r, file: f }); setNote(''); } : undefined} />
                     ) : VID.test(f) ? (
-                      <video src={mediaUrl(office!.id, f)} controls preload="metadata" />
+                      <VideoNote src={mediaUrl(office!.id, f)} onTime={waiting || asking ? (t) => setText((x) => `${x}${x && !x.endsWith('\n') ? '\n' : ''}${base(f)} em ${t}: `) : undefined} />
                     ) : TXT.test(f) ? (
                       <TextPreview officeId={office!.id} file={f} />
                     ) : (
                       <div className="review-other"><FileText size={28} /><span>{base(f)}</span></div>
                     )}
                     <figcaption>
-                      <span className="truncate" title={f}>{base(f)}</span>
+                      <span className="truncate" title={f}>{info && f.toLowerCase().startsWith(info.folder.toLowerCase()) ? f.slice(info.folder.length + 1) : f}</span>
                       <button type="button" className="icon" title="Abrir no app" onClick={() => openFile(f)}><ExternalLink size={13} /></button>
+                      {desktop && <button type="button" className="icon" title="Mostrar na pasta" onClick={() => desktop?.showInFolder(f)}><FolderOpen size={13} /></button>}
                     </figcaption>
                   </figure>
                 ))}
@@ -136,8 +179,38 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
             )}
           </div>
           <aside className="review-side">
-            {v && <p className="review-summary">{v.text}</p>}
-            {waiting ? (
+            {info && <p className="muted small review-path" title={info.folder}>Pasta do cliente: <code>{info.folder}</code></p>}
+            {info && info.base.some((n) => !n.ok) && !versions.length && (
+              <div className="approval"><span>Não achei na pasta: {info.base.filter((n) => !n.ok).map((n) => n.label).join(', ')}. Sem isso, o funcionário deve parar e pedir.</span></div>
+            )}
+            {info && info.newer.length > 0 && !['fila', 'rodando'].includes(active?.status ?? '') && (
+              <div className="approval">
+                <span>Mudou depois da entrega: {info.newer.map(base).join(', ')}</span>
+                <button type="button" className="primary small" disabled={busy} onClick={adopt}>Usar como versão atual</button>
+              </div>
+            )}
+            {!asking && v && <p className="review-summary">{v.text}</p>}
+            {asking && (
+              <div className="col gap-s">
+                <b>{agents.find((a) => a.id === asking.agentId)?.name ?? 'O funcionário'} pede uma decisão</b>
+                {question && <div className="review-text md" dangerouslySetInnerHTML={{ __html: renderMarkdown(question) }} />}
+                {canMark && versions.at(-1)?.files?.some((f) => IMG.test(f)) && <p className="muted small" style={{ margin: 0 }}>Arraste sobre a imagem para marcar uma área e diga o que mudar ali.</p>}
+                {pending && (
+                  <div className="review-pending">
+                    <input autoFocus placeholder="O que mudar nesta área?" value={note} onChange={(e) => setNote(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); if (e.key === 'Enter' && note.trim()) { setMarks([...marks, { ...pending, note: note.trim() }]); setPending(null); } if (e.key === 'Escape') setPending(null); }} />
+                    <button type="button" className="primary small" disabled={!note.trim()} onClick={() => { setMarks([...marks, { ...pending, note: note.trim() }]); setPending(null); }}>Marcar</button>
+                  </div>
+                )}
+                {marks.length > 0 && <ol className="review-marks">{marks.map((m, i) => <li key={i}><span>{base(m.file)}: {m.note}</span><button type="button" className="icon" title="Tirar" onClick={() => setMarks(marks.filter((_, k) => k !== i))}><Trash2 size={12} /></button></li>)}</ol>}
+                <textarea rows={3} placeholder="Sua resposta" value={text} onChange={(e) => setText(e.target.value)} />
+                <div className="row gap end">
+                  <button type="button" className="ghost small" disabled={busy || !!text.trim() || marks.length > 0} onClick={() => answer('Aprovado, pode seguir.')}><Check size={13} /> Pode seguir</button>
+                  <button type="button" className="primary small" disabled={busy || (!text.trim() && !marks.length)} onClick={() => answer(text.trim() || 'Ajuste as áreas marcadas.')}><Send size={13} /> Responder</button>
+                </div>
+              </div>
+            )}
+            {asking ? null : waiting ? (
               <div className="col gap-s">
                 <b>Sua revisão</b>
                 {versions.some((e) => e.files!.some((f) => IMG.test(f))) && <p className="muted small" style={{ margin: 0 }}>Arraste sobre a imagem para marcar uma área e diga o que mudar ali.</p>}

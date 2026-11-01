@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Bot, Check, Eye, Megaphone, Pause, Play, Plus, RotateCcw, Workflow, X } from 'lucide-react';
-import { DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, STAGE_AGENT, STAGE_LABEL, type Demand, type DemandKind, type DemandStatus, type Priority, type Stage } from '@office/shared';
+import { DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, PROCESSES, STAGE_AGENT, STAGE_LABEL, processById, type Demand, type DemandKind, type DemandStatus, type Priority, type Stage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, fmtDuration } from '../lib/api';
 import { DriveBox, PublishBox, ReviewDesk, versionsOf } from './ReviewDesk';
@@ -141,24 +141,26 @@ function Pipeline({ d }: { d: Demand }) {
   const waitingHuman = d.stage === 'aprovacao' && d.status === 'aprovacao' && !active;
   const finished = d.status === 'entregue' && (d.stage === 'agendado' || d.pipeline?.[0] === 'briefing');
   const next = (d.stage ? d.pipeline[d.pipeline.indexOf(d.stage)] : d.pipeline?.[0]) as Stage | undefined;
-  const nextAgent = next && STAGE_AGENT[next] ? agents.find((a) => a.slug === STAGE_AGENT[next]) : undefined;
+  const proc = processById(d.process);
+  const nextAgent = proc ? agents.find((a) => a.slug === proc.agent) : next && STAGE_AGENT[next] ? agents.find((a) => a.slug === STAGE_AGENT[next]) : undefined;
   if (!d.pipeline?.length) return null;
   return (
     <div className="pipeline">
       <div className="row between">
-        <b className="row gap"><Workflow size={14} /> Esteira</b>
+        <b className="row gap"><Workflow size={14} /> {proc ? proc.label : 'Esteira'}</b>
         <div className="row gap">
           {active && <button type="button" className="ghost small" onClick={() => open('agente', active.agentId)}><Bot size={13} /> {agents.find((a) => a.id === active.agentId)?.name} {active.status === 'aguardando' ? 'precisa de você' : 'trabalhando'}</button>}
           {!finished && !active && !waitingHuman && (
-            <button type="button" className="primary small" disabled={busy} onClick={() => act('esteira')} title={nextAgent ? `${nextAgent.name} começa a etapa ${STAGE_LABEL[next!]}` : undefined}>
-              <Play size={13} /> {d.stage ? 'Continuar esteira' : 'Ligar esteira'}
+            <button type="button" className="primary small" disabled={busy} onClick={() => act('esteira')} title={nextAgent ? (proc ? `${nextAgent.name} começa pela skill ${proc.skill}, na pasta do cliente` : `${nextAgent.name} começa a etapa ${STAGE_LABEL[next!]}`) : undefined}>
+              <Play size={13} /> {d.stage ? 'Continuar' : proc ? 'Começar' : 'Ligar esteira'}
             </button>
           )}
           {d.auto && !finished && <button type="button" className="ghost small" disabled={busy} onClick={() => act('pausar')} title="Termina a etapa atual e não começa a próxima"><Pause size={13} /> Pausar</button>}
         </div>
       </div>
       <StageTrack d={d} />
-      {versions.length > 0 && !waitingHuman && (
+      {active?.status === 'aguardando' && <button type="button" className="primary small self-start" onClick={() => setDesk(true)}><Eye size={13} /> Responder na mesa</button>}
+      {versions.length > 0 && !waitingHuman && active?.status !== 'aguardando' && (
         <button type="button" className="ghost small self-start" onClick={() => setDesk(true)}><Eye size={13} /> Ver peças ({versions.length} {versions.length === 1 ? 'versão' : 'versões'})</button>
       )}
       {waitingHuman && (
@@ -207,7 +209,7 @@ function DemandForm({ d, onClose }: { d: Partial<Demand>; onClose: () => void })
     <div className="modal-bg" onClick={onClose}>
       <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={async (e) => {
         e.preventDefault();
-        const body = { title: f.title, description: f.description ?? '', clientId: f.clientId ?? null, kind: f.kind, status: f.status, priority: f.priority, assignee: f.assignee ?? null, dueDate: f.dueDate ?? null };
+        const body = { title: f.title, description: f.description ?? '', clientId: f.clientId ?? null, kind: f.kind, status: f.status, priority: f.priority, assignee: f.assignee ?? null, dueDate: f.dueDate ?? null, process: f.process ?? null };
         if (f.id) await api(`${base}/${f.id}`, { method: 'PATCH', body }); else await api(base, { body });
         onClose();
       }}>
@@ -216,6 +218,14 @@ function DemandForm({ d, onClose }: { d: Partial<Demand>; onClose: () => void })
           {f.id && <Pipeline d={demands.find((x) => x.id === f.id) ?? (f as Demand)} />}
           <label>Título<input autoFocus required value={f.title ?? ''} onChange={set('title')} /></label>
           <label>Briefing<textarea rows={4} value={f.description ?? ''} onChange={set('description')} /></label>
+          {!f.stage && (
+            <label>Processo <span className="muted">(o método validado que o funcionário segue, na pasta do cliente)</span>
+              <select value={f.process ?? ''} onChange={(e) => { const p = processById(e.target.value); setF({ ...f, process: p?.id ?? null, kind: p?.kind ?? f.kind }); }}>
+                <option value="">Sem processo (esteira por etapas)</option>
+                {PROCESSES.map((p) => <option key={p.id} value={p.id}>{p.label}</option>)}
+              </select>
+            </label>
+          )}
           <div className="grid3">
             <label>Cliente<select value={f.clientId ?? ''} onChange={set('clientId')}><option value="">—</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select></label>
             <label>Tipo<select value={f.kind} onChange={set('kind')}>{Object.entries(KIND_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}</select></label>
@@ -260,7 +270,7 @@ function Delegate({ d, onClose, onDone }: { d: Demand; onClose: () => void; onDo
             {agents.map((a) => <option key={a.id} value={a.id}>{a.name} · {a.role} ({a.status})</option>)}
           </select></label>
           <label>Instruções<textarea rows={5} value={prompt} onChange={(e) => setPrompt(e.target.value)} /></label>
-          <p className="muted small" style={{ margin: 0 }}>O briefing e a pasta do cliente vão junto. O funcionário roda o Claude Code na pasta do escritório e para quando precisar de você.</p>
+          <p className="muted small" style={{ margin: 0 }}>O briefing vai junto. O funcionário roda o Claude Code dentro da pasta do cliente, quando ela existe, e para quando precisar de você.</p>
           {err && <div className="error">{err}</div>}
         </div>
         <footer className="modal-foot"><span /><div className="row gap"><button type="button" className="ghost" onClick={onClose}>Cancelar</button><button className="primary"><Bot size={14} /> Delegar</button></div></footer>

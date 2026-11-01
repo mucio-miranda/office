@@ -97,6 +97,42 @@ export const STAGE_AGENT: Partial<Record<Stage, string>> = {
   briefing: 'gerente', pauta: 'copywriter', copy: 'copywriter', arte: 'designer', video: 'editor-de-video',
 };
 
+/**
+ * Processo: um método validado da casa. O funcionário abre dentro da pasta do cliente, usa a skill e para nas decisões
+ * dela, numa sessão só por peça. `needs` é o que a pasta do cliente deveria ter (caminho relativo, em regex).
+ */
+export interface ProcessDef {
+  id: string;
+  label: string;
+  kind: DemandKind;
+  stage: Stage;
+  agent: string;
+  skill: string;
+  needs: { label: string; test: string }[];
+}
+const NEEDS_BRUTOS = { label: 'Vídeos brutos', test: '(^|/)BRUTOS/' };
+export const PROCESSES: ProcessDef[] = [
+  {
+    id: 'arte-feed', label: 'Arte de feed ou carrossel', kind: 'design', stage: 'arte', agent: 'designer', skill: 'arte-referencia',
+    needs: [
+      { label: 'Tokens de marca (marca.json)', test: 'marca\\.json$' },
+      { label: 'Identidade visual', test: '(^|/)IDENTIDADE VISUAL/' },
+      { label: 'Fotos editadas', test: '(^|/)FOTOS/.*EDITADAS?/' },
+    ],
+  },
+  {
+    id: 'reels', label: 'Reels falado', kind: 'video', stage: 'video', agent: 'editor-de-video', skill: 'editar-video',
+    needs: [{ label: 'Padrão de edição (PADRAO-EDICAO.md)', test: 'PADRAO-EDICAO' }, NEEDS_BRUTOS],
+  },
+  { id: 'story-broll', label: 'Story de b-roll', kind: 'video', stage: 'video', agent: 'editor-de-video', skill: 'story-broll', needs: [NEEDS_BRUTOS] },
+  { id: 'story-reuniao', label: 'Story de reunião', kind: 'video', stage: 'video', agent: 'editor-de-video', skill: 'story-reuniao', needs: [NEEDS_BRUTOS] },
+  { id: 'fotos-ensaio', label: 'Tratar ensaio', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'editar-ensaio', needs: [{ label: 'Fotos do ensaio', test: '(^|/)FOTOS/' }] },
+  { id: 'fotos-comida', label: 'Tratar fotos de comida', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'editar-comida', needs: [{ label: 'Fotos', test: '(^|/)FOTOS/' }] },
+  { id: 'retoque', label: 'Retoque de retrato', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'retoque-retrato', needs: [{ label: 'Fotos', test: '(^|/)FOTOS/' }] },
+  { id: 'roteiro', label: 'Roteiro de Reels', kind: 'copy', stage: 'copy', agent: 'copywriter', skill: 'guia-de-roteiro', needs: [] },
+];
+export const processById = (id: string | null | undefined) => PROCESSES.find((p) => p.id === id);
+
 export interface StageLogEntry {
   stage: Stage;
   /** agent:<id> ou user:<id> */
@@ -104,7 +140,8 @@ export interface StageLogEntry {
   jobId: string | null;
   /** Resumo do que foi feito (ou o pedido de ajuste / a aprovação). */
   text: string;
-  result: 'feito' | 'aprovado' | 'ajustes' | 'erro';
+  /** `parcial`: o que já existia quando o funcionário parou para pedir uma decisão. */
+  result: 'feito' | 'parcial' | 'aprovado' | 'ajustes' | 'erro';
   at: string;
   /** Arquivos que a etapa produziu (caminhos completos), para a mesa do diretor de arte. */
   files?: string[];
@@ -114,6 +151,8 @@ export interface StageLogEntry {
   marks?: ReviewMark[];
   /** Pasta do Drive para onde esta entrada enviou as peças. */
   drive?: string;
+  /** Arquivos que uma pessoa editou à mão e adotou nesta versão. */
+  manual?: string[];
 }
 
 /**
@@ -182,6 +221,8 @@ export interface Demand {
   position: number;
   createdAt: string;
   updatedAt: string;
+  /** Método da casa que esta demanda segue (null = esteira por etapas). */
+  process?: string | null;
   /** Etapas da esteira desta demanda (vazio = sem esteira). */
   pipeline: Stage[];
   /** Etapa atual (null antes de começar). */
@@ -291,6 +332,10 @@ export interface AgentJob {
   status: JobStatus;
   sessionId: string | null;
   costUsd: number;
+  /** Pasta onde o funcionário roda: a do cliente, quando existe. */
+  cwd?: string | null;
+  /** Início da rodada atual (cada resposta a um checkpoint abre uma rodada na mesma sessão). */
+  turnStartedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

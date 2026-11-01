@@ -11,4 +11,5 @@
   arte, publicar), PARE, explique em poucas linhas o que precisa e termine a resposta com a linha exata:
   `{{APPROVAL_MARKER}}`
   A pessoa responde pelo escritório e você continua de onde parou.
+- Rode um comando por vez, sem juntar vários na mesma linha nem prefixar variáveis: comandos compostos são bloqueados aqui.
 - Ao terminar, entregue um resumo curto: o que foi feito, onde estão os arquivos e o que falta.

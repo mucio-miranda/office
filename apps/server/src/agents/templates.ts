@@ -27,7 +27,7 @@ export function parseFrontmatter(src: string) {
     if (!kv) continue;
     const raw = kv[2].trim();
     if (raw.startsWith('[') && raw.endsWith(']')) {
-      data[kv[1]] = [...raw.slice(1, -1).matchAll(/"([^"]*)"|'([^']*)'|([^,]+)/g)]
+      data[kv[1]] = [...raw.slice(1, -1).matchAll(/\s*(?:"([^"]*)"|'([^']*)'|([^,]+))/g)]
         .map((x) => (x[1] ?? x[2] ?? x[3]).trim())
         .filter(Boolean);
     } else {

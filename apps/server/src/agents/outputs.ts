@@ -71,6 +71,84 @@ export function producedFiles(opts: { finalText: string; since: string; stage: S
   return [...found].sort().slice(0, 40);
 }
 
+/** Pastas que não são entrega: intermediários, originais e o que a própria peça guarda de antes. */
+const NOT_DELIVERY = /^(_trabalho|_fonte|_motor|_script|scripts|tmp|temp|node_modules|__pycache__|descartadas|BRUTOS|BRUTAS|MUSICAS|REFERENCIAS)$|^VERSAO ANTERIOR/i;
+const PIECE = /\.(png|jpe?g|webp|gif|mp4|mov|webm|pdf|md|txt|srt|psd)$/i;
+const MAX_PIECES = 60;
+
+/**
+ * O que mudou numa pasta desde um instante. Cada cliente organiza as entregas do seu jeito, então a mesa olha o que
+ * apareceu nas pastas reais, em vez de exigir um caminho. A comparação do tunning entra, mesmo estando em `_trabalho`.
+ */
+export function changedFiles(dir: string, sinceMs: number, depth = 10): string[] {
+  const found: { file: string; mtime: number }[] = [];
+  const walk = (abs: string, left: number) => {
+    let entries;
+    try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const full = path.join(abs, e.name);
+      if (e.isDirectory()) {
+        if (!NOT_DELIVERY.test(e.name)) { if (left > 1) walk(full, left - 1); continue; }
+        if (e.name.toLowerCase() !== '_trabalho') continue;
+        const cmp = path.join(full, 'comparacao.jpg');
+        if (existsSync(cmp) && statSync(cmp).mtimeMs >= sinceMs) found.push({ file: cmp, mtime: statSync(cmp).mtimeMs });
+      } else if (e.isFile() && PIECE.test(e.name)) {
+        let st;
+        try { st = statSync(full); } catch { continue; }
+        if (st.mtimeMs >= sinceMs) found.push({ file: full, mtime: st.mtimeMs });
+      }
+    }
+  };
+  if (existsSync(dir)) walk(dir, depth);
+  return found.sort((a, b) => b.mtime - a.mtime).slice(0, MAX_PIECES).map((f) => f.file).sort();
+}
+
+/** Peças de uma rodada de um processo: o que mudou na pasta do cliente e o que o funcionário citou em outro lugar (o HD, por exemplo). */
+export function processFiles(opts: { finalText: string; since: string; clientDir: string; inside: (p: string) => boolean }) {
+  // mesma máquina: a folga é só para a resolução do relógio dos arquivos
+  const since = Date.parse(opts.since) - 1000;
+  const found = new Set(changedFiles(opts.clientDir, since));
+  for (const raw of pathsInText(opts.finalText)) {
+    const p = path.resolve(raw);
+    if (!opts.inside(p) || !existsSync(p)) continue;
+    if (statSync(p).isDirectory()) changedFiles(p, since).forEach((f) => found.add(f));
+    else found.add(p);
+  }
+  return [...found].sort().slice(0, MAX_PIECES);
+}
+
+/** Arquivos novos ou editados nas pastas da última versão depois de ela ser entregue: é a edição à mão do diretor de arte. */
+export function newerFiles(d: Demand) {
+  const known = new Set((d.stageLog ?? []).flatMap((e) => e.files ?? []));
+  const last = [...(d.stageLog ?? [])].reverse().find((e) => e.files?.length && (e.result === 'feito' || e.result === 'parcial'));
+  if (!last) return [];
+  // alguns segundos de folga: a própria entrega não conta como edição
+  const since = Date.parse(last.at) + 5000;
+  const dirs = new Set(last.files!.map((f) => path.dirname(f)));
+  const out = new Set<string>();
+  for (const dir of dirs) for (const f of changedFiles(dir, since, 2)) if (!known.has(f) || statSync(f).mtimeMs >= since) out.add(f);
+  return [...out].sort();
+}
+
+/** O que a pasta do cliente tem (ou não) do que o processo costuma usar. */
+export function baseCheck(dir: string, needs: { label: string; test: string }[]) {
+  const pending = needs.map((n) => ({ ...n, re: new RegExp(n.test, 'i'), ok: false }));
+  const walk = (abs: string, rel: string, left: number) => {
+    if (left <= 0 || pending.every((n) => n.ok)) return;
+    let entries;
+    try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith('.')) continue;
+      const childRel = rel ? `${rel}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(path.join(abs, e.name), childRel, left - 1);
+      else if (e.isFile()) for (const n of pending) if (!n.ok && n.re.test(childRel)) n.ok = true;
+    }
+  };
+  if (existsSync(dir)) walk(dir, '', 8);
+  return pending.map(({ label, ok }) => ({ label, ok }));
+}
+
 /** Texto do pedido de ajuste com as áreas marcadas, do jeito que o funcionário vai ler. */
 export function marksText(marks: ReviewMark[]) {
   if (!marks.length) return '';

@@ -1,16 +1,16 @@
 import { existsSync, mkdirSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import {
-  APPROVAL_MARKER, BRIEFING_FIELDS, NETWORK_LABEL, STAGE_AGENT, STAGE_LABEL, uid,
+  APPROVAL_MARKER, BRIEFING_FIELDS, NETWORK_LABEL, STAGE_AGENT, STAGE_LABEL, processById, uid,
   type AgentJob, type AgentProfile, type Briefing, type CalendarEvent, type Client, type Demand, type DemandKind, type Network, type Office,
-  type Publish, type ReviewMark, type Stage, type StageLogEntry,
+  type ProcessDef, type Publish, type ReviewMark, type Stage, type StageLogEntry,
 } from '@office/shared';
 import { all, insert, logActivity, now, one, update } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { clientDir, folderName, indexClient, indexSummary, writeNew } from '../clients/folder.ts';
 import { clientDriveFolder, driveInfo, driveSubdir, sendToDrive, type DriveItem } from '../clients/drive.ts';
-import { enqueueJob } from './runtime.ts';
-import { captionFrom, isInsideAny, latestFiles, marksText, producedFiles, slug, stageOutput } from './outputs.ts';
+import { enqueueJob, replyToJob } from './runtime.ts';
+import { baseCheck, captionFrom, isInsideAny, latestFiles, marksText, newerFiles, processFiles, producedFiles, slug, stageOutput } from './outputs.ts';
 
 /**
  * Esteira de produção: cada demanda passa por etapas (pauta → copy → arte/vídeo → aprovação → pronto para
@@ -59,6 +59,14 @@ function outDir(office: Office, client?: Client) {
   if (!client) return path.join(office.rootPath, 'CLIENTES', 'SEM CLIENTE');
   return clientDir(office, client) ?? path.join(office.rootPath, 'CLIENTES', folderName(client.name));
 }
+
+/** Onde o funcionário roda: a pasta do cliente, quando existe. */
+export function jobCwd(office: Office, client?: Client) {
+  const dir = client ? clientDir(office, client) : null;
+  return dir && existsSync(dir) ? dir : office.rootPath;
+}
+
+export const processPipeline = (p: ProcessDef): Stage[] => [p.stage, 'aprovacao', 'agendado'];
 
 export function briefingText(b: Briefing | undefined) {
   const lines = BRIEFING_FIELDS.filter((f) => b?.[f.key]).map((f) => `- **${f.label}**: ${b![f.key]}`);
@@ -113,6 +121,27 @@ const nextVersion = (d: Demand, stage: Stage) => (d.stageLog ?? []).filter((e) =
 
 const AUTO_RULES = `Esta tarefa está na **esteira automática**: não pare nos checkpoints intermediários das skills. Decida pelo briefing e pelas etapas anteriores, e só pare (com a linha \`${APPROVAL_MARKER}\`) se faltar algo essencial, como um arquivo que não existe. Ao terminar, responda com um resumo curto: o que fez e os caminhos completos dos arquivos.`;
 
+/** Pedido inicial de um processo: o método está na skill; aqui vai só a demanda e como devolver o trabalho para a mesa. */
+function processPrompt(d: Demand, p: ProcessDef, office: Office, client?: Client) {
+  const dir = outDir(office, client);
+  const missing = baseCheck(dir, p.needs).filter((n) => !n.ok).map((n) => n.label);
+  return `## Demanda: ${d.title}
+Cliente: ${client?.name ?? '—'} · Pasta: ${dir}
+Processo: ${p.label} · Prioridade: ${d.priority} · Prazo: ${d.dueDate ?? '—'}
+
+${d.description || '(sem descrição)'}
+
+## Briefing registrado no Office
+${briefingText(client?.briefing)}
+${missing.length ? `\n## Não encontrei na pasta do cliente\n${missing.map((m) => `- ${m}`).join('\n')}\nSe for essencial, pare e peça em vez de inventar.\n` : ''}
+## Como trabalhar
+- Use a skill \`${p.skill}\` e siga o método e as paradas dela. Veja antes como as entregas anteriores deste cliente foram feitas.
+- Grave nas pastas reais do cliente, seguindo o padrão que já existe aqui. Não crie uma estrutura nova sem precisar.
+- Quando precisar de uma decisão (proposta, referência, amostra), pare com a linha \`${APPROVAL_MARKER}\` e cite os caminhos completos do que mostrar: as peças aparecem na mesa do diretor de arte.
+- Não envie ao Drive nem publique: isso sai pela mesa, depois da aprovação.
+- Ao terminar, responda com um resumo curto e os caminhos completos das peças finais.`;
+}
+
 function reviewPrompt(d: Demand, office: Office, client?: Client) {
   return `${context(d, 'aprovacao', office, client)}
 
@@ -153,7 +182,8 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
     logActivity(d.officeId, by, 'concluiu a esteira de', d.title);
     return null;
   }
-  const agentSlug = STAGE_AGENT[stage];
+  const proc = processById(d.process);
+  const agentSlug = proc ? proc.agent : STAGE_AGENT[stage];
   const agent = agentSlug ? agentBySlug(d.officeId, agentSlug) : undefined;
   if (!agent) {
     patchDemand(d, { stage, auto: false });
@@ -166,7 +196,18 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
     return 'Limite de tarefas desta demanda.';
   }
   const fresh = patchDemand(d, { stage, status: statusFor(stage), assignee: `agent:${agent.id}`, auto: true });
-  const prompt = stage === 'briefing' && client
+  // processo da casa: o ajuste continua a mesma conversa, como no terminal, sem começar do zero
+  if (proc && feedback) {
+    const last = one<AgentJob>('SELECT * FROM jobs WHERE demand_id = ? AND stage = ? ORDER BY created_at DESC LIMIT 1', d.id, stage);
+    if (last?.sessionId) {
+      const manual = manualEdits(fresh);
+      replyToJob(last.id, `## Ajustes pedidos\n${feedback}\n${manual.length ? `\nO diretor de arte editou estes arquivos à mão; trabalhe em cima deles:\n${manual.map((f) => `- ${f}`).join('\n')}\n` : ''}\nMude só o que foi pedido, numa versão nova, sem apagar nem sobrescrever a anterior. Ao terminar, cite os caminhos completos.`);
+      return null;
+    }
+  }
+  const prompt = proc
+    ? `${processPrompt(fresh, proc, office, client)}${feedback ? `\n\n## Ajustes pedidos\n${feedback}` : ''}`
+    : stage === 'briefing' && client
     ? briefingPrompt(client, office)
     : `${context(fresh, stage, office, client)}
 
@@ -174,8 +215,15 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
 ${stageTask(stage, fresh, outDir(office, client), nextVersion(fresh, stage))}
 ${feedback ? `\n## Ajustes pedidos\n${feedback}\nRefaça só o que foi pedido, mantendo o resto.\n` : ''}
 ${AUTO_RULES}`;
-  enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, prompt, createdBy: by, stage });
+  enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, prompt, createdBy: by, stage, cwd: jobCwd(office, client) });
   return null;
+}
+
+/** Arquivos que uma pessoa adotou depois da última entrega do funcionário. */
+export function manualEdits(d: Demand) {
+  const log = d.stageLog ?? [];
+  const lastAgent = log.map((e) => e.by.startsWith('agent:') && (e.result === 'feito' || e.result === 'parcial')).lastIndexOf(true);
+  return log.slice(lastAgent + 1).filter((e) => e.by.startsWith('user:') && e.manual).flatMap((e) => e.manual ?? []);
 }
 
 function approvalStage(d: Demand, by: string): string | null {
@@ -185,7 +233,7 @@ function approvalStage(d: Demand, by: string): string | null {
     const rafa = agentBySlug(d.officeId, 'gerente');
     if (rafa) {
       patchDemand(fresh, { assignee: `agent:${rafa.id}` });
-      enqueueJob({ officeId: d.officeId, agentId: rafa.id, demandId: d.id, prompt: reviewPrompt(fresh, getOffice(d.officeId), client), createdBy: by, stage: 'aprovacao' });
+      enqueueJob({ officeId: d.officeId, agentId: rafa.id, demandId: d.id, prompt: reviewPrompt(fresh, getOffice(d.officeId), client), createdBy: by, stage: 'aprovacao', cwd: jobCwd(getOffice(d.officeId), client) });
       return null;
     }
   }
@@ -266,7 +314,44 @@ export function startBriefing(client: Client, by: string) {
   return { demandId: d.id, agentId: agentBySlug(client.officeId, 'gerente')?.id ?? null, error: err };
 }
 
+// ---------------------------------------------------------------- mesa
+
+/** O que a mesa mostra além das versões: a pasta real do cliente, o que falta nela e o que mudou depois da entrega. */
+export function deskInfo(demandId: string) {
+  const d = getDemand(demandId);
+  if (!d) return null;
+  const office = getOffice(d.officeId);
+  const client = getClient(d.clientId);
+  const proc = processById(d.process);
+  const dir = outDir(office, client);
+  return { folder: dir, base: proc ? baseCheck(dir, proc.needs) : [], newer: newerFiles(d) };
+}
+
+/** A edição à mão vira a versão atual: entra nas peças e a próxima rodada do funcionário trabalha em cima dela. */
+export function adoptFiles(demandId: string, files: string[], by: string) {
+  const d = getDemand(demandId);
+  if (!d) return 'Demanda não encontrada.';
+  if (all<AgentJob>("SELECT id FROM jobs WHERE demand_id = ? AND status IN ('fila','rodando')", d.id).length) return 'Um funcionário está trabalhando nesta demanda. Espere ele terminar.';
+  const allowed = new Set(newerFiles(d));
+  const chosen = files.filter((f) => allowed.has(f));
+  if (!chosen.length) return 'Esses arquivos não mudaram desde a última entrega.';
+  const last = [...(d.stageLog ?? [])].reverse().find((e) => e.files?.length && (e.result === 'feito' || e.result === 'parcial'))!;
+  addLog(d, { stage: last.stage, by, jobId: null, text: `Edição manual: ${chosen.map((f) => path.basename(f)).join(', ')}`, result: 'feito', files: [...new Set([...chosen, ...last.files!])], version: nextVersion(d, last.stage), manual: chosen });
+  logActivity(d.officeId, by, 'adotou uma edição manual em', d.title);
+  return null;
+}
+
 // ---------------------------------------------------------------- fim de cada tarefa
+
+/** Funcionário de um processo parou para pedir uma decisão: o que ele já produziu vai para a mesa junto com a pergunta. */
+export function onJobCheckpoint(job: AgentJob, finalText: string) {
+  if (!job.demandId || !job.stage) return;
+  const d = getDemand(job.demandId);
+  if (!d?.process) return;
+  const office = getOffice(d.officeId);
+  const files = processFiles({ finalText, since: job.turnStartedAt ?? job.createdAt, clientDir: outDir(office, getClient(d.clientId)), inside: isInsideAny(office) });
+  if (files.length) addLog(d, { stage: job.stage, by: `agent:${job.agentId}`, jobId: job.id, text: finalText.replace(APPROVAL_MARKER, '').trim().slice(0, 2500), result: 'parcial', files, version: nextVersion(d, job.stage) });
+}
 
 /** Chamado pelo runtime quando a tarefa de um funcionário termina (sem pedir aprovação no meio). */
 export function onJobFinished(job: AgentJob, finalText: string, ok: boolean) {
@@ -305,7 +390,10 @@ export function onJobFinished(job: AgentJob, finalText: string, ok: boolean) {
     return;
   }
   const office = getOffice(d.officeId);
-  const files = producedFiles({ finalText, since: job.createdAt, stage: job.stage, d, clientDir: outDir(office, getClient(d.clientId)), inside: isInsideAny(office) });
+  const dir = outDir(office, getClient(d.clientId));
+  const files = d.process
+    ? processFiles({ finalText, since: job.turnStartedAt ?? job.createdAt, clientDir: dir, inside: isInsideAny(office) })
+    : producedFiles({ finalText, since: job.createdAt, stage: job.stage, d, clientDir: dir, inside: isInsideAny(office) });
   const fresh = addLog(d, { stage: job.stage, by, jobId: job.id, text: summary, result: 'feito', files, version: nextVersion(d, job.stage) });
   if (!fresh.auto) return;
   const next = nextAfter(fresh, job.stage);

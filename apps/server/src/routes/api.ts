@@ -5,7 +5,7 @@ import { createReadStream, existsSync, statSync, readdirSync, readFileSync } fro
 import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import {
-  BRIEFING_FIELDS, DEMAND_COLUMNS, NETWORKS, uid,
+  BRIEFING_FIELDS, DEMAND_COLUMNS, NETWORKS, PROCESSES, processById, uid,
   type AgentJob, type AgentProfile, type CalendarEvent, type Client, type Demand, type JobMessage, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
@@ -19,7 +19,8 @@ import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
 import { driveDirs } from '../clients/drive.ts';
-import { approveDemand, defaultPipeline, driveDraft, markPublished, pausePipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { adoptFiles, approveDemand, defaultPipeline, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { marksText } from '../agents/outputs.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
@@ -55,10 +56,14 @@ export function syncAgentTools() {
   for (const a of all<AgentProfile>('SELECT * FROM agents')) {
     const t = templates.get(a.slug);
     if (!t) continue;
-    const merged = [...new Set([...a.allowedTools, ...t.allowedTools])];
-    if (merged.length !== a.allowedTools.length) update('agents', a.id, { allowedTools: merged });
+    // versões antigas salvaram as permissões com aspas ("Bash(python:*)"), e assim elas não valiam
+    const unquote = (s: string) => s.replace(/^"|"$/g, '');
+    const merged = [...new Set([...a.allowedTools.map(unquote), ...t.allowedTools])];
+    if (merged.join('|') !== a.allowedTools.join('|')) update('agents', a.id, { allowedTools: merged });
+    const skills = [...new Set([...a.skills, ...t.skills])];
+    if (skills.length !== a.skills.length) update('agents', a.id, { skills });
     // ferramentas MCP novas do modelo entram uma vez; as que a pessoa desligou ficam como `!id` e não voltam
-    const labels = [...t.tools, ...a.tools.filter((x) => !t.tools.includes(x))];
+    const labels = [...t.tools, ...a.tools.map(unquote).filter((x) => !t.tools.includes(x))];
     if (labels.join('|') !== a.tools.join('|')) update('agents', a.id, { tools: labels });
     const missing = t.mcp.filter((id) => !a.mcp.includes(id) && !a.mcp.includes(`!${id}`));
     if (missing.length) update('agents', a.id, { mcp: [...a.mcp, ...missing] });
@@ -405,7 +410,10 @@ export async function api(app: FastifyInstance) {
         if (!b) return;
         const { officeId, id } = req.params as any;
         if (!one(`SELECT id FROM ${table} WHERE id = ? AND office_id = ?`, id, officeId)) return reply.code(404).send({ error: 'Não encontrado' });
-        update(table, id, table === 'demands' ? { ...b, updatedAt: now() } : b);
+        // trocar o processo antes de começar troca também as etapas
+        const proc = table === 'demands' && (b as any).process !== undefined && !one<{ stage: string | null }>('SELECT stage FROM demands WHERE id = ?', id)?.stage
+          ? { pipeline: (b as any).process ? processPipeline(processById((b as any).process)!) : defaultPipeline((b as any).kind ?? 'outro') } : {};
+        update(table, id, table === 'demands' ? { ...b, ...proc, updatedAt: now() } : b);
         invalidate(officeId, what);
         return one<T>(`SELECT * FROM ${table} WHERE id = ?`, id);
       });
@@ -506,8 +514,9 @@ export async function api(app: FastifyInstance) {
       status: z.enum(DEMAND_COLUMNS).default('backlog'), priority: z.enum(['baixa', 'media', 'alta', 'urgente']).default('media'),
       assignee: z.string().nullable().optional(), dueDate: z.string().nullable().optional(), position: z.number().optional(),
       pipeline: z.array(z.enum(['briefing', 'pauta', 'copy', 'arte', 'video', 'aprovacao', 'agendado'])).optional(),
+      process: z.enum(PROCESSES.map((p) => p.id) as [string, ...string[]]).nullable().optional(),
     }), 'status, position, created_at', 'demands', (b) => ({
-      createdAt: now(), updatedAt: now(), position: Date.now(), pipeline: defaultPipeline(b.kind ?? 'outro'), stage: null, auto: false, stageLog: [], reviewRounds: 0, publish: null,
+      createdAt: now(), updatedAt: now(), position: Date.now(), pipeline: processById(b.process) ? processPipeline(processById(b.process)!) : defaultPipeline(b.kind ?? 'outro'), stage: null, auto: false, stageLog: [], reviewRounds: 0, publish: null,
     }));
 
     // esteira da demanda: ligar, pausar, aprovar, pedir ajustes
@@ -538,6 +547,15 @@ export async function api(app: FastifyInstance) {
       if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
       return publishDraft(id);
     });
+
+    // mesa: a pasta real, o que falta nela e o que mudou depois da entrega; a edição à mão pode virar a versão atual
+    r.get('/api/offices/:officeId/demands/:id/mesa', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
+      return deskInfo(id);
+    });
+    pipelineAction('adotar', (id, req) => adoptFiles(id, (req.body as any).files, `user:${req.user.id}`), z.object({ files: z.array(z.string().min(1)).min(1).max(60) }));
 
     // envio do trabalho aprovado para o Drive: as peças com as subpastas sugeridas, as pastas de lá e o envio em si
     r.get('/api/offices/:officeId/demands/:id/drive', async (req, reply) => {
@@ -746,16 +764,21 @@ export async function api(app: FastifyInstance) {
         };
         prompt += `\n\n## Dados do escritório (JSON)\n\`\`\`json\n${JSON.stringify(snapshot)}\n\`\`\``;
       }
-      return enqueueJob({ officeId, agentId: agent.id, demandId: b.demandId ?? null, prompt, createdBy: req.user.id });
+      const demand = b.demandId ? one<Demand>('SELECT client_id FROM demands WHERE id = ? AND office_id = ?', b.demandId, officeId) : undefined;
+      const client = demand?.clientId ? one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', demand.clientId, officeId) : undefined;
+      return enqueueJob({ officeId, agentId: agent.id, demandId: b.demandId ?? null, prompt, createdBy: req.user.id, cwd: jobCwd(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, client) });
     });
 
     r.post('/api/offices/:officeId/jobs/:id/reply', async (req, reply) => {
       if (!requireMember(req, reply)) return;
-      const b = body(z.object({ text: z.string().min(1) }), req, reply);
+      const b = body(z.object({ text: z.string().min(1), marks: z.array(mark).max(20).optional() }), req, reply);
       if (!b) return;
       if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
       try {
-        replyToJob((req.params as any).id, b.text);
+        const job = one<AgentJob>('SELECT demand_id FROM jobs WHERE id = ?', (req.params as any).id);
+        const demand = job?.demandId ? one<Demand>('SELECT * FROM demands WHERE id = ?', job.demandId) : undefined;
+        const manual = demand ? manualEdits(demand) : [];
+        replyToJob((req.params as any).id, [b.text, marksText(b.marks ?? []), manual.length ? `O diretor de arte editou estes arquivos à mão; trabalhe em cima deles:\n${manual.map((f) => `- ${f}`).join('\n')}` : ''].filter(Boolean).join('\n\n'));
         return { ok: true };
       } catch (e) {
         return reply.code(409).send({ error: (e as Error).message });

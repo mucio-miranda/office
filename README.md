@@ -90,6 +90,11 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - **Publicação**: a peça aprovada ganha data, redes e legenda (puxada da seção "Legenda" da copy). O Office põe o
   post no calendário, grava o pacote em `PUBLICAR\<data> <peça>\POST.md` na pasta do cliente, avisa na hora de
   postar e fecha o ciclo com "Marcar como publicado"
+- **Processos da casa**: a demanda segue um método validado (arte de feed, Reels, story, tratamento de fotos, roteiro). O
+  funcionário abre dentro da pasta do cliente, usa a skill e continua na mesma conversa a cada decisão e ajuste.
+- **Mesa de trabalho**: o que está esperando você, peça por peça, com os caminhos reais de cada arquivo. Você responde,
+  marca áreas na imagem, comenta um tempo do vídeo e aprova, sem procurar nas pastas. Se você editar uma peça à mão, a mesa
+  nota e oferece usar como versão atual.
 - **Envio ao Drive**: um botão na demanda aprovada copia as peças para a pasta do cliente no Google Drive para
   computador, com a mesma estrutura da pasta local. Você escolhe a pasta e os arquivos; nada é apagado nem sobrescrito lá.
 - **Arquivo dos clientes**: um armário por cliente na redação; clicar abre a pasta dele por grupo, com busca e
@@ -380,6 +385,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 
 - [x] Escritório 3D, multi-escritório, presença na LAN
 - [x] Login seguro, acesso de fora por VPN privada e backup diário do banco
+- [x] Processos da casa na pasta do cliente, sessão contínua por peça e mesa de trabalho
 - [x] Demandas, calendário, financeiro e métricas
 - [x] Funcionários de IA com Claude Code e aprovação
 - [x] Engine de vídeo com timeline

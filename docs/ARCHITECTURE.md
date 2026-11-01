@@ -40,6 +40,9 @@ flowchart LR
   vínculo de membro, e o que mexe em pastas, permissões e contas exige o papel de dono.
 - **Origem**: `guardHost` só atende por IP, pelo nome da máquina, por `*.netbird.cloud` ou por `OFFICE_HOSTS`, o que barra
   DNS rebinding. "Local" vem do socket (`isLocal`), por isso túneis e proxies na mesma máquina não são suportados.
+- **Processos** (`PROCESSES` em `packages/shared`): uma demanda com processo tem uma tarefa só, uma sessão do Claude Code na
+  pasta do cliente. Cada parada e cada ajuste retoma a sessão. A mesa não exige caminho de saída: `changedFiles` olha o que
+  mudou nas pastas reais em cada rodada, sem intermediários, e `newerFiles` nota edições à mão. Vídeos renderizam um por vez.
 - **Backup**: `VACUUM INTO` diário em `dados/backups`, com `integrity_check` e os 14 últimos; a segunda cópia opcional usa um
   arquivo por dia da semana e não apaga nada na pasta de destino.
 - **Arquivos**: `/fs`, `/media` e `/probe` só enxergam a pasta raiz do escritório e as pastas extras.
