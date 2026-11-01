@@ -21,6 +21,18 @@ export function driveInfo(root: string | null) {
   return { root, ok: true, free: st.bavail * st.bsize };
 }
 
+/** A pasta que já existe no Drive para algum destes nomes, até três níveis abaixo. Sem achar, fica sem pasta. */
+export function existingDriveFolders(root: string) {
+  const subdirs = (rel: string) => driveDirs(root, rel)?.dirs.map((d) => (rel ? `${rel}/${d}` : d)) ?? [];
+  const first = subdirs('');
+  const second = first.flatMap(subdirs);
+  const all = [...first, ...second, ...second.flatMap(subdirs)];
+  return (...names: string[]) => {
+    const wanted = names.map(folderName);
+    return all.find((rel) => wanted.includes(folderName(rel.split('/').pop()!))) ?? null;
+  };
+}
+
 /** Subpastas de uma pasta do Drive. Uma pasta que ainda não existe (vai ser criada no envio) lista vazio. */
 export function driveDirs(root: string, rel: string) {
   const clean = rel.split(/[\\/]+/).filter(Boolean).join('/');

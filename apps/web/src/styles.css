@@ -666,6 +666,11 @@ label.check input { width: auto; height: auto; }
 .clients-list > .primary { margin-bottom: 8px; }
 .client-item { justify-content: flex-start; gap: 8px; border-color: transparent; background: transparent; height: 34px; font-size: 13px; text-align: left; }
 .client-item .truncate { flex: 1; }
+.import-list { display: flex; flex-direction: column; gap: 6px; max-height: 46vh; overflow-y: auto; }
+.import-row { display: grid; grid-template-columns: auto minmax(0, 1.2fr) minmax(0, 1fr) 96px; align-items: center; gap: 8px; }
+.import-tags { display: flex; gap: 4px; }
+.import-tags .badge { font-size: 10px; height: 18px; }
+@media (max-width: 560px) { .import-row { grid-template-columns: auto minmax(0, 1fr); } .import-row > .truncate, .import-tags { grid-column: 2; } }
 .client-item.active { background: var(--accent); }
 .client-item .badge { font-size: 10px; height: 18px; }
 .client-detail { display: flex; flex-direction: column; gap: 16px; min-width: 0; }

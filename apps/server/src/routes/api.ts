@@ -18,7 +18,8 @@ import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts
 import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
-import { driveDirs } from '../clients/drive.ts';
+import { driveDirs, existingDriveFolders } from '../clients/drive.ts';
+import { discoverClients } from '../clients/discover.ts';
 import { adoptFiles, approveDemand, defaultPipeline, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
@@ -556,6 +557,46 @@ export async function api(app: FastifyInstance) {
       invalidate(officeId, 'clients');
       const briefing = interview ? startBriefing(row, `user:${req.user.id}`) : null;
       return { client: row, createdDirs: created, briefing };
+    });
+
+    // pastas de CLIENTES que ainda não são clientes no Office
+    r.get('/api/offices/:officeId/clients/importar', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as any;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      return { root: path.join(office.rootPath, 'CLIENTES'), found: discoverClients(office, all<Client>('SELECT * FROM clients WHERE office_id = ?', officeId)) };
+    });
+
+    // só cadastra: a pasta fica como está. Com rascunho, o gerente lê cada pasta na fila dos funcionários
+    r.post('/api/offices/:officeId/clients/importar', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const b = body(z.object({ items: z.array(z.object({ dir: z.string().min(1), name: z.string().trim().min(1).max(120) })).min(1).max(200), rascunho: z.boolean().default(false) }), req, reply);
+      if (!b) return;
+      const { officeId } = req.params as any;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const found = new Set(discoverClients(office, all<Client>('SELECT * FROM clients WHERE office_id = ?', officeId)).map((f) => f.dir));
+      const driveFolder = (() => {
+        if (!office.driveRoot) return () => null;
+        try { return existingDriveFolders(office.driveRoot); } catch { return () => null; }
+      })();
+      const created: Client[] = [];
+      const skipped: string[] = [];
+      const errors: string[] = [];
+      for (const { dir, name } of b.items) {
+        if (!found.delete(dir)) { skipped.push(dir); continue; }
+        const row = { id: uid(), officeId, name, folder: path.join('CLIENTES', dir), driveFolder: driveFolder(dir, name), monthlyFee: 0, status: 'ativo', color: pick(), briefing: {}, approvalMode: 'humano', niche: null } as Client;
+        insert('clients', row as never);
+        created.push(row);
+        if (b.rascunho) {
+          const err = startBriefing(row, `user:${req.user.id}`, true).error;
+          if (err) errors.push(`${name}: ${err}`);
+        }
+      }
+      if (created.length) {
+        logActivity(officeId, `user:${req.user.id}`, `importou ${created.length} cliente(s) da pasta`, created.map((c) => c.name).join(', ').slice(0, 200));
+        invalidate(officeId, 'clients');
+      }
+      return { created, skipped, errors };
     });
 
     r.post('/api/offices/:officeId/clients/:id/folder', async (req, reply) => {

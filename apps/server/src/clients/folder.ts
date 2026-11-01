@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, type Dirent } from 'node:fs';
 import path from 'node:path';
 import type { Client, Office } from '@office/shared';
 
@@ -20,6 +20,16 @@ export const folderName = (name: string) =>
 export function clientDir(office: Office, client: Pick<Client, 'folder'>) {
   if (!client.folder) return null;
   return path.isAbsolute(client.folder) ? client.folder : path.join(office.rootPath, client.folder);
+}
+
+/**
+ * É pasta? Conta também a junction: os brutos moram no HD, com um atalho no caminho antigo, e o Node não a trata como pasta.
+ * Com o disco desconectado, o atalho não leva a lugar nenhum e fica de fora.
+ */
+export function isFolder(e: Dirent, full: string) {
+  if (e.isDirectory()) return true;
+  if (!e.isSymbolicLink()) return false;
+  try { return statSync(full).isDirectory(); } catch { return false; }
 }
 
 /** Cria as subpastas que faltam. Devolve as que foram criadas agora. */
@@ -94,7 +104,7 @@ export function indexClient(dir: string): ClientIndex {
       if (e.name.startsWith('.') || SKIP.has(e.name)) continue;
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       const childAbs = path.join(abs, e.name);
-      if (e.isDirectory()) { walk(childAbs, childRel, depth + 1); continue; }
+      if (isFolder(e, childAbs)) { walk(childAbs, childRel, depth + 1); continue; }
       if (!e.isFile() || res.total >= MAX_FILES) continue;
       let st;
       try { st = statSync(childAbs); } catch { continue; }

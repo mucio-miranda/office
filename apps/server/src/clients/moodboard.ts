@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Client, MoodboardItem, MoodboardSummary, MoodboardTheme, Office } from '@office/shared';
-import { clientDir } from './folder.ts';
+import { clientDir, isFolder } from './folder.ts';
 
 /**
  * Moodboards: um por nicho, da biblioteca da agência (REFERENCIAS\<segmento> + indice.json, mantidos pela skill
@@ -111,7 +111,7 @@ function clientRefs(dir: string | null) {
       const full = path.join(abs, e.name);
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       // a pasta começa com o nome: "TESTE ARTE-REFERENCIA", por exemplo, é trabalho da skill, não referência
-      if (e.isDirectory()) walk(full, childRel, depth + 1, inside || /^REFER[EÊ]NCIAS?\b/i.test(e.name));
+      if (isFolder(e, full)) walk(full, childRel, depth + 1, inside || /^REFER[EÊ]NCIAS?\b/i.test(e.name));
       else if (inside && e.isFile() && IMAGE.test(e.name)) {
         let st;
         try { st = statSync(full); } catch { continue; }

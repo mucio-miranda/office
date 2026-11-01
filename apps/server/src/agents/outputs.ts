@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Demand, Office, ReviewMark, Stage } from '@office/shared';
+import { isFolder } from '../clients/folder.ts';
 
 /**
  * Peças que cada etapa da esteira produz: onde a etapa grava, quais arquivos saíram de uma tarefa (para a mesa
@@ -41,7 +42,7 @@ const listFiles = (dir: string, depth = 2): string[] => {
   for (const e of readdirSync(dir, { withFileTypes: true })) {
     if (e.name.startsWith('.')) continue;
     const full = path.join(dir, e.name);
-    if (e.isDirectory()) { if (depth > 1) out.push(...listFiles(full, depth - 1)); } else out.push(full);
+    if (e.isDirectory()) { if (depth > 1) out.push(...listFiles(full, depth - 1)); } else if (e.isFile()) out.push(full);
   }
   return out;
 };
@@ -141,7 +142,7 @@ export function baseCheck(dir: string, needs: { label: string; test: string }[])
     for (const e of entries) {
       if (e.name.startsWith('.')) continue;
       const childRel = rel ? `${rel}/${e.name}` : e.name;
-      if (e.isDirectory()) walk(path.join(abs, e.name), childRel, left - 1);
+      if (isFolder(e, path.join(abs, e.name))) walk(path.join(abs, e.name), childRel, left - 1);
       else if (e.isFile()) for (const n of pending) if (!n.ok && n.re.test(childRel)) n.ok = true;
     }
   };

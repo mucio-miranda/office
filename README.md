@@ -107,6 +107,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   prévia de imagem, vídeo, áudio, PDF e texto. Editar um PDF vira uma tarefa para o funcionário com o PdfCraft
 
 ### 🧾 Clientes
+- **Importar da pasta** lista o que já existe em `CLIENTES\` e ainda não é cliente no Office, sem criar, mover nem renomear nada lá. Opcionalmente, o gerente lê cada pasta e preenche um rascunho do briefing para a equipe conferir.
 - **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com DOCUMENTOS, FOTOS e VIDEOS); só cria
   as pastas que faltam, nada é movido nem apagado
 - **Entrevista de briefing**: o gerente de IA lê a pasta, pergunta o que falta pelo chat, grava o `BRIEFING.md`

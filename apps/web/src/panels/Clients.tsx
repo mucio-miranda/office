@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bot, FileText, Film, FolderPlus, Image, Music, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
+import { Bot, FileText, Film, FolderInput, FolderPlus, Image, Music, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
@@ -21,6 +21,7 @@ export function Clients() {
   const { clients, panelArg } = useStore();
   const [sel, setSel] = useState<string | null>(panelArg ?? null);
   const [creating, setCreating] = useState(false);
+  const [importing, setImporting] = useState(false);
   useEffect(() => { if (panelArg) setSel(panelArg); }, [panelArg]);
   const current = clients.find((c) => c.id === sel) ?? clients[0];
 
@@ -28,22 +29,27 @@ export function Clients() {
     <div className="clients-page">
       <aside className="clients-list">
         <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Novo cliente</button>
+        <button className="ghost" onClick={() => setImporting(true)}><FolderInput size={14} /> Importar da pasta</button>
         {clients.map((c) => (
           <button key={c.id} className={`client-item ${current?.id === c.id ? 'active' : ''}`} onClick={() => setSel(c.id)}>
             <span className="dot" style={{ background: c.color }} />
             <span className="truncate">{c.name}</span>
-            <span className={`badge ${c.briefing?.feitoEm ? '' : 'outline'}`}>{c.briefing?.feitoEm ? 'briefing ok' : 'sem briefing'}</span>
+            <span className={`badge ${c.briefing?.feitoEm ? '' : 'outline'}`}>{c.briefing?.feitoEm ? 'briefing ok' : BRIEFING_FIELDS.some((x) => c.briefing?.[x.key]) ? 'rascunho' : 'sem briefing'}</span>
           </button>
         ))}
         {clients.length === 0 && <p className="muted small">Nenhum cliente ainda.</p>}
       </aside>
       {current ? <ClientDetail key={current.id} c={current} /> : (
         <div className="empty">
-          <p>Cadastre o primeiro cliente: o Office cria a pasta no padrão da casa e a Rafa faz a entrevista de briefing.</p>
-          <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Novo cliente</button>
+          <p>Cadastre o primeiro cliente: o Office cria a pasta no padrão da casa e a Rafa faz a entrevista de briefing. Se as pastas já existem, é só importar.</p>
+          <div className="row gap">
+            <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Novo cliente</button>
+            <button className="ghost" onClick={() => setImporting(true)}><FolderInput size={14} /> Importar da pasta</button>
+          </div>
         </div>
       )}
       {creating && <NewClient onClose={(id) => { setCreating(false); if (id) setSel(id); }} />}
+      {importing && <ImportClients onClose={() => setImporting(false)} />}
     </div>
   );
 }
@@ -184,6 +190,69 @@ function FilesCard({ c, base }: { c: Client; base: string }) {
           </div>
         );
       })}
+    </div>
+  );
+}
+
+interface FoundClient { dir: string; name: string; standard: boolean; marca: boolean; idv: boolean }
+
+/** Importar: cada pasta de CLIENTES que ainda não é cliente vira uma linha. A pasta não muda. */
+function ImportClients({ onClose }: { onClose: () => void }) {
+  const { office, agents, notify } = useStore();
+  const rafa = agents.find((a) => a.slug === 'gerente')?.name ?? 'O gerente';
+  const base = `/api/offices/${office!.id}/clients/importar`;
+  const [root, setRoot] = useState('');
+  const [rows, setRows] = useState<(FoundClient & { on: boolean })[] | null>(null);
+  const [draft, setDraft] = useState(true);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => {
+    api<{ root: string; found: FoundClient[] }>(base)
+      .then((r) => { setRoot(r.root); setRows(r.found.map((f) => ({ ...f, on: f.standard }))); })
+      .catch((e) => setErr((e as Error).message));
+  }, [base]);
+  const set = (dir: string, change: Partial<FoundClient & { on: boolean }>) => setRows((rs) => rs!.map((x) => (x.dir === dir ? { ...x, ...change } : x)));
+  const chosen = rows?.filter((x) => x.on) ?? [];
+  const valid = chosen.length > 0 && chosen.every((x) => x.name.trim());
+  return (
+    <div className="modal-bg" onClick={onClose}>
+      <form className="modal" onClick={(e) => e.stopPropagation()} onSubmit={async (e) => {
+        e.preventDefault();
+        setBusy(true);
+        try {
+          const r = await api<{ created: Client[]; errors: string[] }>(base, { body: { items: chosen.map((x) => ({ dir: x.dir, name: x.name.trim() })), rascunho: draft } });
+          notify(r.errors[0] ?? `${r.created.length} cliente(s) importado(s)${draft ? `. ${rafa} vai ler as pastas na fila` : ''}`);
+          onClose();
+        } catch (x) { setErr((x as Error).message); setBusy(false); }
+      }}>
+        <header className="modal-head"><h3>Importar clientes da pasta</h3><button type="button" className="icon" onClick={onClose}><X size={16} /></button></header>
+        <div className="modal-body">
+          {rows === null && !err && <p className="muted small">Lendo as pastas...</p>}
+          {rows?.length === 0 && <p className="muted small">Nenhuma pasta nova em <code>{root}</code>.</p>}
+          {rows && rows.length > 0 && (
+            <>
+              <span className="muted small">Pastas em <code>{root}</code> que ainda não são clientes. Nada é criado, movido nem renomeado nelas. A mensalidade fica zerada até você preencher.</span>
+              <div className="import-list">
+                {rows.map((x) => (
+                  <div key={x.dir} className="import-row">
+                    <input type="checkbox" aria-label={`Importar ${x.dir}`} checked={x.on} onChange={(e) => set(x.dir, { on: e.target.checked })} />
+                    <input type="text" aria-label={`Nome do cliente da pasta ${x.dir}`} value={x.name} disabled={!x.on} onChange={(e) => set(x.dir, { name: e.target.value })} />
+                    <span className="muted small truncate" title={x.dir}>{x.dir}</span>
+                    <span className="import-tags">
+                      {x.marca && <span className="badge">marca</span>}
+                      {x.idv && <span className="badge">IDV</span>}
+                      {!x.standard && <span className="badge outline">fora do padrão</span>}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <label className="check"><input type="checkbox" checked={draft} onChange={(e) => setDraft(e.target.checked)} /> {rafa} lê cada pasta e preenche um rascunho do briefing para você conferir. Consome uso do Claude por cliente, em fila.</label>
+            </>
+          )}
+          {err && <div className="error">{err}</div>}
+        </div>
+        <footer className="modal-foot"><span /><div className="row gap"><button type="button" className="ghost" onClick={onClose}>Cancelar</button><button className="primary" disabled={busy || !valid}>Importar {chosen.length || ''}</button></div></footer>
+      </form>
     </div>
   );
 }
