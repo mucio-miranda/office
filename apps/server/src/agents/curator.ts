@@ -95,7 +95,9 @@ export function applySkillChange(office: Office, changeId: string, by: string) {
   if (next.size && existsSync(path.join(dir, '.git'))) {
     try {
       git(dir, 'add', '--', ...[...next.keys()].map((f) => path.relative(dir, f)));
-      git(dir, 'commit', '-m', `Office: ${ch.summary || 'aprendizados aprovados'}`);
+      // sem nome configurado no git (PC novo da agência), o registro sai assinado pelo Office em vez de não sair
+      const named = (() => { try { return !!git(dir, 'config', 'user.name').trim(); } catch { return false; } })();
+      git(dir, ...(named ? [] : ['-c', 'user.name=Office', '-c', 'user.email=office@localhost']), 'commit', '-m', `Office: ${ch.summary || 'aprendizados aprovados'}`);
       commitRef = git(dir, 'rev-parse', '--short', 'HEAD').trim();
       if (git(dir, 'remote').trim()) git(dir, 'push');
     } catch (e) {
