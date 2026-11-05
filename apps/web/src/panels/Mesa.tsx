@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, FileText, Film, Workflow, X } from 'lucide-react';
-import { STAGE_LABEL, processById, type Demand, type Learning } from '@office/shared';
+import { STAGE_LABEL, processById, type Demand, type Learning, type SkillChange } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import { ReviewDesk, versionsOf } from './ReviewDesk';
@@ -29,7 +29,7 @@ function Learnings() {
   return (
     <section>
       <div className="section-label" style={{ padding: 0, marginBottom: 8 }}>Aprendizados para aprovar · {items.length}</div>
-      <p className="muted small" style={{ marginTop: 0 }}>Aprovado, entra em INSIGHTS-PRODUCAO.md, a caixa de entrada das skills.</p>
+      <p className="muted small" style={{ marginTop: 0 }}>Aprovado, entra em INSIGHTS-PRODUCAO.md e na lista abaixo, de onde vira mudança na skill.</p>
       <div className="learnings">
         {items.map((l) => (
           <div key={l.id} className="learning">
@@ -39,6 +39,78 @@ function Learnings() {
           </div>
         ))}
       </div>
+    </section>
+  );
+}
+
+/**
+ * O único caminho para uma regra virar skill pelo Office: escolher aprendizados aprovados, ler a proposta do curador
+ * (antes e depois, arquivo por arquivo) e aplicar. Só o dono decide; os funcionários nunca escrevem nas skills.
+ */
+function SkillPath() {
+  const { office, clients, notify } = useStore();
+  const owner = office?.role === 'dono';
+  const base = `/api/offices/${office!.id}`;
+  const [approved, setApproved] = useState<Learning[]>([]);
+  const [changes, setChanges] = useState<SkillChange[]>([]);
+  const [chosen, setChosen] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false);
+  const load = () => {
+    api<Learning[]>(`${base}/aprendizados/aprovados`).then(setApproved).catch(() => setApproved([]));
+    api<SkillChange[]>(`${base}/skills/mudancas`).then(setChanges).catch(() => setChanges([]));
+  };
+  useEffect(() => { load(); }, [base]); // eslint-disable-line react-hooks/exhaustive-deps
+  const generating = changes.some((c) => c.status === 'gerando');
+  useEffect(() => {
+    if (!generating) return;
+    const t = setInterval(load, 5000);
+    return () => clearInterval(t);
+  }, [generating]); // eslint-disable-line react-hooks/exhaustive-deps
+  const act = async (fn: () => Promise<unknown>, ok: string) => {
+    setBusy(true);
+    try { await fn(); notify(ok); load(); } catch (e) { notify((e as Error).message); }
+    setBusy(false);
+  };
+  if (!approved.length && !changes.length) return null;
+  return (
+    <section>
+      <div className="section-label" style={{ padding: 0, marginBottom: 8 }}>Para virar skill · {approved.length}</div>
+      <p className="muted small" style={{ marginTop: 0 }}>O curador lê as skills e propõe a troca exata. Nada muda até o dono aplicar; a mudança fica registrada no git das skills e vale para todos os clientes.</p>
+      {approved.length > 0 && (
+        <div className="learnings">
+          {approved.map((l) => (
+            <label key={l.id} className="learning check">
+              {owner && <input type="checkbox" checked={chosen.includes(l.id)} onChange={(e) => setChosen(e.target.checked ? [...chosen, l.id] : chosen.filter((x) => x !== l.id))} />}
+              <span className="grow">{l.text}<small className="muted"> · {clients.find((c) => c.id === l.clientId)?.name ?? 'sem cliente'}</small></span>
+            </label>
+          ))}
+          {owner && <div className="row gap"><button className="small" disabled={busy || !chosen.length} onClick={() => act(() => api(`${base}/skills/mudancas`, { body: { learningIds: chosen } }).then(() => setChosen([])), 'O curador está preparando a proposta')}>Propor mudança nas skills{chosen.length ? ` (${chosen.length})` : ''}</button></div>}
+        </div>
+      )}
+      {changes.map((c) => (
+        <div key={c.id} className="skill-change">
+          <div className="row gap">
+            <b className="grow">{c.status === 'gerando' ? 'O curador está lendo as skills…' : c.summary || (c.status === 'erro' ? 'A proposta não saiu' : 'Proposta')}</b>
+            <span className="badge outline">{c.status}</span>
+          </div>
+          {c.error && <p className="error small">{c.error}</p>}
+          {c.edits.map((e, i) => (
+            <div key={i} className="skill-edit">
+              <div className="mono small">{e.file}</div>
+              {e.find && <pre className="before">{e.find}</pre>}
+              <pre className="after">{e.replace}</pre>
+            </div>
+          ))}
+          {c.status === 'pronta' && !c.edits.length && <p className="muted small">O curador concluiu que nada precisa mudar nas skills (veja o resumo).</p>}
+          {c.commitRef && <p className="muted small">Registrado nas skills: {c.commitRef}</p>}
+          {owner && ['pronta', 'erro'].includes(c.status) && (
+            <div className="row gap">
+              <button className="ghost small" disabled={busy} onClick={() => act(() => api(`${base}/skills/mudancas/${c.id}/recusar`, { body: {} }), 'Proposta recusada')}><X size={13} /> Recusar</button>
+              {c.status === 'pronta' && c.edits.length > 0 && <button className="small primary" disabled={busy} onClick={() => act(() => api(`${base}/skills/mudancas/${c.id}/aplicar`, { body: {} }), 'Skills atualizadas')}><Check size={13} /> Aplicar nas skills</button>}
+            </div>
+          )}
+        </div>
+      ))}
     </section>
   );
 }
@@ -105,6 +177,7 @@ export function Mesa() {
         <div className="empty"><Workflow size={22} /><p>Nada na mesa ainda. Peça algo na conversa do cliente, em Clientes, e as peças aparecem aqui.</p></div>
       )}
       <Learnings />
+      <SkillPath />
       {section('Esperando você', asking)}
       {section('Em produção', working)}
       {section('Paradas', stopped)}

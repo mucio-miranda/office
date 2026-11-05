@@ -1,3 +1,4 @@
+import { PostProgress } from './CalendarPanel';
 import { useEffect, useState } from 'react';
 import { Bot, Check, Eye, Megaphone, Pause, Play, Plus, RotateCcw, Workflow, X } from 'lucide-react';
 import { DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, PROCESSES, STAGE_AGENT, STAGE_LABEL, processById, type Demand, type DemandKind, type DemandStatus, type Priority, type Stage } from '@office/shared';
@@ -94,6 +95,7 @@ export function Demands() {
                 return (
                   <article key={d.id} className="kcard" draggable onDragStart={(e) => e.dataTransfer.setData('id', d.id)} onClick={() => setEditing(d)}>
                     <div className="kcard-title">{d.title}</div>
+                    <PostProgress demandId={d.id} />
                     {d.stage && <div className="kcard-stage"><StageTrack d={d} compact /><span>{d.auto && d.status !== 'entregue' ? <Workflow size={11} /> : null} {STAGE_LABEL[d.stage]}</span></div>}
                     <div className="kcard-meta">
                       <Prio p={d.priority} />

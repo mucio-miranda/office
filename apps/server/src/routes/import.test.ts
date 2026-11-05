@@ -28,9 +28,9 @@ const put = (rel: string, content = 'x') => {
 };
 
 before(async () => {
-  put('FERNANDA MIRANDA/DOCUMENTOS/IDENTIDADE VISUAL/marca.json', '﻿{"nome": "Fernanda Miranda"}');
-  put('BOLO DE MAE JP/FOTOS/a.jpg');
-  put('STG/stg-studio/index.html');
+  put('MARIA TESTE/DOCUMENTOS/IDENTIDADE VISUAL/marca.json', '﻿{"nome": "Maria Teste"}');
+  put('DOCERIA DA ANA JP/FOTOS/a.jpg');
+  put('XYZ/site/index.html');
   put('.oculta/x.txt');
   put('solto.txt');
   app = Fastify();
@@ -41,37 +41,37 @@ before(async () => {
 after(async () => { await app.close(); db.close(); rmSync(dataDir, { recursive: true, force: true }); });
 
 test('nome da pasta vira nome de gente', () => {
-  assert.equal(prettyName('BOLO DE MAE JP'), 'Bolo de Mae JP');
-  assert.equal(prettyName('DR. ANDERSON'), 'Dr. Anderson');
-  assert.equal(prettyName("PIZZARIA BONA'S"), "Pizzaria Bona's");
+  assert.equal(prettyName('DOCERIA DA ANA JP'), 'Doceria da Ana JP');
+  assert.equal(prettyName('DR. SILVA'), 'Dr. Silva');
+  assert.equal(prettyName("LANCHES ZE'S"), "Lanches Ze's");
   assert.equal(prettyName('KOMMUchat'), 'KOMMUchat');
 });
 
 test('lista só as pastas de cliente que faltam, com o nome da marca', async () => {
   const { json } = await call('GET', `${O}/clients/importar`);
   assert.deepEqual(json.found.map((f: any) => [f.dir, f.name, f.standard, f.marca]), [
-    ['BOLO DE MAE JP', 'Bolo de Mae JP', true, false],
-    ['FERNANDA MIRANDA', 'Fernanda Miranda', true, true],
-    ['STG', 'STG', false, false],
+    ['DOCERIA DA ANA JP', 'Doceria da Ana JP', true, false],
+    ['MARIA TESTE', 'Maria Teste', true, true],
+    ['XYZ', 'XYZ', false, false],
   ]);
 });
 
 test('importa sem criar nada na pasta, não duplica e recusa o que não foi encontrado', async () => {
-  const before = readdirSync(path.join(root, 'CLIENTES', 'STG'));
+  const before = readdirSync(path.join(root, 'CLIENTES', 'XYZ'));
   const r = await call('POST', `${O}/clients/importar`, { items: [
-    { dir: 'STG', name: 'STG Studio' },
+    { dir: 'XYZ', name: 'XYZ Studio' },
     { dir: '../fora', name: 'Fora' },
     { dir: 'NAO EXISTE', name: 'Nada' },
   ], rascunho: false });
   assert.equal(r.status, 200);
-  assert.deepEqual(r.json.created.map((c: any) => c.name), ['STG Studio']);
+  assert.deepEqual(r.json.created.map((c: any) => c.name), ['XYZ Studio']);
   assert.deepEqual(r.json.skipped, ['../fora', 'NAO EXISTE']);
-  assert.deepEqual(readdirSync(path.join(root, 'CLIENTES', 'STG')), before, 'não cria a estrutura padrão');
+  assert.deepEqual(readdirSync(path.join(root, 'CLIENTES', 'XYZ')), before, 'não cria a estrutura padrão');
   assert.ok(!existsSync(path.join(dataDir, 'fora')));
-  const again = await call('POST', `${O}/clients/importar`, { items: [{ dir: 'STG', name: 'De novo' }], rascunho: false });
+  const again = await call('POST', `${O}/clients/importar`, { items: [{ dir: 'XYZ', name: 'De novo' }], rascunho: false });
   assert.deepEqual(again.json.created, []);
   const list = await call('GET', `${O}/clients/importar`);
-  assert.ok(!list.json.found.some((f: any) => f.dir === 'STG'));
+  assert.ok(!list.json.found.some((f: any) => f.dir === 'XYZ'));
 });
 
 test('bruto que mora no HD por junction aparece no índice e na conferência do processo', { skip: process.platform !== 'win32' }, () => {

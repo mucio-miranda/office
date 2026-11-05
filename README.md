@@ -68,6 +68,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - O avatar digita ⌨️ enquanto trabalha e **levanta a mão ✋** quando precisa de aprovação
 - Você responde pelo chat e ele **continua a mesma sessão**
 - Comandos destrutivos ficam **sempre bloqueados**, e o custo de cada tarefa aparece em US$
+- **Skills por um caminho só**: o funcionário sugere aprendizados, você aprova na Mesa, um curador (que só lê) propõe a troca exata na skill e você vê o antes e o depois. Só ao apertar **Aplicar** o Office grava e registra no git das skills
 - **Ferramentas criativas por MCP**: a Duda usa o PhotoCraft e o VectorCraft, a Vic usa o FilmCraft e o Theo e a Rafa usam o OfficeCLI, sempre presos às pastas do escritório
 
 </td>
@@ -106,7 +107,9 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   prévia de imagem, vídeo, áudio, PDF e texto. Editar um PDF vira uma tarefa para o funcionário com o PdfCraft
 
 ### 🧾 Clientes
-- **Uma conversa contínua por cliente**: pedidos, correções e aprovações na mesma conversa, com memória de um dia para o outro. Digite `/` para os comandos, que são as skills do escritório (`/start-conteudo`), e escreva enquanto o agente trabalha para corrigir na hora. **Nova conversa** começa do zero.
+- **Uma conversa contínua por cliente**: pedidos, correções e aprovações na mesma conversa, com memória de um dia para o outro. Digite `/` para os comandos, que são as skills do escritório (`/start-conteudo`), e escreva enquanto o agente trabalha para corrigir na hora. **Nova conversa** começa do zero. Cada mensagem mostra quem pediu.
+- **Sessões do cliente**: o botão **Sessões** lista as conversas do Office e as que você abriu no terminal (Claude Code) na pasta do cliente. Leia qualquer uma e continue de onde parou, no Office.
+- **Demanda pelo mapa**: chegue perto de um funcionário e aperte <kbd>E</kbd>, ou use **Nova demanda** no topo. Escolha cliente, pedido, processo, prazo e quem faz, e a sessão do cliente já começa.
 - **Importar da pasta** lista o que já existe em `CLIENTES\` e ainda não é cliente no Office, sem criar, mover nem renomear nada lá. Opcionalmente, o gerente lê cada pasta e preenche um rascunho do briefing para a equipe conferir.
 - **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com DOCUMENTOS, FOTOS e VIDEOS); só cria
   as pastas que faltam, nada é movido nem apagado
@@ -130,6 +133,10 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 <td valign="top">
 
 ### 📅 Calendário
+- **Calendário de conteúdo** de cada cliente, ligado à demanda que o produz: dia, formato, tema, número e legenda de cada post
+- Cada peça mostra a etapa (referência > composição > tunning > conferência > aprovado > Drive > postado), e o funcionário atualiza sozinho enquanto produz, pelo servidor MCP do Office
+- **O tunning faz parte do design**: arte sem tunning não é aprovada, a não ser que uma pessoa decida que fica sem
+- "3 de 8 prontas · 1 no tunning" no quadro e no calendário
 - Mês inteiro com reuniões, gravações e entregas
 - Os prazos das demandas aparecem no dia com ⏰
 - A lista de próximos eventos fica sempre à vista
@@ -139,6 +146,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 
 ### 👥 Multi-escritório e multiusuário
 - Crie **quantos escritórios quiser**, cada um com a própria pasta raiz e os próprios funcionários
+- **Papéis**: dono; **ADM** (CEO e comercial), que também vê o financeiro; membro, que pede trabalho à IA; convidado, que só acompanha. Financeiro, mensalidades e métricas de dinheiro são só do dono e do ADM
 - Convide a equipe com um **código**: quem estiver na mesma rede abre `http://SEU-IP:4747`; quem estiver em outro lugar entra pela VPN
 - Presença em tempo real, e você vê os colegas andando pelo escritório
 
@@ -419,7 +427,9 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [ ] Sons do mundo, editor de planta e vários andares
 - [ ] Voz e vídeo por proximidade
 - [ ] Google Calendar, Notion e Trello
-- [ ] Servidor MCP do Office
+- [x] Papéis com financeiro só do ADM, demanda pelo mapa, sessões do terminal no Office, calendário de conteúdo preenchido pelo agente e skills alteradas só pela Mesa
+- [x] Servidor MCP do Office (calendário de conteúdo)
+- [ ] Office como SaaS: servidor na nuvem, banco central, Drive pela API e o PC da agência como trabalhador
 
 Lista completa em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 

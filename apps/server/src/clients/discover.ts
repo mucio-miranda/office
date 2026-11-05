@@ -18,7 +18,7 @@ export interface FoundClient {
 
 const SMALL_WORD = /^(de|da|do|das|dos|e)$/;
 
-/** BOLO DE MAE JP vira Bolo de Mae JP. Pasta que já tem minúsculas foi escrita por alguém e fica como está. */
+/** DOCERIA DA ANA JP vira Doceria da Ana JP. Pasta que já tem minúsculas foi escrita por alguém e fica como está. */
 export function prettyName(dir: string) {
   if (dir !== dir.toUpperCase()) return dir;
   return dir.toLowerCase().split(/\s+/).map((w, i) => {

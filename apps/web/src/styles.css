@@ -895,3 +895,28 @@ label.check input { width: auto; height: auto; }
 .wall-types button.on { border-color: var(--foreground); }
 .wall-types i { flex: none; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border-strong); }
 
+
+/* sessões do cliente (Office e terminal) */
+.session-list { display: flex; flex-direction: column; gap: 2px; max-height: 260px; overflow-y: auto; overflow-x: hidden; padding: 6px 0; border-bottom: 1px solid var(--border); }
+.session-item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 6px 8px; border-radius: 8px; background: transparent; border: 0; min-width: 0; }
+.session-item:hover, .session-item.on { background: var(--muted); }
+.session-item { width: 100%; flex-shrink: 0; height: auto; white-space: normal; justify-content: flex-start; }
+.session-item > .row { max-width: 100%; min-width: 0; }
+.session-item b { font-weight: 600; max-width: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-item > .muted { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-banner { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 12px; border-bottom: 1px solid var(--border); background: var(--muted); }
+.msg.usuario .who { justify-content: flex-end; font-size: 11px; opacity: .7; }
+
+/* calendário de conteúdo */
+.cal-post { font-size: 11px; line-height: 1.25; padding: 2px 4px; margin-top: 2px; border-radius: 4px; border-left: 3px solid var(--cl); background: var(--muted); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; gap: 3px; align-items: center; }
+.cal-post b { font-family: var(--mono); font-size: 10px; opacity: .8; }
+.cal-post.st-aprovado, .cal-post.st-drive, .cal-post.st-postado { opacity: .65; }
+.cal-post.st-tunning { box-shadow: inset 0 0 0 1px var(--waiting); }
+.post-progress { display: flex; flex-direction: column; gap: 3px; margin: 4px 0; }
+.post-progress .bar { height: 4px; border-radius: 4px; background: var(--muted); overflow: hidden; }
+.post-progress .bar span { display: block; height: 100%; background: var(--done); }
+/* caminho das skills na Mesa */
+.skill-change { border: 1px solid var(--border); border-radius: var(--radius); padding: 10px 12px; margin: 8px 0; display: flex; flex-direction: column; gap: 8px; }
+.skill-edit pre { white-space: pre-wrap; word-break: break-word; font-size: 12px; margin: 4px 0 0; padding: 6px 8px; border-radius: 6px; max-height: 220px; overflow: auto; }
+.skill-edit pre.before { background: color-mix(in srgb, var(--error) 12%, transparent); text-decoration: line-through; opacity: .8; }
+.skill-edit pre.after { background: color-mix(in srgb, var(--done) 14%, transparent); }

@@ -185,6 +185,30 @@ export function requireMember(req: FastifyRequest, reply: FastifyReply) {
   return true;
 }
 
+/** Financeiro, mensalidades e métricas de dinheiro: só o dono e o ADM. */
+export function requireFinance(req: FastifyRequest, reply: FastifyReply) {
+  const { officeId } = req.params as { officeId?: string };
+  const role = officeId ? membership(officeId, req.user.id)?.role : undefined;
+  if (role !== 'dono' && role !== 'adm') {
+    reply.code(403).send({ error: role ? 'O financeiro é só do dono e do ADM.' : 'Você não faz parte deste escritório.' });
+    return false;
+  }
+  return true;
+}
+
+/** O que muda algo ou aciona um funcionário de IA: qualquer membro, menos o convidado, que só acompanha. */
+export function requireWorker(req: FastifyRequest, reply: FastifyReply) {
+  const { officeId } = req.params as { officeId?: string };
+  const role = officeId ? membership(officeId, req.user.id)?.role : undefined;
+  if (!role || role === 'convidado') {
+    reply.code(403).send({ error: role ? 'Convidados só acompanham: peça a um membro do escritório.' : 'Você não faz parte deste escritório.' });
+    return false;
+  }
+  return true;
+}
+
+export const seesFinance = (officeId: string, userId: string) => ['dono', 'adm'].includes(membership(officeId, userId)?.role ?? '');
+
 /** Para o que mexe em pastas, permissões e contas: só o dono do escritório da rota. */
 export function requireOwner(req: FastifyRequest, reply: FastifyReply) {
   const { officeId } = req.params as { officeId?: string };

@@ -142,6 +142,40 @@ test('membro não mexe em pastas, permissões, convite nem contas, e não vê o 
   assert.equal((await call('GET', O(), { token })).json.office.inviteCode, '');
 });
 
+test('financeiro só para o dono e o ADM; convidado só acompanha', async () => {
+  const fin = await join('Comercial');
+  const mem = await join('Designer');
+  const conv = await join('Visita');
+  assert.equal((await call('PUT', `${O()}/members/${fin.user.id}/papel`, { token: mem.token, body: { role: 'adm' } })).status, 403, 'membro não muda papel');
+  assert.equal((await call('PUT', `${O()}/members/${fin.user.id}/papel`, { token: owner, body: { role: 'adm' } })).status, 200);
+  assert.equal((await call('PUT', `${O()}/members/${conv.user.id}/papel`, { token: owner, body: { role: 'convidado' } })).status, 200);
+  const dono = (await call('GET', `${O()}/members`, { token: owner })).json.find((m: any) => m.name === 'Dona');
+  assert.equal((await call('PUT', `${O()}/members/${dono.id}/papel`, { token: owner, body: { role: 'membro' } })).status, 409);
+
+  const c = await call('POST', `${O()}/clients`, { token: owner, body: { name: 'Cliente Teste', monthlyFee: 2500 } });
+  assert.equal(c.status, 200);
+  assert.equal((await call('POST', `${O()}/transactions`, { token: fin.token, body: { kind: 'receita', category: 'mensalidade', amount: 2500, date: '2026-11-05' } })).status, 200);
+  for (const t of [mem.token, conv.token]) {
+    assert.equal((await call('GET', `${O()}/transactions`, { token: t })).status, 403);
+    assert.equal((await call('POST', `${O()}/transactions`, { token: t, body: { kind: 'despesa', category: 'x', amount: 1, date: '2026-11-05' } })).status, 403);
+    assert.equal((await call('GET', `${O()}/clients`, { token: t })).json[0].monthlyFee, 0, 'mensalidade escondida');
+    const m = (await call('GET', `${O()}/metrics`, { token: t })).json;
+    assert.equal(m.mrr, 0);
+    assert.equal(m.revenueMonth, 0);
+    assert.ok(!(await call('GET', `${O()}/activity`, { token: t })).json.some((a: any) => a.action.endsWith('transactions')));
+  }
+  assert.equal((await call('GET', `${O()}/clients`, { token: fin.token })).json[0].monthlyFee, 2500);
+  assert.equal((await call('GET', `${O()}/metrics`, { token: fin.token })).json.mrr, 2500);
+  assert.equal((await call('GET', `${O()}/transactions`, { token: fin.token })).json.length, 1);
+
+  // membro não muda a mensalidade; convidado não cria nada nem aciona a IA
+  assert.equal((await call('PATCH', `${O()}/clients/${c.json.client.id}`, { token: mem.token, body: { monthlyFee: 1, niche: 'saude' } })).status, 200);
+  assert.equal((await call('GET', `${O()}/clients`, { token: owner })).json[0].monthlyFee, 2500);
+  assert.equal((await call('POST', `${O()}/demands`, { token: conv.token, body: { title: 'x' } })).status, 403);
+  assert.equal((await call('POST', `${O()}/clients/${c.json.client.id}/conversa`, { token: conv.token, body: { text: 'faça algo' } })).status, 403);
+  assert.equal((await call('GET', `${O()}/demands`, { token: conv.token })).status, 200, 'mas vê o quadro');
+});
+
 test('um escritório não alcança as tarefas e timelines de outro', async () => {
   const other = (await call('POST', '/api/offices', { ip: LOCAL, token: owner, body: { name: 'Outro', rootPath: dataDir } })).json;
   const agent = (await call('GET', `/api/offices/${other.id}/agents`, { token: owner })).json[0];

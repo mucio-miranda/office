@@ -4,24 +4,27 @@ import { randomBytes } from 'node:crypto';
 import { createReadStream, existsSync, statSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
-import {
+import { POST_FORMATS, POST_STATUSES,
   BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, PROCESSES, WALL_TYPES, processById, uid,
   type AgentJob, type AgentProfile, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
 import {
   MIN_PIN, attemptKeys, blocked, checkPin, checkResetCode, clearFails, createResetCode, createSession, hashPin, isLocal, membership, noteFail,
-  requireMember, requireOwner, requireUser, revokeSession, revokeSessions, sessionCookie, setPin,
+  requireFinance, requireMember, requireWorker, seesFinance, requireOwner, requireUser, revokeSession, revokeSessions, sessionCookie, setPin,
 } from '../auth.ts';
 import { disconnectUser, invalidate, onlineUsers, refreshPresence } from '../realtime.ts';
 import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts';
 import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
-import { cancelJob, enqueueJob, replyToJob } from '../agents/runtime.ts';
+import { authorName, cancelJob, enqueueJob, jobForToken, replyToJob } from '../agents/runtime.ts';
+import { postsOf, progress, savePosts, type PostInput } from '../agents/calendar.ts';
+import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
 import { driveDirs, existingDriveFolders } from '../clients/drive.ts';
 import { discoverClients } from '../clients/discover.ts';
 import { listSkills } from '../agents/skills.ts';
-import { adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, resetConversation, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/sessions.ts';
+import { resumeSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, resetConversation, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
@@ -118,6 +121,33 @@ export function createOffice(name: string, rootPath: string, extraDirs: string[]
 
 export async function api(app: FastifyInstance) {
   // ---------------- autenticação ----------------
+  // o servidor MCP `office` de uma tarefa: só daqui desta máquina e só o cliente da tarefa
+  app.post('/api/agente/:tool', async (req, reply) => {
+    if (!isLocal(req)) return reply.code(403).send({ error: 'Só nesta máquina.' });
+    const h = req.headers.authorization;
+    const job = jobForToken(h?.startsWith('Bearer ') ? h.slice(7) : undefined);
+    if (!job?.clientId) return reply.code(401).send({ error: 'Tarefa encerrada ou sem cliente.' });
+    const tool = (req.params as { tool: string }).tool;
+    const b = (req.body ?? {}) as { mes?: string; posts?: PostInput[] };
+    try {
+      if (tool === 'calendario_listar') {
+        const mes = typeof b.mes === 'string' && /^\d{4}-\d{2}$/.test(b.mes) ? b.mes : undefined;
+        const posts = postsOf(job.officeId, job.clientId, mes);
+        return { posts: posts.map(({ officeId, clientId, ...p }) => p), andamento: progress(posts.filter((p) => p.status !== 'cancelado')) };
+      }
+      if (tool === 'calendario_salvar') {
+        if (!Array.isArray(b.posts) || !b.posts.length) return reply.code(400).send({ error: 'Mande a lista `posts`.' });
+        // dispensar o tunning é decisão de uma pessoa, pela tela; o funcionário só registra o tunning que fez
+        if (b.posts.some((p) => p?.tunning === 'dispensado')) return reply.code(409).send({ error: 'Só uma pessoa pode dispensar o tunning, pelo calendário do Office. Faça o tunning e marque "feito", ou pergunte se a peça fica sem.' });
+        const saved = savePosts(job.officeId, job.clientId, job.demandId, b.posts, `agent:${job.agentId}`);
+        return { salvos: saved.map((p) => ({ id: p.id, date: p.date, theme: p.theme, status: p.status, tunning: p.tunning })) };
+      }
+      return reply.code(404).send({ error: `Ferramenta desconhecida: ${tool}` });
+    } catch (e) {
+      return reply.code(409).send({ error: (e as Error).message });
+    }
+  });
+
   app.post('/api/auth/enter', async (req, reply) => {
     const b = body(z.object({ name: z.string().trim().min(2).max(40), pin: pinField.optional(), invite: z.string().trim().toUpperCase().max(32).optional() }), req, reply);
     if (!b) return;
@@ -321,6 +351,20 @@ export async function api(app: FastifyInstance) {
       return updatePerson(userId, b, reply) ?? undefined;
     });
 
+    r.put('/api/offices/:officeId/members/:userId/papel', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId, userId } = req.params as { officeId: string; userId: string };
+      const m = membership(officeId, userId);
+      if (!m) return reply.code(404).send({ error: 'Essa pessoa não está no escritório.' });
+      if (m.role === 'dono') return reply.code(409).send({ error: 'O papel do dono não muda.' });
+      const b = body(z.object({ role: z.enum(['adm', 'membro', 'convidado']) }), req, reply);
+      if (!b) return;
+      db.prepare('UPDATE office_members SET role = ? WHERE office_id = ? AND user_id = ?').run(b.role, officeId, userId);
+      logActivity(officeId, `user:${req.user.id}`, 'mudou o papel de uma pessoa', `${userId}: ${b.role}`);
+      invalidate(officeId, 'members');
+      return { ok: true };
+    });
+
     // paredes: tipo de cada trecho (quem decora o mapa também mexe nelas)
     r.get('/api/offices/:officeId/walls', async (req, reply) => {
       if (!requireMember(req, reply)) return;
@@ -459,7 +503,7 @@ export async function api(app: FastifyInstance) {
       return row?.json ?? null;
     });
     r.put('/api/offices/:officeId/layout', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId } = req.params as { officeId: string };
       if (membership(officeId, req.user.id)?.role === 'convidado') return reply.code(403).send({ error: 'Convidados não mudam a decoração.' });
       const item = z.object({
@@ -492,12 +536,15 @@ export async function api(app: FastifyInstance) {
       name: string, table: string, schema: z.ZodObject<z.ZodRawShape>, order: string,
       what: 'demands' | 'events' | 'transactions' | 'clients', defaults: (b: any) => Partial<T> = () => ({}), withPost = true,
     ) => {
+      const guard = table === 'transactions' ? requireFinance : requireWorker;
       r.get(`/api/offices/:officeId/${name}`, async (req, reply) => {
-        if (!requireMember(req, reply)) return;
-        return all<T>(`SELECT * FROM ${table} WHERE office_id = ? ORDER BY ${order}`, (req.params as any).officeId);
+        if (!(table === 'transactions' ? requireFinance : requireMember)(req, reply)) return;
+        const officeId = (req.params as any).officeId;
+        const rows = all<T>(`SELECT * FROM ${table} WHERE office_id = ? ORDER BY ${order}`, officeId);
+        return table === 'clients' && !seesFinance(officeId, req.user.id) ? rows.map((c) => ({ ...c, monthlyFee: 0 })) : rows;
       });
       if (withPost) r.post(`/api/offices/:officeId/${name}`, async (req, reply) => {
-        if (!requireMember(req, reply)) return;
+        if (!guard(req, reply)) return;
         const b = body(schema, req, reply);
         if (!b) return;
         const officeId = (req.params as any).officeId;
@@ -508,10 +555,11 @@ export async function api(app: FastifyInstance) {
         return row;
       });
       r.patch(`/api/offices/:officeId/${name}/:id`, async (req, reply) => {
-        if (!requireMember(req, reply)) return;
+        if (!guard(req, reply)) return;
         const b = body(schema.partial(), req, reply);
         if (!b) return;
         const { officeId, id } = req.params as any;
+        if (table === 'clients' && !seesFinance(officeId, req.user.id)) delete (b as any).monthlyFee;
         if (!one(`SELECT id FROM ${table} WHERE id = ? AND office_id = ?`, id, officeId)) return reply.code(404).send({ error: 'Não encontrado' });
         // trocar o processo antes de começar troca também as etapas
         const proc = table === 'demands' && (b as any).process !== undefined && !one<{ stage: string | null }>('SELECT stage FROM demands WHERE id = ?', id)?.stage
@@ -521,7 +569,7 @@ export async function api(app: FastifyInstance) {
         return one<T>(`SELECT * FROM ${table} WHERE id = ?`, id);
       });
       r.delete(`/api/offices/:officeId/${name}/:id`, async (req, reply) => {
-        if (!requireMember(req, reply)) return;
+        if (!guard(req, reply)) return;
         const { officeId, id } = req.params as any;
         db.prepare(`DELETE FROM ${table} WHERE id = ? AND office_id = ?`).run(id, officeId);
         logActivity(officeId, `user:${req.user.id}`, `removeu ${name}`, id);
@@ -541,12 +589,13 @@ export async function api(app: FastifyInstance) {
 
     // cliente novo: cria a pasta no padrão da casa (só pastas que faltam) e, se pedido, abre a entrevista de briefing
     r.post('/api/offices/:officeId/clients', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const b = body(clientSchema.extend({ createFolder: z.boolean().default(false), interview: z.boolean().default(false) }), req, reply);
       if (!b) return;
       const { officeId } = req.params as { officeId: string };
       const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
       const { createFolder, interview, ...data } = b;
+      if (!seesFinance(officeId, req.user.id)) data.monthlyFee = 0;
       const folder = data.folder || (createFolder ? path.join('CLIENTES', folderName(data.name)) : null);
       const row = { id: uid(), officeId, ...data, folder, driveFolder: null, color: data.color ?? pick(), briefing: data.briefing ?? {} } as Client;
       let created: string[] = [];
@@ -570,7 +619,7 @@ export async function api(app: FastifyInstance) {
 
     // só cadastra: a pasta fica como está. Com rascunho, o gerente lê cada pasta na fila dos funcionários
     r.post('/api/offices/:officeId/clients/importar', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const b = body(z.object({ items: z.array(z.object({ dir: z.string().min(1), name: z.string().trim().min(1).max(120) })).min(1).max(200), rascunho: z.boolean().default(false) }), req, reply);
       if (!b) return;
       const { officeId } = req.params as any;
@@ -606,21 +655,97 @@ export async function api(app: FastifyInstance) {
       return listSkills(one<Office>('SELECT root_path FROM offices WHERE id = ?', (req.params as any).officeId)!.rootPath);
     });
     r.post('/api/offices/:officeId/clients/:id/conversa', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
-      const b = body(z.object({ text: z.string().trim().min(1).max(20000), newRequest: z.boolean().default(false) }), req, reply);
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({
+        text: z.string().trim().min(1).max(20000), newRequest: z.boolean().default(false),
+        // demanda aberta pelo mapa: já sai com quem faz, processo, prazo e prioridade
+        demand: z.object({
+          title: z.string().trim().max(80).optional(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+          priority: z.enum(['baixa', 'media', 'alta', 'urgente']).optional(), process: z.string().max(40).nullable().optional(), agentId: z.string().max(40).nullable().optional(),
+        }).optional(),
+      }), req, reply);
       if (!b) return;
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
-      const err = clientMessage(officeId, id, b.text, `user:${req.user.id}`, b.newRequest);
+      const err = clientMessage(officeId, id, b.text, `user:${req.user.id}`, b.demand ?? b.newRequest);
       if (err) return reply.code(409).send({ error: err });
       return { ok: true };
     });
     r.post('/api/offices/:officeId/clients/:id/conversa/nova', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
       const err = resetConversation(id);
       if (err) return reply.code(409).send({ error: err });
+      invalidate(officeId, 'clients');
+      return { ok: true };
+    });
+
+    // calendário de conteúdo: posts de cada cliente, ligados à demanda que os produz
+    const postSchema = z.object({
+      id: z.string().max(40).optional(), date: z.string().optional(), format: z.enum(POST_FORMATS).optional(), theme: z.string().max(200).optional(),
+      caption: z.string().max(2200).optional(), notes: z.string().max(2000).optional(), number: z.number().nullable().optional(),
+      status: z.enum(POST_STATUSES).optional(), tunning: z.enum(['feito', 'dispensado']).nullable().optional(), files: z.array(z.string().max(500)).max(40).optional(),
+      demandId: z.string().max(40).nullable().optional(),
+    });
+    r.get('/api/offices/:officeId/posts', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as any;
+      const q = req.query as { cliente?: string; mes?: string };
+      return postsOf(officeId, q.cliente, q.mes && /^\d{4}-\d{2}$/.test(q.mes) ? q.mes : undefined);
+    });
+    r.post('/api/offices/:officeId/clients/:id/posts', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ posts: z.array(postSchema).min(1).max(60) }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      const demandId = b.posts.find((p) => p.demandId)?.demandId ?? null;
+      if (demandId && !one('SELECT id FROM demands WHERE id = ? AND office_id = ? AND client_id = ?', demandId, officeId, id)) return reply.code(400).send({ error: 'Essa demanda não é deste cliente.' });
+      try { return savePosts(officeId, id, demandId, b.posts as PostInput[], `user:${req.user.id}`); } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
+    });
+    r.get('/api/offices/:officeId/demands/:id/progresso', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      return progress(all('SELECT status FROM content_posts WHERE office_id = ? AND demand_id = ? AND status != \'cancelado\'', officeId, id));
+    });
+
+    // sessões do cliente: as do Office e as abertas no terminal na mesma pasta
+    const clientCwd = (officeId: string, id: string) => {
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      return c ? { c, cwd: jobCwd(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, c) } : null;
+    };
+    r.get('/api/offices/:officeId/clients/:id/sessoes', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const found = clientCwd(officeId, id);
+      if (!found) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      const mine = all<{ sessionId: string; cost: number; people: string | null }>(
+        `SELECT j.session_id, SUM(j.cost_usd) AS cost,
+                (SELECT GROUP_CONCAT(DISTINCT m.author) FROM job_messages m JOIN jobs j2 ON j2.id = m.job_id WHERE j2.session_id = j.session_id AND m.author IS NOT NULL) AS people
+         FROM jobs j WHERE j.client_id = ? AND j.session_id IS NOT NULL GROUP BY j.session_id`, id);
+      const byId = new Map(mine.map((s) => [s.sessionId, s]));
+      return listSessions(found.cwd).map((s) => ({
+        ...s, origin: byId.has(s.id) ? 'office' : 'terminal', current: s.id === found.c.sessionId,
+        costUsd: byId.get(s.id)?.cost ?? 0, people: byId.get(s.id)?.people?.split(',') ?? [],
+      }));
+    });
+    r.get('/api/offices/:officeId/clients/:id/sessoes/:sid', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id, sid } = req.params as any;
+      const found = clientCwd(officeId, id);
+      const file = found && SESSION_ID.test(sid) ? sessionFile(found.cwd, sid) : null;
+      if (!file) return reply.code(404).send({ error: 'Sessão não encontrada' });
+      return sessionTail(file);
+    });
+    r.post('/api/offices/:officeId/clients/:id/sessoes/:sid/retomar', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { officeId, id, sid } = req.params as any;
+      const found = clientCwd(officeId, id);
+      if (!found || !SESSION_ID.test(sid) || !sessionFile(found.cwd, sid)) return reply.code(404).send({ error: 'Sessão não encontrada' });
+      const err = resumeSession(id, sid);
+      if (err) return reply.code(409).send({ error: err });
+      logActivity(officeId, `user:${req.user.id}`, 'retomou uma sessão', `${found.c.name}: ${sid}`);
       invalidate(officeId, 'clients');
       return { ok: true };
     });
@@ -641,8 +766,33 @@ export async function api(app: FastifyInstance) {
       return { ok: true };
     });
 
-    r.post('/api/offices/:officeId/clients/:id/folder', async (req, reply) => {
+    // o caminho único para mudar as skills: aprovado > proposta do curador > o dono aplica
+    r.get('/api/offices/:officeId/aprendizados/aprovados', async (req, reply) => {
       if (!requireMember(req, reply)) return;
+      return all<Learning>("SELECT * FROM learnings WHERE office_id = ? AND status = 'aprovado' ORDER BY created_at DESC LIMIT 60", (req.params as any).officeId);
+    });
+    r.get('/api/offices/:officeId/skills/mudancas', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return skillChanges((req.params as any).officeId);
+    });
+    r.post('/api/offices/:officeId/skills/mudancas', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const b = body(z.object({ learningIds: z.array(z.string().max(40)).min(1).max(20) }), req, reply);
+      if (!b) return;
+      const res = proposeSkillChange(one<Office>('SELECT * FROM offices WHERE id = ?', (req.params as any).officeId)!, b.learningIds, `user:${req.user.id}`);
+      return typeof res === 'string' ? reply.code(409).send({ error: res }) : res;
+    });
+    r.post('/api/offices/:officeId/skills/mudancas/:id/:acao', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const { officeId, id, acao } = req.params as any;
+      const err = acao === 'aplicar' ? applySkillChange(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, id, `user:${req.user.id}`)
+        : acao === 'recusar' ? rejectSkillChange(officeId, id, `user:${req.user.id}`) : 'Ação desconhecida.';
+      if (err) return reply.code(409).send({ error: err });
+      return { ok: true };
+    });
+
+    r.post('/api/offices/:officeId/clients/:id/folder', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
       const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
@@ -703,7 +853,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/clients/:id/briefing', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
       if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
@@ -726,7 +876,7 @@ export async function api(app: FastifyInstance) {
     // esteira da demanda: ligar, pausar, aprovar, pedir ajustes
     const pipelineAction = (name: string, run: (id: string, req: FastifyRequest) => string | null | void, schema?: z.ZodTypeAny) =>
       r.post(`/api/offices/:officeId/demands/:id/${name}`, async (req, reply) => {
-        if (!requireMember(req, reply)) return;
+        if (!requireWorker(req, reply)) return;
         const { officeId, id } = req.params as any;
         if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
         if (schema && !body(schema, req, reply)) return;
@@ -775,7 +925,7 @@ export async function api(app: FastifyInstance) {
       return dirs ?? reply.code(400).send({ error: 'Pasta fora do Drive' });
     });
     r.post('/api/offices/:officeId/demands/:id/drive', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
       const b = body(z.object({ folder: z.string().trim().min(1).max(400), items: z.array(z.object({ file: z.string().min(1), sub: z.string().max(300) })).min(1).max(80) }), req, reply);
@@ -797,7 +947,7 @@ export async function api(app: FastifyInstance) {
 
     // cronômetro da demanda
     r.post('/api/offices/:officeId/demands/:id/timer', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       const d = one<Demand>('SELECT * FROM demands WHERE id = ? AND office_id = ?', id, officeId);
       if (!d) return reply.code(404).send({ error: 'Demanda não encontrada' });
@@ -822,7 +972,8 @@ export async function api(app: FastifyInstance) {
       for (const row of db.prepare('SELECT status, COUNT(*) AS n FROM demands WHERE office_id = ? GROUP BY status').all(officeId) as any[]) byStatus[row.status] = row.n;
       const receita = sum("SELECT SUM(amount) v FROM transactions WHERE office_id = ? AND kind = 'receita' AND substr(date,1,7) = ?", month);
       const despesa = sum("SELECT SUM(amount) v FROM transactions WHERE office_id = ? AND kind = 'despesa' AND substr(date,1,7) = ?", month);
-      return {
+      const money = seesFinance(officeId, req.user.id);
+      const metrics = {
         month,
         demandsByStatus: byStatus,
         overdue: sum("SELECT COUNT(*) v FROM demands WHERE office_id = ? AND status != 'entregue' AND due_date IS NOT NULL AND due_date < ?", today),
@@ -845,11 +996,16 @@ export async function api(app: FastifyInstance) {
            FROM transactions WHERE office_id = ? GROUP BY month ORDER BY month DESC LIMIT 6`,
         ).all(officeId),
       };
+      if (money) return metrics;
+      const { mrr, revenueMonth, expenseMonth, profitMonth, receivablePending, aiCostMonth, cashflow, ...rest } = metrics;
+      return { ...rest, mrr: 0, revenueMonth: 0, expenseMonth: 0, profitMonth: 0, receivablePending: 0, aiCostMonth: 0, cashflow: [] };
     });
 
     r.get('/api/offices/:officeId/activity', async (req, reply) => {
       if (!requireMember(req, reply)) return;
-      return db.prepare('SELECT * FROM activity WHERE office_id = ? ORDER BY id DESC LIMIT 60').all((req.params as any).officeId);
+      const officeId = (req.params as any).officeId;
+      const hide = seesFinance(officeId, req.user.id) ? '' : " AND action NOT LIKE '% transactions'";
+      return db.prepare(`SELECT * FROM activity WHERE office_id = ?${hide} ORDER BY id DESC LIMIT 60`).all(officeId);
     });
 
     // ---------------- funcionários de IA ----------------
@@ -943,7 +1099,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/live/:id/focus', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       if (getLive(id)?.officeId !== officeId) return reply.code(404).send({ error: 'Esse app já foi fechado.' });
       try {
@@ -955,7 +1111,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/live/:id/close', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       const s = getLive(id);
       if (!s || s.officeId !== officeId) return { ok: true };
@@ -978,7 +1134,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/jobs', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const b = body(z.object({ agentId: z.string(), prompt: z.string().min(1), demandId: z.string().nullable().optional() }), req, reply);
       if (!b) return;
       const { officeId } = req.params as any;
@@ -997,9 +1153,9 @@ export async function api(app: FastifyInstance) {
       if (agent.slug === 'gerente') {
         // o gerente recebe o retrato do escritório para trabalhar com números reais
         const snapshot = {
-          clientes: all('SELECT id, name, monthly_fee, status FROM clients WHERE office_id = ?', officeId),
+          clientes: all(`SELECT id, name, ${seesFinance(officeId, req.user.id) ? 'monthly_fee, ' : ''}status FROM clients WHERE office_id = ?`, officeId),
           demandas: all('SELECT id, title, client_id, kind, status, priority, assignee, due_date, tracked_seconds FROM demands WHERE office_id = ?', officeId),
-          financeiro_90d: all("SELECT kind, category, amount, date, paid, client_id FROM transactions WHERE office_id = ? AND date >= date('now','-90 day')", officeId),
+          financeiro_90d: !seesFinance(officeId, req.user.id) ? 'sem acesso' : all("SELECT kind, category, amount, date, paid, client_id FROM transactions WHERE office_id = ? AND date >= date('now','-90 day')", officeId),
           funcionarios: all('SELECT id, name, role, status FROM agents WHERE office_id = ?', officeId),
           agenda_14d: all("SELECT title, start, kind FROM events WHERE office_id = ? AND start BETWEEN date('now') AND date('now','+14 day')", officeId),
         };
@@ -1011,7 +1167,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/jobs/:id/reply', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const b = body(z.object({ text: z.string().min(1), marks: z.array(mark).max(20).optional() }), req, reply);
       if (!b) return;
       if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
@@ -1020,7 +1176,7 @@ export async function api(app: FastifyInstance) {
         const demand = job?.demandId ? one<Demand>('SELECT * FROM demands WHERE id = ?', job.demandId) : undefined;
         const manual = demand ? manualEdits(demand) : [];
         if (demand?.clientId) grantDirs(demand.officeId, demand.clientId, `user:${req.user.id}`, b.text);
-        replyToJob((req.params as any).id, [b.text, marksText(b.marks ?? []), manual.length ? `O diretor de arte editou estes arquivos à mão; trabalhe em cima deles:\n${manual.map((f) => `- ${f}`).join('\n')}` : ''].filter(Boolean).join('\n\n'));
+        replyToJob((req.params as any).id, [b.text, marksText(b.marks ?? []), manual.length ? `O diretor de arte editou estes arquivos à mão; trabalhe em cima deles:\n${manual.map((f) => `- ${f}`).join('\n')}` : ''].filter(Boolean).join('\n\n'), b.text, `user:${req.user.id}`);
         return { ok: true };
       } catch (e) {
         return reply.code(409).send({ error: (e as Error).message });
@@ -1028,7 +1184,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/jobs/:id/cancel', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
       cancelJob((req.params as any).id);
       return { ok: true };
@@ -1046,7 +1202,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/timelines', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const b = body(z.object({ name: z.string().min(1), baseDir: z.string(), json: z.any(), demandId: z.string().nullable().optional() }), req, reply);
       if (!b) return;
       const { officeId } = req.params as any;
@@ -1057,7 +1213,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.put('/api/offices/:officeId/timelines/:id', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const b = body(z.object({ name: z.string().optional(), json: z.any(), baseDir: z.string().optional() }), req, reply);
       if (!b) return;
       if (!one('SELECT id FROM timelines WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId)) return reply.code(404).send({ error: 'Timeline não encontrada' });
@@ -1068,7 +1224,7 @@ export async function api(app: FastifyInstance) {
 
     // importa um timeline.json escrito por um funcionário de IA (ou pelo editor) para editar na UI
     r.post('/api/offices/:officeId/timelines/import', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const b = body(z.object({ path: z.string() }), req, reply);
       if (!b) return;
       const { officeId } = req.params as any;
@@ -1089,7 +1245,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/timelines/:id/render', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       try {
         return renderTimeline(officeId, id);
@@ -1099,7 +1255,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/timelines/:id/preview', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       try {
         return previewTimeline(officeId, id);
@@ -1118,7 +1274,7 @@ export async function api(app: FastifyInstance) {
 
     // legendas com o Whisper: em CPU leva por volta de duas vezes a duração da fala
     r.post('/api/offices/:officeId/timelines/:id/captions', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
       try {
         return await captionRow(officeId, id);
@@ -1128,7 +1284,7 @@ export async function api(app: FastifyInstance) {
     });
 
     r.post('/api/offices/:officeId/timelines/:id/export', async (req, reply) => {
-      if (!requireMember(req, reply)) return;
+      if (!requireWorker(req, reply)) return;
       const b = body(z.object({ format: z.enum(EXPORT_FORMATS) }), req, reply);
       if (!b) return;
       const { officeId, id } = req.params as any;

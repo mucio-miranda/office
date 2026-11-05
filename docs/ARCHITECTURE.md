@@ -132,3 +132,15 @@ Cada cliente tem uma sessão do Claude Code (`clients.session_id`), retomada com
 - Pastas citadas pelo dono entram em `clients.session_dirs` e valem até a próxima **Nova conversa**.
 - `total_cost_usd` é acumulado por sessão: o custo de cada rodada é a diferença (`turnCost`).
 - O bloco `Aprendizados:` vira um item na tabela `learnings`; aprovado, entra em `.claude/skills/INSIGHTS-PRODUCAO.md`.
+- **Mudança de skill** (`agents/curator.ts`): aprendizados aprovados vão para um curador (Claude Code só com Read, Glob e Grep) que devolve trocas exatas em JSON. `parseProposal` confere que cada trecho existe uma vez e fica em `.claude/skills`; o dono aplica em `skill_changes`, e o Office grava, faz o commit e, havendo remoto, o push. Se as skills mudarem durante uma tarefa, a conversa avisa (`skillsFingerprint`).
+- **Sessões** (`agents/sessions.ts`): lê `~/.claude/projects/<pasta do cliente>/*.jsonl` (só o começo, para o título, e o fim, para ler). Retomar põe o id em `clients.session_id`; vinda do terminal, `session_cost = -1` faz a primeira rodada virar a base do custo.
+- `job_messages.author` guarda quem escreveu. Demanda pelo mapa: `clientMessage` recebe `NewRequest` (quem faz, processo, prazo, prioridade); o funcionário escolhido fica em `demands.assignee` e faz as etapas de produção.
+
+## Calendário de conteúdo e servidor MCP do Office
+
+- Tabela `content_posts` (cliente, demanda, data, formato, tema, legenda, número, etapa, tunning, arquivos), regras em `agents/calendar.ts`: arte só passa de `conferencia` com `tunning` preenchido, e `approveDemand` recusa demanda com arte sem tunning.
+- Toda tarefa de cliente recebe o servidor MCP `office` (`agents/office-mcp.mjs`, JavaScript puro, empacotado como `office-mcp.mjs` no app): `calendario_listar` e `calendario_salvar`. Ele fala com `POST /api/agente/:tool`, só de 127.0.0.1, com um token por tarefa guardado na memória (`issueJobToken`), que só alcança o cliente da tarefa. O funcionário não dispensa o tunning; só uma pessoa, pela tela.
+
+## Papéis
+
+`office_members.role`: `dono`, `adm`, `membro`, `convidado`. `requireFinance` (dono e ADM) protege transações; métricas de dinheiro, mensalidades e a atividade do financeiro saem zeradas ou ocultas para os outros. `requireWorker` barra o convidado em toda escrita e em tudo que aciona a IA.

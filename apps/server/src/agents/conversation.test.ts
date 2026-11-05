@@ -6,6 +6,7 @@ import path from 'node:path';
 import { mentionedDirs } from './permissions.ts';
 import { pickRunnable, queueRank, turnCost, type QueueEntry } from './queue.ts';
 import { expandCommand, guessKind, listSkills, parseLearnings } from './skills.ts';
+import { listSessions, projectDirs, sessionFile, sessionTail } from './sessions.ts';
 
 const job = (id: string, clientId: string | null, lane: QueueEntry['lane'] = null, rank = 4): QueueEntry => ({ id, clientId, lane, rank });
 
@@ -66,7 +67,7 @@ test('aprendizados: lê o bloco do fim da resposta, com ou sem negrito', () => {
 
 test('caminho citado: acha pasta com espaço, arquivo vira a pasta dele, e raiz de disco não vale', () => {
   const dir = mkdtempSync(path.join(tmpdir(), 'office-cartao-'));
-  const pasta = path.join(dir, 'Videos Fernanda - 29.10');
+  const pasta = path.join(dir, 'Videos Maria - 29.10');
   mkdirSync(pasta);
   const arquivo = path.join(pasta, 'roteiro.pdf');
   writeFileSync(arquivo, 'x');
@@ -77,4 +78,29 @@ test('caminho citado: acha pasta com espaço, arquivo vira a pasta dele, e raiz 
   assert.deepEqual(mentionedDirs(`olha ${path.parse(dir).root}`), []);
   assert.deepEqual(mentionedDirs('nenhum caminho aqui'), []);
   rmSync(dir, { recursive: true, force: true });
+});
+
+test('sessões do terminal: acha a pasta do projeto, lê o primeiro pedido e só o fim de uma sessão longa', () => {
+  const root = mkdtempSync(path.join(tmpdir(), 'office-proj-'));
+  const cwd = path.join(root, 'CLIENTES', "LANCHES ZE'S");
+  const proj = path.join(root, 'projects', path.resolve(cwd).replace(/[^A-Za-z0-9]/g, '-').replace(/^./, (c) => c.toLowerCase()));
+  mkdirSync(proj, { recursive: true });
+  const id = '6ec0b3da-0000-4000-8000-000000000001';
+  const ev = (type: string, content: unknown, ts: string) => JSON.stringify({ type, timestamp: ts, message: { role: type, content } });
+  const lines = [
+    ev('user', '<system-reminder>ruído</system-reminder>', '2026-11-01T10:00:00Z'),
+    ev('user', 'edite os vídeos da lanchonete', '2026-11-01T10:01:00Z'),
+    ev('assistant', [{ type: 'tool_use', name: 'Bash', input: {} }], '2026-11-01T10:02:00Z'),
+    ev('assistant', [{ type: 'text', text: 'Pronto, o 01 está na pasta.' }], '2026-11-01T10:03:00Z'),
+  ];
+  writeFileSync(path.join(proj, `${id}.jsonl`), `${lines.join('\n')}\n`);
+  writeFileSync(path.join(proj, 'nao-e-sessao.jsonl'), '{}');
+  assert.equal(projectDirs(cwd, path.join(root, 'projects')).length, 1, 'letra do disco em minúscula também vale');
+  process.env.CLAUDE_PROJECTS_DIR = path.join(root, 'projects');
+  const s = listSessions(cwd);
+  assert.deepEqual(s.map((x) => [x.id, x.title]), [[id, 'edite os vídeos da lanchonete']]);
+  assert.deepEqual(sessionTail(sessionFile(cwd, id)!).map((l) => l.role + ':' + l.text), ['usuario:edite os vídeos da lanchonete', 'agente:Pronto, o 01 está na pasta.']);
+  assert.equal(sessionFile(cwd, '../../etc'), null, 'id fora do formato não vira caminho');
+  delete process.env.CLAUDE_PROJECTS_DIR;
+  rmSync(root, { recursive: true, force: true });
 });

@@ -1,3 +1,4 @@
+import { canSeeFinance } from '@office/shared';
 import { useEffect, useState } from 'react';
 import { Bot, FileText, Film, FolderInput, FolderPlus, Image, Music, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client } from '@office/shared';
@@ -78,7 +79,7 @@ function ClientDetail({ c }: { c: Client }) {
         <select value={c.status} onChange={(e) => patch({ status: e.target.value as Client['status'] })}>
           <option value="ativo">ativo</option><option value="pausado">pausado</option><option value="encerrado">encerrado</option>
         </select>
-        <span className="muted small">{brl(c.monthlyFee)}/mês</span>
+        {canSeeFinance(office?.role) && <span className="muted small">{brl(c.monthlyFee)}/mês</span>}
       </header>
 
       <div className="client-settings">
@@ -287,7 +288,7 @@ function NewClient({ onClose }: { onClose: (id?: string) => void }) {
         <div className="modal-body">
           <div className="grid2">
             <label>Nome<input autoFocus required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-            <label>Mensalidade (R$)<input type="number" min={0} value={f.monthlyFee} onChange={(e) => setF({ ...f, monthlyFee: e.target.value })} /></label>
+            {canSeeFinance(useStore.getState().office?.role) && <label>Mensalidade (R$)<input type="number" min={0} value={f.monthlyFee} onChange={(e) => setF({ ...f, monthlyFee: e.target.value })} /></label>}
           </div>
           <div className="col gap-s">
             <small className="muted">Pasta</small>

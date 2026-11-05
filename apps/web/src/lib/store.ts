@@ -1,3 +1,4 @@
+import { canSeeFinance, type ContentPost } from '@office/shared';
 import { create } from 'zustand';
 import type {
   AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, CustomRoom, DecorItem, Demand, JobMessage, LiveSession, Member, Office, Presence, RoomId, ServerMsg, ToolInfo, Transaction, User, Vec2, WallType,
@@ -23,6 +24,8 @@ interface State {
   demands: Demand[];
   events: CalendarEvent[];
   transactions: Transaction[];
+  /** Calendário de conteúdo de todos os clientes. */
+  posts: ContentPost[];
   clients: Client[];
   agents: AgentProfile[];
   jobs: AgentJob[];
@@ -50,6 +53,9 @@ interface State {
 
   panel: PanelId;
   panelArg: string | null;
+  /** Janela de demanda nova aberta pelo mapa, com o funcionário ou o cliente já escolhidos. */
+  newDemand: { agentId?: string | null; clientId?: string | null } | null;
+  askDemand(v: { agentId?: string | null; clientId?: string | null } | null): void;
   /** Destino de teletransporte pedido pela UI (atalhos, minimapa, paleta). */
   teleport: Vec2 | null;
   myRoom: RoomId | null;
@@ -67,7 +73,7 @@ interface State {
   logout(): void;
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
-  reload(what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls'): Promise<void>;
+  reload(what: 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls'): Promise<void>;
   loadTools(): Promise<void>;
   /** Liga ou desliga uma ferramenta de um funcionário. */
   toggleAgentTool(agentId: string, toolId: string, on: boolean): Promise<void>;
@@ -86,9 +92,9 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
-  demands: [], events: [], transactions: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, mapRev: 0,
+  demands: [], events: [], transactions: [], posts: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, mapRev: 0,
   presences: {}, chat: [], emotes: {},
-  panel: null, panelArg: null, teleport: null, myRoom: 'recepcao', toast: null,
+  panel: null, panelArg: null, newDemand: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
 
   async boot() {
@@ -125,7 +131,7 @@ export const useStore = create<State>((set, get) => ({
     const office = me.offices.find((o: OfficeWithRole) => o.id === id) ?? info.office;
     try { localStorage.setItem('office.last', id); } catch { /* ok */ }
     set({ office, offices: me.offices, members: info.members, presences: {}, chat: [], messages: {} });
-    await Promise.all((['demands', 'events', 'transactions', 'clients', 'agents', 'jobs', 'timelines', 'live', 'layout', 'rooms', 'walls'] as const).map((w) => get().reload(w)));
+    await Promise.all((['demands', 'events', 'transactions', 'posts', 'clients', 'agents', 'jobs', 'timelines', 'live', 'layout', 'rooms', 'walls'] as const).map((w) => get().reload(w)));
     connect(id);
   },
 
@@ -139,6 +145,7 @@ export const useStore = create<State>((set, get) => ({
   async reload(what) {
     const o = get().office;
     if (!o) return;
+    if (what === 'transactions' && !canSeeFinance(o.role)) return set({ transactions: [] } as Partial<State>);
     const data = await api(`/api/offices/${o.id}/${what}`);
     if (what === 'rooms' && JSON.stringify(data) !== JSON.stringify(get().rooms)) {
       setCustomRooms(data);
@@ -200,7 +207,12 @@ export const useStore = create<State>((set, get) => ({
     set((s) => ({ messages: { ...s.messages, [jobId]: msgs } }));
   },
 
+  askDemand(v) {
+    set({ newDemand: v });
+  },
+
   open(panel, arg = null) {
+    if (panel === 'financeiro' && !canSeeFinance(get().office?.role)) return get().notify('O financeiro é só do dono e do ADM.');
     set({ panel, panelArg: arg });
   },
 

@@ -185,7 +185,8 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
   }
   const proc = processById(d.process);
   const agentSlug = proc ? proc.agent : STAGE_AGENT[stage];
-  const agent = agentSlug ? agentForProcess(d.officeId, agentSlug) : undefined;
+  const picked = d.assignee?.startsWith('agent:') && stage !== 'briefing' ? one<AgentProfile>('SELECT * FROM agents WHERE id = ? AND office_id = ?', d.assignee.slice(6), d.officeId) : undefined;
+  const agent = picked ?? (agentSlug ? agentForProcess(d.officeId, agentSlug) : undefined);
   if (!agent) {
     patchDemand(d, { stage, auto: false });
     return `Nenhum funcionário de IA faz a etapa ${STAGE_LABEL[stage]}.`;
@@ -283,7 +284,10 @@ export function grantDirs(officeId: string, clientId: string, by: string, text: 
  * Mensagem na conversa do cliente, que serve para tudo: corrige o que está rodando, responde a uma decisão, continua o
  * cartão em aberto ou abre um pedido novo. Assim um pedido pequeno não vira um cartão a mais no quadro.
  */
-export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest = false): string | null {
+/** Demanda aberta pelo mapa ou pelo quadro: quem faz, o processo, o prazo e a prioridade vêm junto com o pedido. */
+export interface NewRequest { title?: string; dueDate?: string | null; priority?: Demand['priority']; process?: string | null; agentId?: string | null }
+
+export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest: boolean | NewRequest = false): string | null {
   const client = getClient(clientId);
   if (!client) return 'Cliente não encontrado.';
   const office = getOffice(officeId);
@@ -294,8 +298,8 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
     if (!newRequest) {
       const active = jobs.find((j) => ['fila', 'rodando', 'aguardando'].includes(j.status));
       if (active) {
-        if (active.status === 'aguardando') replyToJob(active.id, text, raw);
-        else interruptJob(active.id, text, raw);
+        if (active.status === 'aguardando') replyToJob(active.id, text, raw, by);
+        else interruptJob(active.id, text, raw, by);
         return null;
       }
       const open = jobs.find((j) => {
@@ -305,23 +309,38 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
       if (open) {
         const d = getDemand(open.demandId!)!;
         patchDemand(d, { stage: open.stage, status: 'em_producao', auto: true });
-        replyToJob(open.id, text, raw);
+        replyToJob(open.id, text, raw, by);
         return null;
       }
     }
   } catch (e) {
     return (e as Error).message;
   }
-  const kind = guessKind(raw) as DemandKind;
+  const opts: NewRequest = typeof newRequest === 'object' ? newRequest : {};
+  const proc = processById(opts.process);
+  const kind = (proc?.kind ?? guessKind(raw)) as DemandKind;
+  const chosen = opts.agentId && one('SELECT id FROM agents WHERE id = ? AND office_id = ?', opts.agentId, officeId) ? `agent:${opts.agentId}` : null;
   const d: Demand = {
-    id: uid(), officeId, clientId, title: raw.trim().split(/\r?\n/)[0].slice(0, 80), description: text,
-    kind, status: 'a_fazer', priority: 'media', assignee: null, dueDate: null, trackedSeconds: 0, timerStartedAt: null,
-    position: Date.now(), createdAt: now(), updatedAt: now(), pipeline: defaultPipeline(kind), stage: null, auto: true, stageLog: [], reviewRounds: 0, publish: null,
-  };
+    id: uid(), officeId, clientId, title: (opts.title?.trim() || raw.trim().split(/\r?\n/)[0]).slice(0, 80), description: text,
+    kind, status: 'a_fazer', priority: opts.priority ?? 'media', assignee: chosen, dueDate: opts.dueDate ?? null, trackedSeconds: 0, timerStartedAt: null,
+    position: Date.now(), createdAt: now(), updatedAt: now(), pipeline: proc ? processPipeline(proc) : defaultPipeline(kind), stage: null, auto: true, stageLog: [], reviewRounds: 0, publish: null,
+    process: proc?.id ?? null,
+  } as Demand;
   insert('demands', d as never);
   invalidate(officeId, 'demands');
   logActivity(officeId, by, 'pediu', d.title);
   return runStage(d, d.pipeline[0], by);
+}
+
+/**
+ * Continua uma sessão anterior do cliente, do Office ou do terminal: a próxima mensagem retoma ela. Sem custo
+ * conhecido (veio do terminal), a primeira rodada só serve de base para as seguintes.
+ */
+export function resumeSession(clientId: string, sessionId: string): string | null {
+  if (all('SELECT id FROM jobs WHERE client_id = ? AND status IN (\'fila\', \'rodando\', \'aguardando\')', clientId).length) return 'Um funcionário ainda está nesta conversa. Espere ele terminar ou pare a tarefa.';
+  const last = one<AgentJob>('SELECT session_cost FROM jobs WHERE client_id = ? AND session_id = ? ORDER BY updated_at DESC LIMIT 1', clientId, sessionId);
+  update('clients', clientId, { sessionId, sessionCost: last ? last.sessionCost ?? 0 : -1 });
+  return null;
 }
 
 /** Nova conversa: o próximo pedido começa do zero. O histórico fica nas tarefas antigas. */
@@ -364,6 +383,10 @@ export function approveDemand(demandId: string, by: string) {
   if (d.stage !== 'aprovacao' || d.status !== 'aprovacao') return 'Esta demanda não está esperando aprovação.';
   if (all<AgentJob>("SELECT id FROM jobs WHERE demand_id = ? AND status IN ('fila','rodando','aguardando')", d.id).length)
     return 'A revisão ainda está em andamento. Espere ela terminar.';
+  // o tunning é parte do design: arte do calendário desta demanda sem tunning (nem dispensa) não é aprovada
+  const untuned = all<{ theme: string; format: string; tunning: string | null }>("SELECT theme, format, tunning FROM content_posts WHERE demand_id = ? AND status != 'cancelado'", d.id)
+    .filter((p) => p.format !== 'reels' && !p.tunning);
+  if (untuned.length) return `Falta o tunning de ${untuned.length} peça(s): ${untuned.slice(0, 3).map((p) => p.theme).join(', ')}${untuned.length > 3 ? '…' : ''}. Faça o tunning ou marque no calendário que fica sem.`;
   const fresh = addLog(d, { stage: 'aprovacao', by, jobId: null, text: 'Aprovado.', result: 'aprovado' });
   return runStage(fresh, nextAfter(fresh, 'aprovacao') ?? 'agendado', by);
 }

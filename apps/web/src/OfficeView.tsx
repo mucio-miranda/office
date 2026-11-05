@@ -1,8 +1,11 @@
+import { NewDemand } from './panels/NewDemand';
+import { canSeeFinance } from '@office/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Grid2x2,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
+  Plus,
 } from 'lucide-react';
 import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
@@ -100,6 +103,7 @@ export function OfficeView() {
               <span className="live-dot" /> Escritório ao vivo
             </button>
           )}
+          <button className="small" onClick={() => useStore.getState().askDemand({})} title="Abrir uma demanda e já começar a sessão do cliente"><Plus size={14} /> Nova demanda</button>
           <button className="ghost small" onClick={() => setPalette(true)}><Search size={14} /> Buscar <kbd>Ctrl K</kbd></button>
         </header>
         <div className="world-page">
@@ -125,6 +129,7 @@ export function OfficeView() {
         </div>
       </main>
       {palette && <Palette onClose={() => setPalette(false)} />}
+      <NewDemandHost />
       {toast && <ToastView />}
     </div>
   );
@@ -183,7 +188,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
           <button className="nav-item" onClick={onSearch}><Search size={16} /> Buscar <kbd>Ctrl K</kbd></button>
         </nav>
         <nav className="nav">
-          {NAV.map((n) => (
+          {NAV.filter((n) => n.id !== 'financeiro' || canSeeFinance(office?.role)).map((n) => (
             <button key={n.label} className={`nav-item ${panel === n.id ? 'active' : ''}`} onClick={() => go(n.id)}>
               <n.icon size={16} /> {n.label}
               {n.id === 'demandas' && openCount > 0 && <span className="count">{openCount}</span>}
@@ -404,7 +409,7 @@ function Palette({ onClose }: { onClose: () => void }) {
       ...agents.map((a) => ({ icon: Navigation, label: `Ir até ${a.name}`, hint: 'mesa', run: () => goToAgent(a) })),
       ...Object.values(presences).map((p) => ({ icon: Navigation, label: `Ir até ${p.name}`, hint: 'online', run: () => goToPerson(p) })),
       ...demands.filter((d) => d.status !== 'entregue').map((d) => ({ icon: KanbanSquare, label: d.title, hint: 'demanda', run: () => open('demandas', d.id) })),
-      ...clients.map((c) => ({ icon: Users, label: c.name, hint: 'cliente', run: () => open('financeiro', c.id) })),
+      ...clients.map((c) => ({ icon: Users, label: c.name, hint: 'cliente', run: () => open('clientes', c.id) })),
     ];
     const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     return all.filter((i) => norm(i.label).includes(norm(q))).slice(0, 12);
@@ -431,3 +436,8 @@ function Palette({ onClose }: { onClose: () => void }) {
   );
 }
 
+
+function NewDemandHost() {
+  const { newDemand, askDemand } = useStore();
+  return newDemand ? <NewDemand agentId={newDemand.agentId} clientId={newDemand.clientId} onClose={() => askDemand(null)} /> : null;
+}

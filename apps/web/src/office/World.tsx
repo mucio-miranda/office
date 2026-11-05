@@ -294,7 +294,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     for (const a of st.agents) {
       const desk = agentSeat(a);
       const d = Math.hypot(desk.x - player.x, desk.z - player.z);
-      if (d < 2.2 && (!best || d < best.d)) best = { d, key: `a:${a.id}`, n: { label: `Falar com ${a.name}`, action: () => st.open('agente', a.id) } };
+      if (d < 2.2 && (!best || d < best.d)) best = { d, key: `a:${a.id}`, n: { label: `Nova demanda com ${a.name}`, action: () => st.askDemand({ agentId: a.id }) } };
     }
     if ((best?.key ?? null) !== lastNear.current) {
       lastNear.current = best?.key ?? null;

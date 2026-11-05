@@ -121,6 +121,19 @@ const MIGRATIONS: string[] = [
    CREATE TABLE learnings (
      id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE, client_id TEXT, demand_id TEXT,
      agent_id TEXT NOT NULL, text TEXT NOT NULL, status TEXT NOT NULL DEFAULT 'pendente', created_at TEXT NOT NULL);`,
+  // v0.11: quem escreveu cada mensagem da conversa (o escritório é de mais de uma pessoa)
+  `ALTER TABLE job_messages ADD COLUMN author TEXT;
+   CREATE TABLE content_posts (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+     client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE, demand_id TEXT REFERENCES demands(id) ON DELETE SET NULL,
+     date TEXT NOT NULL, format TEXT NOT NULL, theme TEXT NOT NULL, caption TEXT NOT NULL DEFAULT '', notes TEXT NOT NULL DEFAULT '',
+     number INTEGER, status TEXT NOT NULL DEFAULT 'planejado', tunning TEXT, files TEXT NOT NULL DEFAULT '[]',
+     updated_at TEXT NOT NULL, updated_by TEXT);
+   CREATE INDEX content_posts_client ON content_posts(office_id, client_id, date);
+   CREATE TABLE skill_changes (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE, learning_ids TEXT NOT NULL,
+     status TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', edits TEXT NOT NULL DEFAULT '[]', error TEXT, commit_ref TEXT,
+     created_at TEXT NOT NULL, decided_by TEXT);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -163,7 +176,7 @@ const camel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
-const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls', 'session_dirs']);
+const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls', 'session_dirs', 'files', 'learning_ids', 'edits']);
 const BOOL_COLS = new Set(['paid', 'auto', 'must_change_pin']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {

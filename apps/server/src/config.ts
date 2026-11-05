@@ -17,6 +17,8 @@ export const config = {
   agentTemplatesDir: path.resolve(process.env.OFFICE_AGENTS_DIR ?? path.join(REPO_ROOT, 'agents')),
   webDist: path.resolve(process.env.OFFICE_WEB_DIST ?? path.join(REPO_ROOT, 'apps/web/dist')),
   claudeBin: resolveClaude(),
+  /** Servidor MCP `office` (calendário de conteúdo) que cada tarefa de cliente recebe. */
+  officeMcp: path.resolve(process.env.OFFICE_MCP ?? path.join(here, 'agents', 'office-mcp.mjs')),
   /** Comando que os funcionários usam para renderizar uma timeline (`<cmd> timeline.json saida.mp4`). */
   renderCmd: process.env.OFFICE_RENDER_CMD ?? `npx tsx "${path.join(REPO_ROOT, 'packages/video-engine/src/cli.ts')}"`,
   /** Quantos funcionários de IA podem trabalhar ao mesmo tempo. */

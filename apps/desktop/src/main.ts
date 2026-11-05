@@ -92,6 +92,7 @@ async function startServer() {
       OFFICE_WEB_DIST: path.join(RES, 'web'),
       OFFICE_AGENTS_DIR: path.join(RES, 'agents'),
       OFFICE_RENDER_CMD: 'office-render',
+      OFFICE_MCP: path.join(RES, 'office-mcp.mjs'),
       OFFICE_VERSION: app.getVersion(),
       PATH: `${binDir}${path.delimiter}${process.env.PATH ?? ''}`,
     },

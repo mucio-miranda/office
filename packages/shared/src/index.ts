@@ -40,7 +40,14 @@ export interface User {
   mustChangePin?: boolean;
 }
 
-export type OfficeRole = 'dono' | 'membro' | 'convidado';
+/**
+ * Papéis: o dono abre o escritório e cuida de pastas e contas; o ADM (CEO e comercial) também vê o financeiro;
+ * o membro pede trabalho aos funcionários de IA; o convidado só acompanha.
+ */
+export type OfficeRole = 'dono' | 'adm' | 'membro' | 'convidado';
+export const ROLE_LABEL: Record<OfficeRole, string> = { dono: 'dono', adm: 'ADM', membro: 'membro', convidado: 'convidado' };
+export const canSeeFinance = (role: OfficeRole | string | undefined) => role === 'dono' || role === 'adm';
+export const canWork = (role: OfficeRole | string | undefined) => !!role && role !== 'convidado';
 
 /** Pessoa do escritório, com a mesa que escolheu (id de um lugar da planta, ou null). */
 export interface Member extends User {
@@ -308,6 +315,41 @@ export interface Demand {
   publish: Publish | null;
 }
 
+/** Formatos do calendário de conteúdo. */
+export const POST_FORMATS = ['estatico', 'carrossel', 'reels', 'capa-reels', 'story'] as const;
+export type PostFormat = (typeof POST_FORMATS)[number];
+export const POST_FORMAT_LABEL: Record<PostFormat, string> = { estatico: 'estático', carrossel: 'carrossel', reels: 'reels', 'capa-reels': 'capa de reels', story: 'story' };
+/** Etapas de cada peça, na ordem do método da casa: referência, composição, tunning, conferência, aprovação e Drive. */
+export const POST_STATUSES = ['planejado', 'referencia', 'composicao', 'tunning', 'conferencia', 'aprovado', 'drive', 'postado', 'cancelado'] as const;
+export type PostStatus = (typeof POST_STATUSES)[number];
+export const POST_STATUS_LABEL: Record<PostStatus, string> = {
+  planejado: 'planejado', referencia: 'referência', composicao: 'composição', tunning: 'tunning', conferencia: 'conferência',
+  aprovado: 'aprovado', drive: 'no Drive', postado: 'postado', cancelado: 'cancelado',
+};
+/** Arte passa pelo tunning; o reels editado não. */
+export const needsTunning = (f: PostFormat) => f !== 'reels';
+
+/** Um post do calendário de conteúdo de um cliente, ligado à demanda que o produz. */
+export interface ContentPost {
+  id: ID;
+  officeId: ID;
+  clientId: ID;
+  demandId: ID | null;
+  date: string;
+  format: PostFormat;
+  theme: string;
+  caption: string;
+  notes: string;
+  /** Ordem de postagem no lote (o 01, 02… do nome dos arquivos). */
+  number: number | null;
+  status: PostStatus;
+  /** `feito` quando passou pelo tunning; `dispensado` quando alguém decidiu que fica sem. */
+  tunning: 'feito' | 'dispensado' | null;
+  files: string[];
+  updatedAt: string;
+  updatedBy: string | null;
+}
+
 export interface CalendarEvent {
   id: ID;
   officeId: ID;
@@ -406,8 +448,26 @@ export interface Learning {
   demandId: ID | null;
   agentId: ID;
   text: string;
-  status: 'pendente' | 'aprovado' | 'recusado';
+  /** `na-skill` depois que uma mudança aprovada pelo dono gravou o aprendizado nas skills. */
+  status: 'pendente' | 'aprovado' | 'recusado' | 'na-skill';
   createdAt: string;
+}
+
+/** Uma troca exata num arquivo das skills (caminho relativo a .claude/skills); `find` vazio acrescenta no fim. */
+export interface SkillEdit { file: string; find: string; replace: string }
+
+/** Proposta do curador para guardar aprendizados aprovados nas skills. Só vale depois que o dono aplica. */
+export interface SkillChange {
+  id: ID;
+  officeId: ID;
+  learningIds: ID[];
+  status: 'gerando' | 'pronta' | 'aplicada' | 'recusada' | 'erro';
+  summary: string;
+  edits: SkillEdit[];
+  error: string | null;
+  commitRef: string | null;
+  createdAt: string;
+  decidedBy: string | null;
 }
 
 export interface AgentJob {
@@ -438,7 +498,22 @@ export interface JobMessage {
   jobId: ID;
   role: 'usuario' | 'agente' | 'ferramenta' | 'sistema';
   text: string;
+  /** Nome de quem escreveu, nas mensagens de pessoas. */
+  author?: string | null;
   createdAt: string;
+}
+
+/** Uma sessão do Claude Code na pasta do cliente: aberta pelo Office ou no terminal. */
+export interface ClientSession {
+  id: string;
+  title: string;
+  startedAt: string;
+  updatedAt: string;
+  sizeMb: number;
+  origin: 'office' | 'terminal';
+  current: boolean;
+  costUsd: number;
+  people: string[];
 }
 
 /** Marcador que o agente escreve quando para num checkpoint e precisa de aprovação humana. */
@@ -498,7 +573,7 @@ export type ServerMsg =
   | { t: 'chat'; from: ID; name: string; text: string; room: RoomId | null; at: string }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
+  | { t: 'invalidate'; what: 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
   /** Aviso para todo mundo do escritório (ex.: peça esperando aprovação). */
   | { t: 'notice'; text: string; demandId?: ID; agentId?: ID }
   | { t: 'job'; job: AgentJob }

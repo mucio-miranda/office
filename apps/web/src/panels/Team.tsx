@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { MAX_CUSTOM_ROOMS, WALL_TYPES, type AgentProfile, type Member, type WallType } from '@office/shared';
+import { MAX_CUSTOM_ROOMS, ROLE_LABEL, WALL_TYPES, type AgentProfile, type Member, type WallType } from '@office/shared';
 import { AvatarEditor } from './AvatarEditor';
 import { DESKS, findDeskSpot } from '../office/layout';
 import { WALL_LABEL, applyWall, wallsOfRoom } from '../office/decor/walls';
@@ -114,7 +114,15 @@ export function Team() {
           <div key={m.id} className="member">
             <span className="avatar" style={{ background: m.color }}>{m.name[0]}</span>
             <b>{m.name}</b>
-            <span className="badge">{m.role}</span>
+            {isOwner && m.role !== 'dono' ? (
+              <select className="small" value={m.role} aria-label={`Papel de ${m.name}`} title="ADM vê o financeiro; membro pede trabalho à IA; convidado só acompanha"
+                onChange={(e) => { const role = e.target.value; act(async () => {
+                  await api(`/api/offices/${office!.id}/members/${m.id}/papel`, { method: 'PUT', body: { role } });
+                  await useStore.getState().reload('members');
+                })(); }}>
+                <option value="adm">ADM (CEO, comercial)</option><option value="membro">membro</option><option value="convidado">convidado</option>
+              </select>
+            ) : <span className="badge">{ROLE_LABEL[m.role] ?? m.role}</span>}
             <span className="muted small">{deskLabel(m.desk)}</span>
             <span className={`row gap small ${online.has(m.id) ? 'st-concluido' : 'st-livre'}`}><span className="status-dot" />{online.has(m.id) ? 'online' : 'offline'}</span>
             {(isOwner || m.id === user!.id) && <button className="icon" title="Mudar nome e aparência" onClick={() => setEditing(m)}><Palette size={14} /></button>}

@@ -1,3 +1,5 @@
+import { changedSkillFiles, skillsFingerprint } from './curator.ts';
+import { randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
@@ -27,6 +29,18 @@ const running = new Map<string, ChildProcess | null>();
 const queue: { jobId: string; input: string; resume: boolean }[] = [];
 /** Mensagem que interrompeu o trabalho: entra assim que o processo fechar. */
 const interrupts = new Map<string, string>();
+/** Token de cada tarefa rodando: o servidor MCP `office` só alcança o cliente dela. Vive na memória e some ao fim. */
+const jobTokens = new Map<string, string>();
+export function issueJobToken(jobId: string) {
+  const token = randomBytes(24).toString('hex');
+  jobTokens.set(jobId, token);
+  return token;
+}
+export const jobForToken = (token: string | undefined) => {
+  if (!token) return undefined;
+  for (const [jobId, t] of jobTokens) if (t === token) return one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId);
+  return undefined;
+};
 
 const RENDER_CMD = config.renderCmd;
 
@@ -46,8 +60,15 @@ function systemPrompt(agent: AgentProfile, office: Office, toolHints: string[]) 
   return `${named}${fill(agent.persona)}\n\n${fill(houseRules())}\n\nSua função é só um rótulo do tipo de trabalho: todas as skills de \`.claude/skills\` são suas, e você combina as que o pedido precisar.${tools}`;
 }
 
-function addMessage(jobId: string, officeId: string, role: JobMessage['role'], text: string) {
-  const message: JobMessage = { id: uid(), jobId, role, text, createdAt: now() };
+/** `user:<id>` vira o nome da pessoa; funcionário e sistema ficam sem nome. */
+export function authorName(by: string | undefined) {
+  const id = by?.replace(/^user:/, '');
+  if (!id || id.startsWith('agent:')) return null;
+  return one<{ name: string }>('SELECT name FROM users WHERE id = ?', id)?.name ?? null;
+}
+
+function addMessage(jobId: string, officeId: string, role: JobMessage['role'], text: string, author: string | null = null) {
+  const message: JobMessage = { id: uid(), jobId, role, text, author, createdAt: now() };
   insert('job_messages', message as never);
   broadcast(officeId, { t: 'jobMessage', message });
 }
@@ -88,7 +109,7 @@ export function enqueueJob(params: { officeId: string; agentId: string; demandId
     createdBy: params.createdBy, createdAt: now(), updatedAt: now(),
   };
   insert('jobs', job as never);
-  addMessage(job.id, job.officeId, 'usuario', params.display ?? params.prompt);
+  addMessage(job.id, job.officeId, 'usuario', params.display ?? params.prompt, authorName(params.createdBy));
   broadcast(job.officeId, { t: 'job', job });
   queue.push({ jobId: job.id, input: params.prompt, resume: false });
   pump();
@@ -96,11 +117,11 @@ export function enqueueJob(params: { officeId: string; agentId: string; demandId
 }
 
 /** Resposta humana a um checkpoint: continua a mesma sessão do Claude Code. */
-export function replyToJob(jobId: string, text: string, display?: string) {
+export function replyToJob(jobId: string, text: string, display?: string, by?: string) {
   const job = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId);
   if (!job) throw new Error('Tarefa não encontrada');
   if (running.has(jobId)) throw new Error('O funcionário ainda está trabalhando nesta tarefa.');
-  addMessage(jobId, job.officeId, 'usuario', display ?? text);
+  addMessage(jobId, job.officeId, 'usuario', display ?? text, authorName(by));
   setJob(jobId, { status: 'fila' });
   queue.push({ jobId, input: text, resume: !!job.sessionId });
   pump();
@@ -113,19 +134,19 @@ function killTree(child: ChildProcess) {
 }
 
 /** Correção no meio do trabalho: para o que está rodando e continua a mesma conversa com a mensagem, como Esc no terminal. */
-export function interruptJob(jobId: string, text: string, display?: string) {
+export function interruptJob(jobId: string, text: string, display?: string, by?: string) {
   const job = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId);
   if (!job) throw new Error('Tarefa não encontrada');
   const waiting = queue.find((q) => q.jobId === jobId);
   if (waiting) {
-    addMessage(jobId, job.officeId, 'usuario', display ?? text);
+    addMessage(jobId, job.officeId, 'usuario', display ?? text, authorName(by));
     waiting.input += `\n\n${text}`;
     return;
   }
-  if (!running.has(jobId)) return replyToJob(jobId, text, display);
+  if (!running.has(jobId)) return replyToJob(jobId, text, display, by);
   const child = running.get(jobId);
   if (!child) throw new Error('O funcionário ainda está abrindo as ferramentas. Tente de novo em alguns segundos.');
-  addMessage(jobId, job.officeId, 'usuario', display ?? text);
+  addMessage(jobId, job.officeId, 'usuario', display ?? text, authorName(by));
   interrupts.set(jobId, interrupts.has(jobId) ? `${interrupts.get(jobId)}\n\n${text}` : text);
   killTree(child);
 }
@@ -199,6 +220,15 @@ async function start(jobId: string, typed: string, resume: boolean) {
   }
   // ferramentas criativas instaladas: um servidor MCP por ferramenta, com as pastas do escritório
   const mcp = mcpConfig(isProcess ? [] : agent.mcp ?? [], office, bridges);
+  // calendário de conteúdo: toda tarefa de cliente pode ler e atualizar o dele
+  if (job.clientId && !reviewer && existsSync(config.officeMcp)) {
+    const token = issueJobToken(jobId);
+    mcp.servers.office = {
+      command: process.execPath, args: [config.officeMcp],
+      env: { ELECTRON_RUN_AS_NODE: '1', OFFICE_API: `http://127.0.0.1:${config.port}`, OFFICE_JOB_TOKEN: token },
+    };
+    mcp.hints.push('- **Office** (servidor MCP `office`): o calendário de conteúdo do cliente. Use `calendario_listar` antes de planejar ou produzir. Quando o calendário do mês for definido, registre cada post com `calendario_salvar` (data, formato, tema, número). Durante a produção, mova cada peça de etapa: referencia > composicao > tunning > conferencia > aprovado > drive > postado, com os caminhos das peças finais em `files`. O tunning é parte do design: arte só passa de conferência com `tunning: "feito"`. Só uma pessoa dispensa o tunning, pela tela: se alguém pedir sem tunning, avise que precisa ser marcado no calendário.');
+  }
   const mcpIds = Object.keys(mcp.servers);
   const sysFile = path.join(dir, 'system.md');
   writeFileSync(sysFile, systemPrompt(agent, office, mcp.hints), 'utf8');
@@ -227,6 +257,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   if (!reviewer && agent.allowedTools.includes('mcp__claude-in-chrome')) args.push('--chrome', '--add-dir', path.join(homedir(), 'Downloads'));
   if (session) args.push('--resume', session);
 
+  const skillsBefore = reviewer ? null : skillsFingerprint(office);
   setJob(jobId, { status: 'rodando', turnStartedAt: now() });
   setAgentStatus(agent.id, office.id, 'trabalhando');
   logActivity(office.id, `agent:${agent.slug}`, resume ? 'retomou' : 'começou', job.prompt.slice(0, 120));
@@ -276,7 +307,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
         isError = !!ev.is_error;
         const prev = one<AgentJob>('SELECT cost_usd FROM jobs WHERE id = ?', jobId);
         const reported = Number(ev.total_cost_usd ?? 0);
-        const spent = turnCost(reported, sessionTotal);
+        // sessão vinda do terminal (total anterior desconhecido, marcado como -1): a primeira rodada só vira a base
+        const spent = sessionTotal < 0 ? 0 : turnCost(reported, sessionTotal);
         sessionTotal = reported;
         setJob(jobId, { costUsd: (prev?.costUsd ?? 0) + spent, sessionCost: reported, sessionId: ev.session_id ?? undefined });
         if (ev.session_id) saveSession(ev.session_id);
@@ -288,6 +320,15 @@ async function start(jobId: string, typed: string, resume: boolean) {
 
   child.on('close', (code) => {
     running.delete(jobId);
+    jobTokens.delete(jobId);
+    const skillsAfter = skillsBefore ? skillsFingerprint(office) : null;
+    const touched = skillsBefore && skillsAfter ? changedSkillFiles(skillsBefore, skillsAfter) : [];
+    if (touched.length || (skillsBefore && skillsAfter && skillsBefore.split('\n')[0] !== skillsAfter.split('\n')[0])) {
+      const text = `As skills mudaram enquanto ${agent.name} trabalhava${touched.length ? `: ${touched.slice(0, 6).join(', ')}` : ' (commit novo)'}. Se não foi alguém no terminal, confira: pelo Office, skill só muda por Mesa > Aprendizados.`;
+      addMessage(jobId, office.id, 'sistema', text);
+      broadcast(office.id, { t: 'notice', text, agentId: agent.id });
+      logActivity(office.id, `agent:${agent.slug}`, 'skills mudaram durante a tarefa', touched.join(', ').slice(0, 200));
+    }
     releaseLiveForJob(jobId);
     const current = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId)!;
     if (current.status === 'cancelado') { interrupts.delete(jobId); pump(); return; }
