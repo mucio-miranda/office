@@ -1,5 +1,6 @@
-import { Box, Building2, Grid2x2, Moon, Sun } from 'lucide-react';
-import { useTheme, useWorldStyle } from './theme';
+import { useEffect, useRef, useState } from 'react';
+import { Building2, Check, Palette } from 'lucide-react';
+import { THEMES, useTheme } from './theme';
 
 export function Brand() {
   return (
@@ -10,21 +11,34 @@ export function Brand() {
   );
 }
 
-export function ThemeToggle() {
-  const { theme, toggle } = useTheme();
+/** Temas da interface: claro, escuro, ultradark e vidro. */
+export function ThemeToggle({ up = true }: { up?: boolean }) {
+  const { theme, set } = useTheme();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [open]);
   return (
-    <button className="icon" onClick={toggle} title={theme === 'dark' ? 'Tema claro' : 'Tema escuro'} aria-label="Alternar tema">
-      {theme === 'dark' ? <Sun size={16} /> : <Moon size={16} />}
-    </button>
-  );
-}
-
-/** Alterna o mundo entre pixel art e a maquete minimalista. */
-export function WorldStyleToggle() {
-  const { style, toggle } = useWorldStyle();
-  return (
-    <button className="icon" onClick={toggle} title={style === 'pixel' ? 'Mundo em maquete' : 'Mundo em pixel art'} aria-label="Alternar estilo do mundo">
-      {style === 'pixel' ? <Box size={16} /> : <Grid2x2 size={16} />}
-    </button>
+    <div className="theme-menu" ref={ref}>
+      <button className="icon" onClick={() => setOpen(!open)} title="Temas" aria-label="Temas" aria-expanded={open}><Palette size={16} /></button>
+      {open && (
+        <div className={`theme-pop ${up ? 'up' : 'down'}`} role="menu">
+          <small className="muted">Temas</small>
+          {THEMES.map((x) => (
+            <button key={x.id} role="menuitemradio" aria-checked={theme === x.id} className={theme === x.id ? 'on' : ''} onClick={() => { set(x.id); setOpen(false); }} title={x.hint}>
+              <span className={`theme-swatch ${x.id}`} />
+              <span className="col"><span>{x.label}</span><span className="muted small">{x.hint}</span></span>
+              {theme === x.id && <Check size={14} />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

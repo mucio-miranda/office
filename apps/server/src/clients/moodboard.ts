@@ -14,8 +14,43 @@ interface IndexRef {
 }
 
 const NICHE_LABEL: Record<string, string> = { 'saude-estetica': 'Saúde e estética', juridico: 'Jurídico', imobiliario: 'Imobiliário', comida: 'Comida' };
-/** Título de cada nicho, para o moodboard ter o clima dele mesmo sem marca definida. */
-const NICHE_FONT: Record<string, string> = { 'saude-estetica': 'Playfair Display', juridico: 'Cormorant Garamond', imobiliario: 'Urbanist', comida: 'Fraunces' };
+/**
+ * Tipografia de cada nicho (Google Fonts, abertas), para o moodboard ter o clima dele mesmo sem marca definida.
+ * Ordem: a escolhida pela equipe (indice.json > nichos), a da tabela, a que combina com o nome do nicho e, por fim,
+ * uma da lista fixa pelo nome, para dois nichos novos não saírem iguais.
+ */
+export const NICHE_FONTS: Record<string, { title: string; body: string }> = {
+  'saude-estetica': { title: 'Playfair Display', body: 'Lato' },
+  juridico: { title: 'Cormorant Garamond', body: 'Source Sans 3' },
+  imobiliario: { title: 'Urbanist', body: 'Inter' },
+  comida: { title: 'Fraunces', body: 'Nunito Sans' },
+  'saas-ia': { title: 'Space Grotesk', body: 'Inter' },
+  'unhas-beleza': { title: 'Bodoni Moda', body: 'Jost' },
+  'founder-tech': { title: 'Sora', body: 'Inter' },
+  psicologia: { title: 'Lora', body: 'Nunito' },
+  'propostas-comerciais': { title: 'Manrope', body: 'Manrope' },
+  sites: { title: 'Syne', body: 'DM Sans' },
+  eventos: { title: 'Bebas Neue', body: 'Barlow' },
+};
+const BY_WORD: [RegExp, { title: string; body: string }][] = [
+  [/tech|ia\b|saas|startup|software|app/, NICHE_FONTS['saas-ia']],
+  [/beleza|unha|moda|estetic|cabel|make/, NICHE_FONTS['unhas-beleza']],
+  [/comida|food|restaur|doce|bolo|bar\b|cafe/, NICHE_FONTS.comida],
+  [/advoc|jurid|direito/, NICHE_FONTS.juridico],
+  [/imov|imobil|arquit|constru|interior/, NICHE_FONTS.imobiliario],
+  [/saude|clinic|odont|medic|dent/, NICHE_FONTS['saude-estetica']],
+  [/psic|terap|bem-estar|coach/, NICHE_FONTS.psicologia],
+  [/evento|show|festa|music/, NICHE_FONTS.eventos],
+  [/fitness|academia|esporte|treino/, { title: 'Oswald', body: 'Roboto' }],
+  [/educa|curso|escola|mentor/, { title: 'Merriweather', body: 'Open Sans' }],
+];
+const POOL = ['DM Serif Display', 'Archivo Black', 'Libre Baskerville', 'Outfit', 'Abril Fatface', 'Plus Jakarta Sans', 'Instrument Serif', 'Unbounded'];
+export function nicheFont(niche: string, chosen?: { titulo?: string; texto?: string } | null) {
+  const known = NICHE_FONTS[niche] ?? BY_WORD.find(([re]) => re.test(niche))?.[1];
+  const pooled = POOL[[...niche].reduce((n, c) => (n * 31 + c.charCodeAt(0)) >>> 0, 7) % POOL.length];
+  const base = known ?? { title: pooled, body: 'Inter' };
+  return { title: chosen?.titulo || base.title, body: chosen?.texto || base.body };
+}
 const nicheLabel = (id: string) => NICHE_LABEL[id] ?? id.replace(/-/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 const IMAGE = /\.(png|jpe?g|webp)$/i;
@@ -51,16 +86,17 @@ export function themeFrom(colors: string[], dark: boolean, font: string | null):
 
 // ---------------------------------------------------------------- biblioteca por nicho
 
-function libraryOf(office: Office): IndexRef[] {
+function indexOf(office: Office): { refs: IndexRef[]; nichos: Record<string, { titulo?: string; texto?: string }> } {
   const file = path.join(office.rootPath, 'REFERENCIAS', 'indice.json');
-  if (!existsSync(file)) return [];
+  if (!existsSync(file)) return { refs: [], nichos: {} };
   try {
-    const refs = JSON.parse(readFileSync(file, 'utf8').replace(/^﻿/, '')).refs;
-    return Array.isArray(refs) ? refs : [];
+    const ind = JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
+    return { refs: Array.isArray(ind.refs) ? ind.refs : [], nichos: ind.nichos && typeof ind.nichos === 'object' ? ind.nichos : {} };
   } catch {
-    return [];
+    return { refs: [], nichos: {} };
   }
 }
+const libraryOf = (office: Office) => indexOf(office).refs;
 
 const refFile = (office: Office, r: IndexRef) => path.join(office.rootPath, 'REFERENCIAS', ...String(r.arquivo).split(/[\\/]/));
 const score = (r: IndexRef) => r.nota ?? 0;
@@ -78,9 +114,10 @@ function nicheItems(office: Office, niche: string) {
     .sort((a, b) => score(b) - score(a) || a.id.localeCompare(b.id));
 }
 
-function nicheTheme(refs: IndexRef[], niche: string) {
+function nicheTheme(refs: IndexRef[], niche: string, office?: Office) {
   const dark = refs.filter((r) => r.tema === 'escuro').length >= refs.filter((r) => r.tema === 'claro').length;
-  return themeFrom(refs.flatMap((r) => r.paleta ?? []), dark, NICHE_FONT[niche] ?? 'Playfair Display');
+  const f = nicheFont(niche, office ? indexOf(office).nichos[niche] : null);
+  return { ...themeFrom(refs.flatMap((r) => r.paleta ?? []), dark, f.title), bodyFont: f.body };
 }
 
 // ---------------------------------------------------------------- por cliente
@@ -107,7 +144,7 @@ function clientRefs(dir: string | null) {
     let entries;
     try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
-      if (e.name.startsWith('.') || /_files$|^_trabalho$|^node_modules$/i.test(e.name)) continue;
+      if (e.name.startsWith('.') || /_files$|^_trabalho$|^_apagados$|^node_modules$/i.test(e.name)) continue;
       const full = path.join(abs, e.name);
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       // a pasta começa com o nome: "TESTE ARTE-REFERENCIA", por exemplo, é trabalho da skill, não referência
@@ -145,7 +182,7 @@ function clientTheme(office: Office, client: Client, marca: Marca | null, niche:
     const swatches = [c.escuro, c.claro, c.acento, c.acento2, c.neutro].filter(isHex);
     return { bg: c.escuro, fg: c.claro, accent: isHex(c.acento) ? c.acento : c.claro, swatches, titleFont: marca?.fontes?.titulo ?? null, bodyFont: marca?.fontes?.apoio ?? null };
   }
-  const base = nicheTheme(niche ? nicheItems(office, niche) : [], niche ?? '');
+  const base = nicheTheme(niche ? nicheItems(office, niche) : [], niche ?? '', office);
   return isHex(client.color) && Math.abs(lum(client.color) - lum(base.bg)) > 0.3 ? { ...base, accent: client.color } : base;
 }
 
@@ -156,7 +193,7 @@ export function moodboardList(office: Office, clients: Client[]): { niches: Mood
   const nicheIds = [...new Set(library.map((r) => r.segmento))].sort();
   const niches = nicheIds.map((id): MoodboardSummary => {
     const refs = nicheItems(office, id);
-    return { key: `nicho:${id}`, name: nicheLabel(id), count: refs.length, theme: nicheTheme(refs, id), covers: refs.slice(0, COVERS).map((r) => refFile(office, r)), niche: id };
+    return { key: `nicho:${id}`, name: nicheLabel(id), count: refs.length, theme: nicheTheme(refs, id, office), covers: refs.slice(0, COVERS).map((r) => refFile(office, r)), niche: id };
   });
   const list = clients.filter((c) => c.status !== 'encerrado').map((c): MoodboardSummary => {
     const dir = clientDir(office, c);
@@ -174,7 +211,7 @@ export function moodboardList(office: Office, clients: Client[]): { niches: Mood
 export function nicheBoard(office: Office, niche: string) {
   const refs = nicheItems(office, niche);
   if (!refs.length) return null;
-  return { key: `nicho:${niche}`, name: nicheLabel(niche), niche, folder: path.join(office.rootPath, 'REFERENCIAS', niche), theme: nicheTheme(refs, niche), handle: null, items: refs.map((r) => toItem(office, r)), nicheItems: [] as MoodboardItem[] };
+  return { key: `nicho:${niche}`, name: nicheLabel(niche), niche, folder: path.join(office.rootPath, 'REFERENCIAS', niche), theme: nicheTheme(refs, niche, office), handle: null, items: refs.map((r) => toItem(office, r)), nicheItems: [] as MoodboardItem[] };
 }
 
 export function clientBoard(office: Office, client: Client) {

@@ -293,6 +293,55 @@ export function wallpaperTexture(p: PixelPalette) {
   });
 }
 
+/**
+ * Acabamentos de parede em pixel art (32 px por metro; 1 m de largura por 2 m de altura por repetição).
+ * Cada um com textura própria, para não virarem blocos lisos de cor.
+ */
+export function wallFinishTexture(kind: string) {
+  return canvasTexture(`wallf:${kind}`, 32, 64, (g) => {
+    const r = rand(kind.length * 7 + 1);
+    const fill = (c: string, x = 0, y = 0, w = 32, h = 64) => { g.fillStyle = c; g.fillRect(x, y, w, h); };
+    const speck = (base: string, n: number, lo = 0.94, hi = 1.06) => {
+      for (let i = 0; i < n; i++) { g.fillStyle = shade(base, r() < 0.5 ? lo : hi); g.fillRect(Math.floor(r() * 32), Math.floor(r() * 64), 1, 1); }
+    };
+    if (kind === 'tijolo') {
+      fill('#e3d5c2');
+      for (let row = 0; row < 16; row++) {
+        const off = row % 2 ? 8 : 0;
+        for (let x = -8; x < 32; x += 16) {
+          const c = ['#a8533b', '#b25d42', '#9a4a34', '#b86a4d'][Math.floor(r() * 4)];
+          fill(c, x + off + 1, row * 4 + 1, 15, 3);
+          fill(shade(c, 1.15), x + off + 1, row * 4 + 1, 15, 1);
+        }
+      }
+    } else if (kind === 'azulejo') {
+      fill('#cfd6da');
+      for (let row = 0; row < 21; row++) {
+        const off = row % 2 ? 8 : 0;
+        for (let x = -8; x < 32; x += 16) { fill('#f4f7f8', x + off + 1, row * 3 + 1, 15, 2); fill('#ffffff', x + off + 1, row * 3 + 1, 15, 1); }
+      }
+    } else if (kind === 'madeira') {
+      for (let x = 0; x < 32; x += 4) {
+        const c = ['#a8754a', '#9c6b42', '#b07d50', '#94643d'][(x / 4) % 4];
+        fill(c, x, 0, 4, 64);
+        fill(shade(c, 0.62), x + 3, 0, 1, 64);
+        fill(shade(c, 1.12), x, 0, 1, 64);
+        for (let i = 0; i < 6; i++) fill(shade(c, 0.9), x + 1, Math.floor(r() * 64), 2, 1);
+      }
+    } else if (kind === 'concreto') {
+      fill('#a7a6a1');
+      speck('#a7a6a1', 220, 0.9, 1.08);
+      // juntas das fôrmas e os furos dos tirantes
+      fill('#96958f', 0, 31, 32, 1);
+      for (const [x, y] of [[8, 15], [24, 15], [8, 47], [24, 47]]) { fill('#6f6e69', x, y, 2, 2); fill('#bdbcb7', x, y + 2, 2, 1); }
+    } else {
+      const base = { reboco: '#ece6dc', branca: '#f3f3f1', preta: '#26272b', verde: '#9fb39a', terracota: '#c8714f' }[kind] ?? '#ece6dc';
+      fill(base);
+      speck(base, 140);
+    }
+  });
+}
+
 /** Folhagem: folhas miúdas em 3 tons com brilho, como as moitas dos quartos do Habbo (32 px). */
 export function leafTexture(light: string, dark: string, flowers?: string) {
   return canvasTexture(`leaf:${light}:${dark}:${flowers ?? ''}`, 32, 32, (g) => {

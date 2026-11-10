@@ -3,7 +3,7 @@ import { canSeeFinance } from '@office/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
-  LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Grid2x2,
+  LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
   Plus,
 } from 'lucide-react';
@@ -13,10 +13,11 @@ import { LabelLayer } from './office/Labels';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { HUMAN_DESKS, ROOMS, BOUNDS, agentSeat, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
-import { ThemeToggle, WorldStyleToggle } from './lib/ui';
+import { ThemeToggle } from './lib/ui';
 import { DecorUI, enterDecorate } from './office/decor/DecorUI';
 import { canDecorate, useDecor } from './office/decor/state';
-import { useWorldStyle } from './lib/theme';
+import { THEMES, useTheme } from './lib/theme';
+import { defaultWall, useWallTool } from './office/decor/walls';
 import { desktop } from './lib/desktop';
 
 type NavId = Exclude<PanelId, 'agente'>;
@@ -231,7 +232,6 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
           <option value="foco">Foco</option>
           <option value="ausente">Ausente</option>
         </select>
-        <WorldStyleToggle />
         <ThemeToggle />
       </div>
     </aside>
@@ -398,7 +398,8 @@ function Palette({ onClose }: { onClose: () => void }) {
       { icon: Armchair, label: 'Ir para minha mesa', hint: 'M', run: goToMyDesk },
       { icon: Compass, label: 'Tour do escritório', hint: 'ajuda', run: startTour },
       ...(canDecorate() ? [{ icon: Paintbrush, label: 'Decorar o escritório', hint: 'X', run: enterDecorate }] : []),
-      { icon: Grid2x2, label: useWorldStyle.getState().style === 'pixel' ? 'Mundo em maquete minimalista' : 'Mundo em pixel art', hint: 'visual', run: () => useWorldStyle.getState().toggle() },
+      ...(canDecorate() ? [{ icon: Paintbrush, label: 'Trocar as paredes (acabamento e padrão do escritório)', hint: 'paredes', run: () => { enterDecorate(); setTimeout(() => useWallTool.getState().setTool(defaultWall() === 'alvenaria' ? 'reboco' : defaultWall()), 50); } }] : []),
+      ...THEMES.map((t) => ({ icon: PaletteIcon, label: `Tema: ${t.label}`, hint: 'visual', run: () => useTheme.getState().set(t.id) })),
       ...(myDesk() ? [{ icon: Armchair, label: 'Liberar minha mesa', hint: 'mesa', run: () => { releaseMyDesk(); } }] : []),
       ...members.filter((m) => m.desk && m.id !== user?.id && !presences[m.id]).map((m) => {
         const d = HUMAN_DESKS.find((h) => h.id === m.desk)!;

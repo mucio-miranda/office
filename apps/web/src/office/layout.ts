@@ -238,7 +238,33 @@ const annexRect = (slot: number) => {
 
 let wallStyles: Record<string, WallType> = {};
 let agentDesks: Box[] = [];
-export const wallTypeOf = (key: string): WallType => wallStyles[key] ?? 'alvenaria';
+export const wallTypeOf = (key: string): WallType => styleOf(wallStyles, key);
+/**
+ * Acabamento de um trecho: a escolha dele; numa divisória entre salas, o padrão das divisórias; senão o padrão do
+ * escritório; senão a alvenaria.
+ */
+export const styleOf = (map: Record<string, WallType>, key: string): WallType =>
+  map[key] ?? (isDivider(key) ? map.divisorias : undefined) ?? map.padrao ?? 'alvenaria';
+
+/** Divisórias: trechos com uma sala de cada lado (as paredes externas do prédio ficam de fora). */
+const dividers = new Set<string>();
+let dividersOf: WallSeg[] | null = null;
+let dividersLen = -1;
+export function isDivider(key: string) {
+  if (dividersOf !== WALLS || dividersLen !== WALLS.length) {
+    dividers.clear();
+    for (const w of WALLS) {
+      const across = w.w > w.d;
+      const a = roomAt(across ? { x: w.x, z: w.z - 0.6 } : { x: w.x - 0.6, z: w.z });
+      const b = roomAt(across ? { x: w.x, z: w.z + 0.6 } : { x: w.x + 0.6, z: w.z });
+      if (a && b && a.id !== b.id) dividers.add(w.key);
+    }
+    dividersOf = WALLS;
+    dividersLen = WALLS.length;
+  }
+  return dividers.has(key);
+}
+export const dividerKeys = () => WALLS.filter((w) => isDivider(w.key)).map((w) => w.key);
 
 function rebuildSolids() {
   WALL_BOXES.length = 0;
@@ -283,6 +309,7 @@ export function setCustomRooms(list: CustomRoom[]) {
   const defs = [...MAIN.walls.map((d) => (d.a.x === MAIN.x1 && d.b.x === MAIN.x1 && d.a.z === BOUNDS.z0 ? { ...d, doors: eastDoors } : d)), ...extra];
   WALLS.length = 0;
   WALLS.push(...defs.flatMap(wallSegs));
+  dividersLen = -1;
   DOOR_ZONES.length = 0;
   DOOR_ZONES.push(...defs.flatMap(doorZones));
   const desks = list.flatMap((r): HumanDesk[] => {

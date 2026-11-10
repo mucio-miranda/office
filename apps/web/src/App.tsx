@@ -24,7 +24,7 @@ function Gate() {
   const user = useStore((s) => s.user);
   return (
     <div className="auth">
-      <div className="auth-theme"><ThemeToggle /></div>
+      <div className="auth-theme"><ThemeToggle up={false} /></div>
       <div className="auth-form">
         <div className="auth-inner">
           <div className="auth-brand"><Brand /></div>

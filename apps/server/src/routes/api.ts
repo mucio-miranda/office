@@ -29,6 +29,7 @@ import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/se
 import { resumeSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, resetConversation, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
+import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef, setNicheFont } from '../clients/references.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
@@ -417,7 +418,7 @@ export async function api(app: FastifyInstance) {
       if (!requireMember(req, reply)) return;
       const { officeId } = req.params as { officeId: string };
       if (membership(officeId, req.user.id)?.role === 'convidado') return reply.code(403).send({ error: 'Convidados não mudam as paredes.' });
-      const b = body(z.record(z.string().regex(/^-?[\d.]+:-?[\d.]+$/).max(24), z.enum(WALL_TYPES)).refine((m) => Object.keys(m).length <= 600, 'Paredes demais.'), req, reply);
+      const b = body(z.record(z.string().regex(/^(-?[\d.]+:-?[\d.]+|padrao|divisorias)$/).max(24), z.enum(WALL_TYPES)).refine((m) => Object.keys(m).length <= 600, 'Paredes demais.'), req, reply);
       if (!b) return;
       db.prepare('UPDATE offices SET walls = ? WHERE id = ?').run(JSON.stringify(b), officeId);
       invalidate(officeId, 'walls');
@@ -918,6 +919,54 @@ export async function api(app: FastifyInstance) {
       if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
       return clientBoard(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, c);
     });
+
+    // referências: adicionar (arquivo ou link) e remover (vai para _apagados, fora das pastas que as skills leem)
+    const refInput = z.object({ name: z.string().max(200).optional(), data: z.string().max(36_000_000).optional(), url: z.string().max(2000).optional(), obs: z.string().max(500).optional() })
+      .refine((b) => !!b.url || (!!b.data && !!b.name), 'Mande o arquivo ou o link.');
+    const imageOf = async (b: z.infer<typeof refInput>) => (b.url ? fetchImage(b.url) : { data: Buffer.from(b.data!, 'base64'), name: b.name! });
+    const refRoute = (fn: (req: FastifyRequest, office: Office) => Promise<unknown> | unknown) => async (req: FastifyRequest, reply: FastifyReply) => {
+      if (!requireWorker(req, reply)) return;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', (req.params as any).officeId)!;
+      try {
+        const out = await fn(req, office);
+        return out;
+      } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
+    };
+    const clientOf = (req: FastifyRequest) => {
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId);
+      if (!c) throw new Error('Cliente não encontrado');
+      return c;
+    };
+    r.post('/api/offices/:officeId/moodboards/nicho/:niche/referencias', { bodyLimit: 40 * 1024 * 1024 }, refRoute(async (req, office) => {
+      const b = refInput.parse(req.body);
+      const img = await imageOf(b);
+      const out = await addNicheRef(office, (req.params as any).niche, { ...img, origem: b.url || `Office (${req.user.name})`, obs: b.obs });
+      logActivity(office.id, `user:${req.user.id}`, `adicionou uma referência ao nicho ${(req.params as any).niche}`);
+      return out;
+    }));
+    r.post('/api/offices/:officeId/moodboards/nicho/:niche/referencias/:refId/remover', refRoute((req, office) => {
+      const out = removeNicheRef(office, (req.params as any).niche, (req.params as any).refId, req.user.name);
+      logActivity(office.id, `user:${req.user.id}`, `removeu uma referência do nicho ${(req.params as any).niche}`);
+      return out;
+    }));
+    r.put('/api/offices/:officeId/moodboards/nicho/:niche/fonte', refRoute((req, office) => {
+      const b = z.object({ titulo: z.string().max(40).nullable(), texto: z.string().max(40).nullable() }).parse(req.body);
+      setNicheFont(office, (req.params as any).niche, b);
+      return { ok: true };
+    }));
+    r.post('/api/offices/:officeId/clients/:id/referencias', { bodyLimit: 40 * 1024 * 1024 }, refRoute(async (req, office) => {
+      const c = clientOf(req);
+      const out = addClientRef(office, c, await imageOf(refInput.parse(req.body)));
+      logActivity(office.id, `user:${req.user.id}`, 'adicionou uma referência de', c.name);
+      return out;
+    }));
+    r.post('/api/offices/:officeId/clients/:id/referencias/remover', refRoute((req, office) => {
+      const c = clientOf(req);
+      const { file } = z.object({ file: z.string().min(3).max(1000) }).parse(req.body);
+      const out = removeClientRef(office, c, file, req.user.name);
+      logActivity(office.id, `user:${req.user.id}`, 'removeu uma referência de', c.name);
+      return out;
+    }));
 
     r.post('/api/offices/:officeId/clients/:id/briefing', async (req, reply) => {
       if (!requireWorker(req, reply)) return;

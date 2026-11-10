@@ -49,7 +49,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 ### 🗺️ Escritório 3D navegável
 - **Pixel art isométrica** (padrão), inspirada nos mundos de pixel do Habbo e do Gather: câmera 2:1, contorno escuro, sombreamento em 3 tons, andar aberto de 54 × 36 m (só a sala de reunião e a ilha de vídeo têm paredes; divisórias verdes e tapetes separam as outras áreas), piso de tacos, carpetes e ladrilhos por área, paredes com papel de parede e janelas, avatares em blocos que andam, sentam e digitam e etiquetas de nome em pílula. Tudo desenhado por código, sem assets de terceiros
 - **Modo Decorar** (<kbd>X</kbd> ou o botão Decorar), no espírito do catálogo de mobis do Habbo: dezenas de peças por categoria, inspiradas em escritórios de startup (madeira clara e vidro da Apple Park, cabines acústicas, armários coloridos e bicicletas do Google, arquibancada e neon do Nubank, horta e escada vermelha do iFood, cabanas, tijolinho e bar de cereais da Pixar) e no lado biofílico (árvores e jardins internos das Amazon Spheres: sofá orgânico curvo, banco com jardineira, divisória verde, plantas suspensas e quadro de musgo). A aba **Pisos** troca o piso de uma sala inteira: tábuas de carvalho ou nogueira, parquet, cimento queimado, porcelanato, granilite, ladrilho hidráulico, deck, grama, pedra, carpete em placas e xadrez, com prévia ao passar o mouse. Clique para selecionar, arraste para mover, <kbd>R</kbd> gira, troca de cor, duplicar, remover e desfazer (<kbd>Ctrl</kbd>+<kbd>Z</kbd>). A peça fica verde onde cabe e vermelha onde bloquearia uma porta, uma cadeira ou outro móvel; quadros, neons e revestimentos deslizam pelas paredes. A decoração é salva no servidor e aparece na hora para todo mundo do escritório
-- Ou a **maquete isométrica minimalista** (botão ao lado do tema ou `Ctrl+K` → "Mundo em maquete"), em tema claro e escuro, com as mesmas 7 salas: recepção, gerência, ilha de vídeo, estúdio de design, redação, sala de reunião e copa
+- Quatro temas de interface (botão de paleta no rodapé do menu ou `Ctrl+K` → "Tema"): **claro**, **escuro**, **ultradark** (preto puro) e **vidro** (glassmorphism). O mundo é sempre em pixel art; novas skins de mundo entram depois
 - **WASD** ou clique para andar (como no Habbo: um cursor quadrado marca o ladrilho sob o mouse e o avatar vai até ele reto ou na diagonal, contornando paredes e móveis), **Shift** para correr, **1–7** para teletransportar
 - **Ctrl+K**: vá para qualquer sala, painel, cliente, demanda ou funcionário
 - Minimapa clicável, chat geral ou da sala, status (🎧 foco, ⛔ ocupado, 💤 ausente) e emotes
@@ -444,7 +444,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Funcionários usando PhotoCraft, VectorCraft, FilmCraft e OfficeCLI via MCP
 - [x] Suíte Craft completa e modo ao vivo (a IA opera o app aberto, a equipe assiste e assume)
 - [x] Ilha de edição ao vivo, legendas com Whisper, prévia rápida e exportação para OTIO, Premiere, Shotcut e SRT
-- [x] Mundo em pixel art isométrica (com a maquete minimalista como opção)
+- [x] Mundo em pixel art isométrica
 - [x] Modo Decorar com catálogo de móveis, salvo para o escritório todo
 - [x] Visual detalhado em pixel art 1:1 (contorno na cor do material, assoalho e lambri de 32 px por metro, folhagem arredondada) e pisos por sala
 - [x] Cliente novo com briefing, esteira de demandas entre funcionários e aprovação configurável
@@ -457,6 +457,9 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [ ] Google Calendar, Notion e Trello
 - [x] Papéis com financeiro só do ADM, demanda pelo mapa, sessões do terminal no Office, calendário de conteúdo preenchido pelo agente e skills alteradas só pela Mesa
 - [x] Servidor MCP do Office (calendário de conteúdo)
+- [x] Paredes: 12 acabamentos com textura (reboco, tijolinho, concreto, azulejo, ripado, verde, terracota, vidro, fumê...), padrão do escritório e padrão próprio para as divisórias entre salas (ex.: tudo em vidro), em Decorar > Paredes ou Ctrl+K
+- [x] Temas da interface: claro, escuro, ultradark (preto puro) e vidro (glassmorphism); o mundo fica só em pixel art, à espera de novas skins
+- [x] Moodboards editáveis: buscar, adicionar (arquivo, link ou arrastando), remover para `_apagados` (fora do alcance das skills) e pedir novas ao agente; tipografia própria por nicho
 - [x] Skills de cada escritório no setup inicial (importação, histórico local e repositório próprio) e entrada sem ficar preso
 - [ ] Office como SaaS: servidor na nuvem, banco central, Drive pela API e o PC da agência como trabalhador
 

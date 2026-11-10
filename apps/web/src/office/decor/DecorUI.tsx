@@ -8,7 +8,7 @@ import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
 import { ROOMS } from '../layout';
-import { WALL_LABEL, WALL_OPTIONS, applyWall, saveWalls, useWallTool, wallsOfRoom } from './walls';
+import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, applyWall, defaultWall, dividerWall, saveWalls, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom } from './walls';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
 } from './state';
@@ -208,21 +208,38 @@ function TopBar() {
 }
 
 const WALL_SWATCH: Record<string, string> = {
-  alvenaria: 'linear-gradient(#e7dfd2, #cbbda7)', branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f',
+  alvenaria: 'linear-gradient(#e7dfd2 60%, #b9824e 60%)', reboco: '#ece6dc', branca: '#f3f3f1', preta: '#1f2023', verde: '#9fb39a', terracota: '#c8714f',
+  concreto: 'radial-gradient(circle at 30% 30%, #8f8e89 8%, transparent 9%), #a7a6a1', tijolo: 'repeating-linear-gradient(0deg, #e9dccb 0 1px, #a8533b 1px 6px)',
+  azulejo: 'repeating-linear-gradient(0deg, #d8dde0 0 1px, #f6f8f9 1px 6px)', madeira: 'repeating-linear-gradient(90deg, #7a5233 0 1px, #a8754a 1px 5px)',
   vidro: 'linear-gradient(135deg, #e4f6fb 40%, #a9d5e5)', 'vidro-fume': 'linear-gradient(135deg, #5b6c77 40%, #2b3338)', removida: 'repeating-linear-gradient(45deg, #fff 0 4px, #ff5c8a 4px 6px)',
 };
 
 /** Paredes: escolha um tipo e clique nas paredes, ou aplique na sala inteira. Parede removida deixa passar. */
 function WallToolButton() {
   const { tool, setTool } = useWallTool();
+  useStore((s) => s.walls);
   const [room, setRoom] = useState(ROOMS[0]?.id ?? '');
   useEffect(() => () => setTool(null), [setTool]);
   return (
     <>
-      <button className={`ghost small ${tool ? 'on' : ''}`} onClick={() => setTool(tool ? null : 'vidro')}>Paredes</button>
+      <button className={`ghost small ${tool ? 'on' : ''}`} onClick={() => setTool(tool ? null : defaultWall() === 'alvenaria' ? 'reboco' : defaultWall())}>Paredes</button>
       {tool && (
         <div className="wall-panel">
           <b>Paredes</b>
+          <label>Padrão do escritório
+            <select value={defaultWall()} onChange={(e) => setDefaultWall(e.target.value as typeof tool)}>
+              {WALL_FINISHES.map((t) => <option key={t} value={t}>{WALL_LABEL[t]}</option>)}
+            </select>
+          </label>
+          <label>Divisórias entre as salas
+            <select value={dividerWall() ?? ''} onChange={(e) => setDividerWall((e.target.value || null) as typeof tool)}>
+              <option value="">Igual ao padrão do escritório</option>
+              <option value="vidro">{WALL_LABEL.vidro}</option>
+              <option value="vidro-fume">{WALL_LABEL['vidro-fume']}</option>
+              {WALL_FINISHES.map((t) => <option key={t} value={t}>{WALL_LABEL[t]}</option>)}
+            </select>
+          </label>
+          <p className="muted small" style={{ margin: 0 }}>Os padrões valem para toda parede sem acabamento próprio, inclusive das salas novas. Para trocar uma parede só, escolha abaixo e clique nela.</p>
           <div className="wall-types">
             {WALL_OPTIONS.map((t) => (
               <button key={t} className={tool === t ? 'on' : ''} onClick={() => setTool(t)}><i style={{ background: WALL_SWATCH[t] }} />{WALL_LABEL[t]}</button>
@@ -234,7 +251,7 @@ function WallToolButton() {
           </label>
           <div className="row gap">
             <button className="primary small" onClick={() => applyWall(wallsOfRoom(room), tool)}>Aplicar na sala</button>
-            <button className="ghost small" onClick={() => { if (confirm('Voltar todas as paredes ao padrão?')) saveWalls({}); }}>Tudo padrão</button>
+            <button className="ghost small" onClick={() => { if (confirm('Tirar o acabamento próprio de todas as paredes? Elas ficam com o padrão do escritório.')) { const w = useStore.getState().walls; saveWalls(w.padrao ? { padrao: w.padrao } : {}); } }}>Tudo no padrão</button>
           </div>
         </div>
       )}

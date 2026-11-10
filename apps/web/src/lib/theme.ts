@@ -1,28 +1,41 @@
 import { create } from 'zustand';
 import { desktop } from './desktop';
 
-export type Theme = 'light' | 'dark';
+/** Temas da interface. O mundo 3D usa a base clara ou escura de cada um (`baseOf`). */
+export type Theme = 'light' | 'dark' | 'ultradark' | 'glass';
+export type BaseTheme = 'light' | 'dark';
+export const THEMES: { id: Theme; label: string; hint: string }[] = [
+  { id: 'light', label: 'Claro', hint: 'Neutro e limpo' },
+  { id: 'dark', label: 'Escuro', hint: 'Cinza grafite' },
+  { id: 'ultradark', label: 'Ultradark', hint: 'Preto puro, para telas OLED e salas escuras' },
+  { id: 'glass', label: 'Vidro', hint: 'Glassmorphism: painéis translúcidos sobre cor' },
+];
+export const baseOf = (t: Theme): BaseTheme => (t === 'dark' || t === 'ultradark' ? 'dark' : 'light');
 
 const saved = (): Theme => {
   try {
     const t = localStorage.getItem('office.theme');
-    if (t === 'light' || t === 'dark') return t;
+    if (THEMES.some((x) => x.id === t)) return t as Theme;
   } catch { /* sem storage */ }
   return matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 };
 
-export const useTheme = create<{ theme: Theme; toggle: () => void }>((set, get) => ({
+const apply = (theme: Theme) => {
+  document.documentElement.dataset.theme = theme;
+  desktop?.setTheme(baseOf(theme));
+};
+
+export const useTheme = create<{ theme: Theme; set: (t: Theme) => void; toggle: () => void }>((set, get) => ({
   theme: saved(),
-  toggle: () => {
-    const theme = get().theme === 'dark' ? 'light' : 'dark';
+  set: (theme) => {
     try { localStorage.setItem('office.theme', theme); } catch { /* ok */ }
-    document.documentElement.dataset.theme = theme;
-    desktop?.setTheme(theme);
+    apply(theme);
     set({ theme });
   },
+  /** Atalho antigo: alterna entre claro e escuro. */
+  toggle: () => get().set(baseOf(get().theme) === 'dark' ? 'light' : 'dark'),
 }));
-document.documentElement.dataset.theme = useTheme.getState().theme;
-desktop?.setTheme(useTheme.getState().theme);
+apply(useTheme.getState().theme);
 
 export interface ScenePalette {
   background: string; ground: string; floor: string; floorAlt: string; wall: string; wallTop: string;
@@ -31,7 +44,7 @@ export interface ScenePalette {
 }
 
 /** Paleta da maquete 3D: monocromática, cor só nos avatares e no status. */
-export const SCENE: Record<Theme, ScenePalette> = {
+const SCENE_BASE: Record<BaseTheme, ScenePalette> = {
   light: {
     background: '#f4f4f5',
     ground: '#f4f4f5',
@@ -65,26 +78,24 @@ export const SCENE: Record<Theme, ScenePalette> = {
     hover: '#60a5fa',
   },
 };
+export const SCENE: Record<Theme, ScenePalette> = {
+  ...SCENE_BASE,
+  ultradark: { ...SCENE_BASE.dark, background: '#000000', ground: '#000000', floor: '#0d0d0e', floorAlt: '#0a0a0b', shadow: 0.5 },
+  glass: SCENE_BASE.light,
+};
 export const useScene = (): ScenePalette => SCENE[useTheme((s) => s.theme)];
 
 // ---------------------------------------------------------------- estilo do mundo
 
-/** `pixel`: isométrico em pixel art (padrão); `maquete`: a maquete minimalista original. */
+/**
+ * Estilo do mundo. Hoje só existe o isométrico em pixel art: a maquete minimalista saiu da interface (v0.11.7).
+ * O tipo continua para as próximas skins (texturas e estilos de mundo) entrarem aqui.
+ */
 export type WorldStyle = 'pixel' | 'maquete';
 
-const savedStyle = (): WorldStyle => {
-  try { if (localStorage.getItem('office.style') === 'maquete') return 'maquete'; } catch { /* sem storage */ }
-  return 'pixel';
-};
-
-export const useWorldStyle = create<{ style: WorldStyle; toggle: () => void }>((set, get) => ({
-  style: savedStyle(),
-  toggle: () => {
-    const style = get().style === 'pixel' ? 'maquete' : 'pixel';
-    try { localStorage.setItem('office.style', style); } catch { /* ok */ }
-    document.documentElement.dataset.world = style;
-    set({ style });
-  },
+export const useWorldStyle = create<{ style: WorldStyle; toggle: () => void }>(() => ({
+  style: 'pixel',
+  toggle: () => { /* uma skin só, por enquanto */ },
 }));
 // os rótulos do mundo (HTML por cima do canvas) mudam de estilo junto
 document.documentElement.dataset.world = useWorldStyle.getState().style;
@@ -100,7 +111,7 @@ export interface PixelPalette {
   shadow: number;
 }
 
-export const PIXEL: Record<Theme, PixelPalette> = {
+const PIXEL_BASE: Record<BaseTheme, PixelPalette> = {
   light: {
     void: '#2b2a35', slab: '#6b4b2e', slabEdge: '#4a321d', outline: '#1d1720',
     wall: '#d9c7a8', wallStripe: '#cdb894', wallTop: '#8c6a45', baseboard: '#6b4b2e',
@@ -135,5 +146,10 @@ export const PIXEL: Record<Theme, PixelPalette> = {
     },
     shadow: 0.35,
   },
+};
+export const PIXEL: Record<Theme, PixelPalette> = {
+  ...PIXEL_BASE,
+  ultradark: { ...PIXEL_BASE.dark, void: '#000000', outline: '#000000', shadow: 0.45 },
+  glass: PIXEL_BASE.light,
 };
 export const usePixel = (): PixelPalette => PIXEL[useTheme((s) => s.theme)];

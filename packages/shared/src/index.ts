@@ -15,7 +15,11 @@ export interface AvatarLook {
 }
 
 /** Tipos de parede; `removida` tira a parede e a colisão. Sem registro no mapa, vale a `alvenaria` do prédio. */
-export const WALL_TYPES = ['alvenaria', 'branca', 'preta', 'concreto', 'madeira', 'vidro', 'vidro-fume', 'removida'] as const;
+export const WALL_TYPES = ['alvenaria', 'reboco', 'branca', 'preta', 'verde', 'terracota', 'concreto', 'tijolo', 'azulejo', 'madeira', 'vidro', 'vidro-fume', 'removida'] as const;
+/** Chave do mapa de paredes com o acabamento padrão do escritório (vale para toda parede sem escolha própria, inclusive de salas novas). */
+export const WALL_DEFAULT_KEY = 'padrao';
+/** Chave com o acabamento das divisórias entre as salas (vence o padrão do escritório nessas paredes). */
+export const WALL_DIVIDER_KEY = 'divisorias';
 export type WallType = (typeof WALL_TYPES)[number];
 
 /** Sala criada no escritório: um anexo a leste do prédio, com porta para o vizinho. */
