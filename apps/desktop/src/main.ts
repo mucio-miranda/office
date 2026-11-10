@@ -37,7 +37,8 @@ function dataDir() {
 
 async function healthAt(p: number): Promise<{ office: boolean; version?: string } | null> {
   try {
-    const res = await net.fetch(`http://127.0.0.1:${p}/api/health`);
+    // um processo travado na porta aceita a conexão e nunca responde: sem limite, o Office não abria
+    const res = await net.fetch(`http://127.0.0.1:${p}/api/health`, { signal: AbortSignal.timeout(3000) });
     return res.ok ? await res.json() : null;
   } catch {
     return null;
