@@ -297,6 +297,11 @@ Abra o navegador, **crie a primeira conta** (nome e senha) e **crie um escritór
 a pasta onde ficam os seus clientes. Se essa pasta tiver um `CLAUDE.md` e `.claude/skills`, os funcionários já chegam
 sabendo trabalhar do seu jeito.
 
+A raiz é a pasta da agência (com o `CLAUDE.md` e os clientes), nunca a `.claude\skills`: o Office recusa essa escolha.
+Se o material mora no **Google Drive para computador**, com atalhos no caminho antigo, o Office segue os atalhos e libera
+sozinho a pasta do Drive e as pastas do `env` do `.claude/settings.json` (temporários, por exemplo), e já define a pasta do
+Drive para as entregas.
+
 **As skills são de cada escritório**, não do Office: ao criar o escritório você escolhe de onde elas vêm (a pasta
 `.claude/skills` que já existe, outra pasta para importar ou nenhuma) e, se quiser, o endereço de um repositório git
 **seu** para guardar uma cópia. O histórico local fica sempre ligado, para toda mudança poder ser desfeita. Tudo isso

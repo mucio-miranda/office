@@ -21,6 +21,7 @@ import { authorName, cancelJob, enqueueJob, jobForToken, replyToJob } from '../a
 import { postsOf, progress, savePosts, type PostInput } from '../agents/calendar.ts';
 import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
 import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '../agents/skillsRepo.ts';
+import { detectDirs, mergeDirs, rootProblem } from '../agents/officeSetup.ts';
 import { driveDirs, existingDriveFolders } from '../clients/drive.ts';
 import { discoverClients } from '../clients/discover.ts';
 import { listSkills } from '../agents/skills.ts';
@@ -107,9 +108,9 @@ export function seedAgents(officeId: string) {
   }
 }
 
-export function createOffice(name: string, rootPath: string, extraDirs: string[], ownerId: string) {
+export function createOffice(name: string, rootPath: string, extraDirs: string[], ownerId: string, driveRoot: string | null = null) {
   const office: Office & { inviteCode: string } = {
-    id: uid(), name, rootPath, extraDirs, driveRoot: null, backupDir: null,
+    id: uid(), name, rootPath, extraDirs, driveRoot, backupDir: null,
     theme: { primary: '#ff5c8a', floor: '#e9e4dc', wall: '#f6f3ee' },
     inviteCode: newInvite(),
     createdAt: now(),
@@ -325,7 +326,11 @@ export async function api(app: FastifyInstance) {
       const canCreate = isLocal(req) || !one('SELECT id FROM offices LIMIT 1') || !!one("SELECT user_id FROM office_members WHERE user_id = ? AND role = 'dono' LIMIT 1", req.user.id);
       if (!canCreate) return reply.code(403).send({ error: 'Só o dono de um escritório abre outro neste servidor.' });
       if (!existsSync(b.rootPath) || !statSync(b.rootPath).isDirectory()) return reply.code(400).send({ error: `A pasta ${b.rootPath} não existe.` });
-      const office = createOffice(b.name, path.resolve(b.rootPath), b.extraDirs, req.user.id);
+      const wrong = rootProblem(b.rootPath);
+      if (wrong) return reply.code(400).send({ error: wrong });
+      // o material que mora no Drive (atalhos da raiz) e as pastas do settings.json entram sozinhos
+      const found = detectDirs(b.rootPath);
+      const office = createOffice(b.name, path.resolve(b.rootPath), mergeDirs(b.extraDirs, found.extraDirs), req.user.id, found.driveRoot);
       const setup: { imported?: string[]; error?: string } = {};
       try {
         if (b.skills?.from) setup.imported = importSkills(office, b.skills.from).copied;
@@ -335,7 +340,7 @@ export async function api(app: FastifyInstance) {
         // o escritório já existe: o problema das skills aparece e se resolve na Equipe
         setup.error = (e as Error).message.split('\n')[0];
       }
-      return { ...office, skillsSetup: setup };
+      return { ...office, skillsSetup: setup, detected: found };
     });
 
     r.post('/api/offices/join', async (req, reply) => {
@@ -565,6 +570,8 @@ export async function api(app: FastifyInstance) {
       if (!b) return;
       for (const dir of [b.rootPath, ...(b.extraDirs ?? []), b.driveRoot, b.backupDir].filter(Boolean) as string[])
         if (!existsSync(dir) || !statSync(dir).isDirectory()) return reply.code(400).send({ error: `A pasta ${dir} não existe.` });
+      const wrong = b.rootPath ? rootProblem(b.rootPath) : null;
+      if (wrong) return reply.code(400).send({ error: wrong });
       update('offices', (req.params as any).officeId, b);
       return { ok: true };
     });

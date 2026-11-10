@@ -181,7 +181,7 @@ function OfficeChooser() {
           await enterOffice(o.id);
         })}>
           <label>Nome<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="REZZU" /></label>
-          <label>Pasta raiz<PathField value={root} onChange={setRoot} placeholder="C:\Users\voce\Documents\AGENCIA" title="Pasta raiz do escritório" /></label>
+          <label><span>Pasta raiz <span className="muted">· a da agência, com o CLAUDE.md e os clientes (não a .claude\skills). Atalhos para o Drive entram sozinhos</span></span><PathField value={root} onChange={setRoot} placeholder="C:\Users\voce\Documents\AGENCIA" title="Pasta raiz do escritório" /></label>
           <label><span>Pastas extras <span className="muted">· opcional</span></span><PathList values={extra} onChange={setExtra} /></label>
           <label><span>Trazer skills de uma pasta <span className="muted">· opcional; sem isso começa vazio</span></span><PathField value={skillsFrom} onChange={setSkillsFrom} placeholder="Pasta com .claude\skills de outro projeto" title="Skills para importar" /></label>
           <label><span>Repositório privado das skills <span className="muted">· opcional</span></span><input value={skillsRemote} onChange={(e) => setSkillsRemote(e.target.value)} placeholder="https://github.com/agencia/skills.git" /></label>
