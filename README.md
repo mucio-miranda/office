@@ -293,9 +293,17 @@ npm install
 npm start            # compila a UI e sobe tudo em http://localhost:4747
 ```
 
-Abra o navegador, entre com seu nome e **crie um escritório**, escolhendo (navegando, sem digitar) a pasta onde ficam
-os seus clientes. Se essa pasta tiver um `CLAUDE.md` e `.claude/skills`,
-os funcionários já chegam sabendo trabalhar do seu jeito.
+Abra o navegador, **crie a primeira conta** (nome e senha) e **crie um escritório**, escolhendo (navegando, sem digitar)
+a pasta onde ficam os seus clientes. Se essa pasta tiver um `CLAUDE.md` e `.claude/skills`, os funcionários já chegam
+sabendo trabalhar do seu jeito.
+
+**As skills são de cada escritório**, não do Office: ao criar o escritório você escolhe de onde elas vêm (a pasta
+`.claude/skills` que já existe, outra pasta para importar ou nenhuma) e, se quiser, o endereço de um repositório git
+**seu** para guardar uma cópia. O histórico local fica sempre ligado, para toda mudança poder ser desfeita. Tudo isso
+também se ajusta depois, em **Equipe > Skills do escritório**.
+
+**Esqueceu o nome ou a senha?** No computador que roda o Office, a tela de entrada lista as contas que existem; clique na
+sua e use **Esqueci a senha**, que ali troca sem código.
 
 Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 
@@ -347,7 +355,7 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 - Uma pasta extra que sumiu, como um HD desconectado, não impede a tarefa de começar: fica de fora, com um aviso no chat.
 - O navegador de arquivos e o servidor de mídia só enxergam a pasta raiz do escritório e as pastas extras que você liberou.
 - Renders nunca sobrescrevem arquivos.
-- Conta nova só com o **código de convite**, e toda conta tem senha de pelo menos 8 caracteres. Tentativas erradas bloqueiam
+- Conta nova só com o **código de convite** (no computador do Office, também por **Criar conta nova**; um nome digitado errado não cria conta), e toda conta tem senha de pelo menos 8 caracteres. Tentativas erradas bloqueiam
   por 15 minutos, as sessões valem 30 dias e o banco guarda só o hash delas.
 - Só o dono mexe em pastas, permissões dos funcionários, convite, backup e contas. **Todo membro pode pedir tarefas aos
   funcionários de IA, que rodam no computador do escritório: convide só quem é de confiança.**
@@ -429,6 +437,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [ ] Google Calendar, Notion e Trello
 - [x] Papéis com financeiro só do ADM, demanda pelo mapa, sessões do terminal no Office, calendário de conteúdo preenchido pelo agente e skills alteradas só pela Mesa
 - [x] Servidor MCP do Office (calendário de conteúdo)
+- [x] Skills de cada escritório no setup inicial (importação, histórico local e repositório próprio) e entrada sem ficar preso
 - [ ] Office como SaaS: servidor na nuvem, banco central, Drive pela API e o PC da agência como trabalhador
 
 Lista completa em [`docs/ROADMAP.md`](docs/ROADMAP.md).

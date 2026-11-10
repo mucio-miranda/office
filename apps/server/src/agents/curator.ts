@@ -7,6 +7,7 @@ import { config } from '../config.ts';
 import { all, insert, logActivity, now, one, update } from '../db.ts';
 import { broadcast } from '../realtime.ts';
 import { insideDir } from '../clients/folder.ts';
+import { commitAll, pushSkills, skillsState, startHistory } from './skillsRepo.ts';
 
 /**
  * O único caminho para mudar as skills a partir do Office: aprendizado aprovado > curador (só lê) propõe a troca
@@ -90,19 +91,18 @@ export function applySkillChange(office: Office, changeId: string, by: string) {
     if (e.find && body.split(e.find).length !== 2) return `${e.file} mudou depois da proposta: peça uma nova.`;
     next.set(abs, e.find ? body.replace(e.find, e.replace) : `${body.replace(/\s*$/, '')}\n\n${e.replace.trim()}\n`);
   }
+  // o histórico é sempre ligado: sem ele, a mudança não teria como ser desfeita
+  try { startHistory(office); } catch (e) { return `Não consegui ligar o histórico das skills: ${(e as Error).message.split('\n')[0]}`; }
   for (const [abs, body] of next) writeFileSync(abs, body, 'utf8');
   let commitRef: string | null = null;
-  if (next.size && existsSync(path.join(dir, '.git'))) {
+  if (next.size) {
     try {
-      git(dir, 'add', '--', ...[...next.keys()].map((f) => path.relative(dir, f)));
-      // sem nome configurado no git (PC novo da agência), o registro sai assinado pelo Office em vez de não sair
-      const named = (() => { try { return !!git(dir, 'config', 'user.name').trim(); } catch { return false; } })();
-      git(dir, ...(named ? [] : ['-c', 'user.name=Office', '-c', 'user.email=office@localhost']), 'commit', '-m', `Office: ${ch.summary || 'aprendizados aprovados'}`);
-      commitRef = git(dir, 'rev-parse', '--short', 'HEAD').trim();
-      if (git(dir, 'remote').trim()) git(dir, 'push');
+      commitRef = commitAll(dir, `Office: ${ch.summary || 'aprendizados aprovados'}`, [...next.keys()].map((f) => path.relative(dir, f)));
     } catch (e) {
-      commitRef = commitRef ?? `sem commit: ${(e as Error).message.split('\n')[0].slice(0, 160)}`;
+      commitRef = `sem commit: ${(e as Error).message.split('\n')[0].slice(0, 160)}`;
     }
+    // com cópia remota ligada, envia; se falhar, o registro local fica e a Equipe mostra o que falta enviar
+    if (commitRef && !commitRef.startsWith('sem') && skillsState(office).remote) { try { pushSkills(office); } catch { /* fica para "Enviar agora" */ } }
   }
   update('skill_changes', ch.id, { status: 'aplicada', commitRef, decidedBy: by });
   for (const id of ch.learningIds) update('learnings', id, { status: 'na-skill' });

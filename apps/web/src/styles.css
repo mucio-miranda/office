@@ -443,6 +443,10 @@ input.inline { width: 120px; height: 28px; }
 .auth-error { margin: 0; font-size: 12px; color: var(--error); }
 button.wide { width: 100%; height: 36px; font-size: 14px; }
 .auth .office-list { margin-top: 24px; }
+.auth-accounts { margin-top: 16px; display: flex; flex-direction: column; gap: 6px; }
+.auth-account { height: auto; flex-shrink: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 12px; text-align: left; border: 1px solid var(--border); border-radius: 8px; background: transparent; color: var(--foreground); cursor: pointer; }
+.auth-account:hover { background: var(--accent); }
+.auth-account.on { border-color: var(--primary); }
 .auth-links { margin-top: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; font-size: 14px; }
 button.link { height: auto; padding: 0; border: none; background: none; color: var(--foreground); font-weight: 500; text-decoration: underline; text-underline-offset: 3px; font-size: 14px; }
 button.link:hover { background: none; opacity: .75; }

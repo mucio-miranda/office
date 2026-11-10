@@ -98,6 +98,29 @@ test('conta antiga sem senha: de fora é recusada, no computador do Office vai p
   assert.equal((await enter('Antiga', STRONG)).status, 200);
 });
 
+test('no computador do Office: lista de contas, nome sem acento acha a conta e nome errado não cria conta vazia', async () => {
+  // de fora, a lista não aparece
+  assert.deepEqual((await call('GET', '/api/auth/local')).json, { local: false, first: false, accounts: [] });
+  const l = await call('GET', '/api/auth/local', { ip: LOCAL });
+  assert.equal(l.json.local, true);
+  const dona = l.json.accounts.find((a: { name: string }) => a.name === 'Dona');
+  assert.deepEqual(dona.offices, [{ name: 'REZZU', role: 'dono' }]);
+  assert.equal(JSON.stringify(l.json).includes('pin'), false, 'nada de hash');
+
+  await join('Múcia');
+  assert.equal((await enter('MUCIA', STRONG)).status, 200, 'sem diferença de maiúscula e acento');
+  // digitar um nome que não existe, no próprio computador, não cria mais uma conta sem escritório
+  const count = () => (db.prepare('SELECT COUNT(*) n FROM users').get() as { n: number }).n;
+  const before = count();
+  assert.equal((await enter('Dono Errado', STRONG, { ip: LOCAL })).status, 404);
+  assert.equal(count(), before);
+  const c = await call('POST', '/api/auth/enter', { ip: LOCAL, body: { name: 'Dono Errado', pin: STRONG, create: true } });
+  assert.equal(c.status, 200, 'só com "Criar conta nova"');
+  // esqueci a senha, no computador do Office: troca sem código, com o nome sem acento
+  assert.equal((await call('POST', '/api/auth/redefinir', { ip: LOCAL, body: { name: 'mucia', pin: 'outra-senha-1' } })).status, 200);
+  assert.equal((await enter('Múcia', 'outra-senha-1')).status, 200);
+});
+
 test('o PIN curto da versão antiga ainda entra, mas obriga a troca', async () => {
   const { hashPin } = await import('./auth.ts');
   db.prepare("INSERT INTO users (id, name, color, pin_hash, created_at) VALUES ('pin', 'ComPin', '#000000', ?, 'x')").run(hashPin('1234'));

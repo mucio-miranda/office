@@ -453,6 +453,21 @@ export interface Learning {
   createdAt: string;
 }
 
+/** A pasta de skills de um escritório: o que tem, o histórico e a cópia remota. */
+export interface SkillsState {
+  dir: string;
+  exists: boolean;
+  skills: string[];
+  /** Histórico local (git) ligado. */
+  history: boolean;
+  last: { ref: string; at: string; subject: string } | null;
+  remote: string | null;
+  /** Arquivos mudados fora do Office e ainda sem registro. */
+  pending: number;
+  /** Registros que ainda não foram para a cópia remota. */
+  unpushed: number;
+}
+
 /** Uma troca exata num arquivo das skills (caminho relativo a .claude/skills); `find` vazio acrescenta no fim. */
 export interface SkillEdit { file: string; find: string; replace: string }
 

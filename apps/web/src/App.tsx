@@ -36,30 +36,50 @@ function Gate() {
   );
 }
 
+type LocalInfo = { local: boolean; first: boolean; accounts: { name: string; hasPassword: boolean; offices: { name: string; role: string }[] }[] };
+
 function Login() {
   const login = useStore((s) => s.login);
-  const [mode, setMode] = useState<'entrar' | 'convite' | 'redefinir'>('entrar');
+  const [mode, setMode] = useState<'entrar' | 'convite' | 'redefinir' | 'criar'>('entrar');
   const [name, setName] = useState('');
   const [pin, setPin] = useState('');
   const [code, setCode] = useState('');
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
   const [busy, setBusy] = useState(false);
+  // no computador que roda o Office: as contas que existem, para ninguém ficar preso sem lembrar o nome
+  const [local, setLocal] = useState<LocalInfo | null>(null);
+  useEffect(() => { api('/api/auth/local').then(setLocal).catch(() => setLocal(null)); }, []);
+  const here = !!local?.local;
+  const first = !!local?.first;
   const go = (m: typeof mode) => { setMode(m); setErr(''); setInfo(''); setCode(''); setPin(''); };
   const submit = async () => {
-    if (mode !== 'redefinir') return login(name.trim(), pin, mode === 'convite' ? code.trim() : undefined);
+    if (first || mode !== 'redefinir') return login(name.trim(), pin, mode === 'convite' ? code.trim() : undefined, first || mode === 'criar');
     await api('/api/auth/redefinir', { body: { name: name.trim(), code: code.trim() || undefined, pin } });
     go('entrar');
     setInfo('Senha trocada. Agora é só entrar com a senha nova.');
   };
+  const title = first ? 'Criar a primeira conta' : mode === 'convite' ? 'Entrar com convite' : mode === 'redefinir' ? 'Trocar a senha' : mode === 'criar' ? 'Criar conta nova' : 'Entrar no Office';
+  const sub = first ? `Você é a primeira pessoa aqui. Escolha seu nome e uma senha de pelo menos ${MIN_PASSWORD} caracteres; depois você cria o escritório.`
+    : mode === 'convite' ? `Escolha seu nome e uma senha de pelo menos ${MIN_PASSWORD} caracteres. O código vem de quem criou o escritório.`
+    : mode === 'redefinir' ? (here ? 'Você está no computador que roda o Office: escolha a conta e defina a senha nova, sem código.' : 'Peça o código de redefinição ao dono do escritório (na tela Equipe).')
+    : mode === 'criar' ? 'Uma conta nova começa sem escritório. Se você já tem conta, volte e escolha o seu nome na lista.'
+    : here ? 'Escolha sua conta e digite a senha. Esqueceu? Neste computador dá para trocar sem código.' : 'Use seu nome e sua senha. Primeira vez aqui? Entre com o convite.';
+  const showList = here && !first && (mode === 'entrar' || mode === 'redefinir') && !!local?.accounts.length;
   return (
     <>
-      <h1 className="auth-title">{mode === 'convite' ? 'Entrar com convite' : mode === 'redefinir' ? 'Trocar a senha' : 'Entrar no Office'}</h1>
-      <p className="auth-sub">
-        {mode === 'convite' ? `Escolha seu nome e uma senha de pelo menos ${MIN_PASSWORD} caracteres. O código vem de quem criou o escritório.`
-          : mode === 'redefinir' ? 'Peça o código ao dono do escritório. No computador que roda o Office, o código não é necessário.'
-          : 'Use seu nome e sua senha. Primeira vez aqui? Entre com o convite.'}
-      </p>
+      <h1 className="auth-title">{title}</h1>
+      <p className="auth-sub">{sub}</p>
+      {showList && (
+        <div className="auth-accounts" aria-label="Contas neste computador">
+          {local!.accounts.map((a) => (
+            <button type="button" key={a.name} className={`auth-account${a.name === name ? ' on' : ''}`} onClick={() => { if (!a.hasPassword && mode === 'entrar') go('redefinir'); setName(a.name); setErr(''); }}>
+              <b>{a.name}</b>
+              <span className="muted small">{a.offices.length ? a.offices.map((o) => `${o.name} (${o.role})`).join(', ') : 'sem escritório'}{a.hasPassword ? '' : ' · sem senha'}</span>
+            </button>
+          ))}
+        </div>
+      )}
       <form className="auth-fields" onSubmit={async (e) => {
         e.preventDefault();
         setErr('');
@@ -68,17 +88,20 @@ function Login() {
         try { await submit(); } catch (x) { setErr((x as Error).message); } finally { setBusy(false); }
       }}>
         <label>Nome<input autoFocus autoComplete="username" value={name} onChange={(e) => setName(e.target.value)} /></label>
-        {mode !== 'entrar' && <label>{mode === 'convite' ? 'Código do convite' : 'Código de redefinição'}<input className="mono" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} /></label>}
-        <label>{mode === 'redefinir' ? 'Senha nova' : 'Senha'}<input type="password" autoComplete={mode === 'entrar' ? 'current-password' : 'new-password'} value={pin} onChange={(e) => setPin(e.target.value)} /></label>
+        {!first && (mode === 'convite' || (mode === 'redefinir' && !here)) && <label>{mode === 'convite' ? 'Código do convite' : 'Código de redefinição'}<input className="mono" autoComplete="off" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} /></label>}
+        <label>{mode === 'redefinir' && !first ? 'Senha nova' : 'Senha'}<input type="password" autoComplete={mode === 'entrar' && !first ? 'current-password' : 'new-password'} value={pin} onChange={(e) => setPin(e.target.value)} /></label>
         {err && <p className="auth-error" role="alert">{err}</p>}
         {info && <p className="muted small" role="status">{info}</p>}
-        <button className="primary wide" disabled={busy || name.trim().length < 2}>{busy ? 'Aguarde…' : mode === 'redefinir' ? 'Trocar a senha' : 'Entrar'}</button>
+        <button className="primary wide" disabled={busy || name.trim().length < 2}>{busy ? 'Aguarde…' : first || mode === 'criar' ? 'Criar conta' : mode === 'redefinir' ? 'Trocar a senha' : 'Entrar'}</button>
       </form>
-      <div className="auth-links">
-        {mode !== 'entrar' && <button className="link" onClick={() => go('entrar')}>Já tenho conta</button>}
-        {mode !== 'convite' && <button className="link" onClick={() => go('convite')}>Tenho um convite</button>}
-        {mode !== 'redefinir' && <button className="link" onClick={() => go('redefinir')}>Esqueci a senha</button>}
-      </div>
+      {!first && (
+        <div className="auth-links">
+          {mode !== 'entrar' && <button className="link" onClick={() => go('entrar')}>Já tenho conta</button>}
+          {mode !== 'convite' && <button className="link" onClick={() => go('convite')}>Tenho um convite</button>}
+          {mode !== 'redefinir' && <button className="link" onClick={() => go('redefinir')}>Esqueci a senha</button>}
+          {here && mode !== 'criar' && <button className="link" onClick={() => go('criar')}>Criar conta nova</button>}
+        </div>
+      )}
     </>
   );
 }
@@ -118,6 +141,8 @@ function OfficeChooser() {
   const [name, setName] = useState('');
   const [root, setRoot] = useState('');
   const [extra, setExtra] = useState<string[]>([]);
+  const [skillsFrom, setSkillsFrom] = useState('');
+  const [skillsRemote, setSkillsRemote] = useState('');
   const [code, setCode] = useState('');
   const [err, setErr] = useState('');
   const run = (fn: () => Promise<unknown>) => async (e: React.FormEvent) => {
@@ -151,12 +176,16 @@ function OfficeChooser() {
 
       {mode === 'create' && (
         <form className="auth-fields" onSubmit={run(async () => {
-          const o = await api('/api/offices', { body: { name, rootPath: root, extraDirs: extra } });
+          const o = await api('/api/offices', { body: { name, rootPath: root, extraDirs: extra, skills: { from: skillsFrom || null, remote: skillsRemote.trim() || null } } });
+          if (o.skillsSetup?.error) useStore.getState().notify(`Escritório criado, mas as skills: ${o.skillsSetup.error}`);
           await enterOffice(o.id);
         })}>
           <label>Nome<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="REZZU" /></label>
           <label>Pasta raiz<PathField value={root} onChange={setRoot} placeholder="C:\Users\voce\Documents\AGENCIA" title="Pasta raiz do escritório" /></label>
           <label><span>Pastas extras <span className="muted">· opcional</span></span><PathList values={extra} onChange={setExtra} /></label>
+          <label><span>Trazer skills de uma pasta <span className="muted">· opcional; sem isso começa vazio</span></span><PathField value={skillsFrom} onChange={setSkillsFrom} placeholder="Pasta com .claude\skills de outro projeto" title="Skills para importar" /></label>
+          <label><span>Repositório privado das skills <span className="muted">· opcional</span></span><input value={skillsRemote} onChange={(e) => setSkillsRemote(e.target.value)} placeholder="https://github.com/agencia/skills.git" /></label>
+          <p className="muted small" style={{ margin: 0 }}>As skills deste escritório ficam em .claude\skills da pasta raiz, com histórico: toda mudança aprovada na Mesa pode ser desfeita.</p>
           {err && <p className="auth-error" role="alert">{err}</p>}
           <button className="primary wide" disabled={!name || !root}>Criar escritório</button>
         </form>

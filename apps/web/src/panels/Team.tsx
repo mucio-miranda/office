@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { MAX_CUSTOM_ROOMS, ROLE_LABEL, WALL_TYPES, type AgentProfile, type Member, type WallType } from '@office/shared';
+import { MAX_CUSTOM_ROOMS, ROLE_LABEL, WALL_TYPES, type SkillsState, type AgentProfile, type Member, type WallType } from '@office/shared';
 import { AvatarEditor } from './AvatarEditor';
 import { DESKS, findDeskSpot } from '../office/layout';
 import { WALL_LABEL, applyWall, wallsOfRoom } from '../office/decor/walls';
@@ -104,6 +104,7 @@ export function Team() {
         </div>
       </section>}
 
+      {isOwner && <SkillsCard />}
       {isOwner && <BackupCard />}
 
       <ToolsCard />
@@ -383,5 +384,38 @@ export function Activity() {
         </div>
       ))}
     </div>
+  );
+}
+
+/** As skills deste escritório: histórico sempre ligado, importação e a cópia remota da agência. */
+function SkillsCard() {
+  const office = useStore((s) => s.office)!;
+  const notify = useStore((s) => s.notify);
+  const base = `/api/offices/${office.id}/skills`;
+  const [st, setSt] = useState<SkillsState | null>(null);
+  const [from, setFrom] = useState('');
+  const [remote, setRemote] = useState('');
+  const [busy, setBusy] = useState(false);
+  useEffect(() => { api<SkillsState>(`${base}/estado`).then((s) => { setSt(s); setRemote(s.remote ?? ''); }).catch(() => setSt(null)); }, [base]);
+  const go = async (path: string, body: unknown, ok: string, method: 'POST' | 'PUT' = 'POST') => {
+    setBusy(true);
+    try { const r = await api<{ state: SkillsState }>(`${base}/${path}`, { method, body }); setSt(r.state); notify(ok); } catch (e) { notify((e as Error).message); }
+    setBusy(false);
+  };
+  if (!st) return null;
+  return (
+    <section className="card stack">
+      <h3>Skills do escritório</h3>
+      <code className="small truncate">{st.dir}</code>
+      <p className="small" style={{ margin: 0 }}>{st.skills.length} skill(s){st.last ? ` · último registro ${st.last.ref}: ${st.last.subject}` : ''}</p>
+      {!st.history && <div className="row gap"><span className="auth-error small">Sem histórico: uma mudança não teria como ser desfeita.</span><button className="small" disabled={busy} onClick={() => go('historico', {}, 'Histórico ligado')}>Ligar o histórico</button></div>}
+      {st.pending > 0 && <p className="muted small" style={{ margin: 0 }}>{st.pending} arquivo(s) mudados fora do Office, ainda sem registro.</p>}
+      <div className="row gap"><PathField value={from} onChange={setFrom} placeholder="Pasta com skills para trazer" title="Importar skills" />
+        <button className="small" disabled={busy || !from} onClick={() => go('importar', { from }, 'Skills importadas (as que já existiam ficaram como estão)')}>Importar</button></div>
+      <div className="row gap"><input value={remote} onChange={(e) => setRemote(e.target.value)} placeholder="Repositório privado (https://… ou git@…)" />
+        <button className="small" disabled={busy} onClick={() => go('remoto', { url: remote.trim() || null }, remote.trim() ? 'Cópia remota ligada' : 'Cópia remota desligada', 'PUT')}>Salvar</button>
+        {st.remote && <button className="small" disabled={busy} onClick={() => go('enviar', {}, 'Skills enviadas')}>Enviar agora{st.unpushed ? ` (${st.unpushed})` : ''}</button>}</div>
+      <p className="muted small" style={{ margin: 0 }}>O acesso ao repositório é o desta máquina (gerenciador de credenciais). Não coloque senha nem token no endereço.</p>
+    </section>
   );
 }

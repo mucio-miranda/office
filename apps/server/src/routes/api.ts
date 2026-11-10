@@ -20,6 +20,7 @@ import { loadTemplates } from '../agents/templates.ts';
 import { authorName, cancelJob, enqueueJob, jobForToken, replyToJob } from '../agents/runtime.ts';
 import { postsOf, progress, savePosts, type PostInput } from '../agents/calendar.ts';
 import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
+import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '../agents/skillsRepo.ts';
 import { driveDirs, existingDriveFolders } from '../clients/drive.ts';
 import { discoverClients } from '../clients/discover.ts';
 import { listSkills } from '../agents/skills.ts';
@@ -119,6 +120,16 @@ export function createOffice(name: string, rootPath: string, extraDirs: string[]
   return office;
 }
 
+/** Nome para entrar sem diferença de maiúsculas e acentos ("mucio" acha "Múcio"); o nome exato vem antes. */
+const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+function findUser<T>(name: string): T | undefined {
+  const exact = one<T>('SELECT * FROM users WHERE name = ?', name);
+  if (exact) return exact;
+  const ids = all<{ id: string; name: string }>('SELECT id, name FROM users').filter((u) => fold(u.name) === fold(name));
+  // dois nomes que só mudam no acento: não adivinha qual é
+  return ids.length === 1 ? one<T>('SELECT * FROM users WHERE id = ?', ids[0].id) : undefined;
+}
+
 export async function api(app: FastifyInstance) {
   // ---------------- autenticação ----------------
   // o servidor MCP `office` de uma tarefa: só daqui desta máquina e só o cliente da tarefa
@@ -148,8 +159,19 @@ export async function api(app: FastifyInstance) {
     }
   });
 
+  // no computador do Office: quais contas existem (só nomes), para o dono não ficar preso sem saber com que nome entrou
+  app.get('/api/auth/local', async (req) => {
+    if (!isLocal(req)) return { local: false, first: false, accounts: [] };
+    const users = all<{ id: string; name: string; pinHash: string | null }>('SELECT id, name, pin_hash FROM users ORDER BY created_at');
+    const offices = all<{ userId: string; name: string; role: string }>('SELECT m.user_id, o.name, m.role FROM office_members m JOIN offices o ON o.id = m.office_id ORDER BY o.created_at');
+    return {
+      local: true, first: !users.length,
+      accounts: users.map((u) => ({ name: u.name, hasPassword: !!u.pinHash, offices: offices.filter((o) => o.userId === u.id).map(({ name, role }) => ({ name, role })) })),
+    };
+  });
+
   app.post('/api/auth/enter', async (req, reply) => {
-    const b = body(z.object({ name: z.string().trim().min(2).max(40), pin: pinField.optional(), invite: z.string().trim().toUpperCase().max(32).optional() }), req, reply);
+    const b = body(z.object({ name: z.string().trim().min(2).max(40), pin: pinField.optional(), invite: z.string().trim().toUpperCase().max(32).optional(), create: z.boolean().optional() }), req, reply);
     if (!b) return;
     const keys = attemptKeys(req, b.name);
     if (blocked(keys)) return reply.code(429).send({ error: TOO_MANY });
@@ -157,7 +179,7 @@ export async function api(app: FastifyInstance) {
     const invited = b.invite ? one<Office>('SELECT * FROM offices WHERE invite_code = ?', b.invite) : undefined;
     if (b.invite && !invited) return deny('Código de convite inválido.');
 
-    let user = one<User & { pinHash: string | null }>('SELECT * FROM users WHERE name = ?', b.name);
+    let user = findUser<User & { pinHash: string | null }>(b.name);
     if (user) {
       if (user.pinHash) {
         if (!b.pin || !checkPin(b.pin, user.pinHash)) return deny('Nome ou senha incorretos.');
@@ -173,6 +195,8 @@ export async function api(app: FastifyInstance) {
       // conta nova só com convite; a exceção é quem está no computador do Office ou a primeira conta do servidor
       const first = !one('SELECT id FROM users LIMIT 1');
       if (!invited && !first && !isLocal(req)) return deny('Nome ou senha incorretos. Se é sua primeira vez, use o convite.');
+      // no computador do Office, um nome digitado diferente criava outra conta, vazia, sem escritório
+      if (!invited && !first && !b.create) return reply.code(404).send({ error: `Não existe conta com o nome "${b.name}". Escolha uma das contas da lista ou use "Criar conta nova".` });
       if (!b.pin || b.pin.length < MIN_PIN) return reply.code(400).send({ error: SHORT_PIN });
       user = { id: uid(), name: b.name, color: pick(), createdAt: now(), pinHash: hashPin(b.pin) };
       insert('users', user as never);
@@ -196,7 +220,7 @@ export async function api(app: FastifyInstance) {
     const keys = attemptKeys(req, b.name);
     if (blocked(keys)) return reply.code(429).send({ error: TOO_MANY });
     if (b.pin.length < MIN_PIN) return reply.code(400).send({ error: SHORT_PIN });
-    const user = one<User>('SELECT id FROM users WHERE name = ?', b.name);
+    const user = findUser<User>(b.name);
     if (!user || !(b.code ? checkResetCode(user.id, b.code) : isLocal(req))) {
       noteFail(keys);
       return reply.code(401).send({ error: 'Nome ou código incorretos.' });
@@ -291,13 +315,27 @@ export async function api(app: FastifyInstance) {
 
     // ---------------- escritórios ----------------
     r.post('/api/offices', async (req, reply) => {
-      const b = body(z.object({ name: z.string().trim().min(2), rootPath: z.string().min(2), extraDirs: z.array(z.string()).default([]) }), req, reply);
+      const b = body(z.object({
+        name: z.string().trim().min(2), rootPath: z.string().min(2), extraDirs: z.array(z.string()).default([]),
+        // de onde vêm as skills deste escritório; o histórico é sempre ligado
+        skills: z.object({ from: z.string().max(400).nullable().optional(), remote: z.string().max(400).nullable().optional() }).optional(),
+      }), req, reply);
       if (!b) return;
       // a pasta raiz é onde a IA trabalha nesta máquina: quem é só membro não abre escritório novo
       const canCreate = isLocal(req) || !one('SELECT id FROM offices LIMIT 1') || !!one("SELECT user_id FROM office_members WHERE user_id = ? AND role = 'dono' LIMIT 1", req.user.id);
       if (!canCreate) return reply.code(403).send({ error: 'Só o dono de um escritório abre outro neste servidor.' });
       if (!existsSync(b.rootPath) || !statSync(b.rootPath).isDirectory()) return reply.code(400).send({ error: `A pasta ${b.rootPath} não existe.` });
-      return createOffice(b.name, path.resolve(b.rootPath), b.extraDirs, req.user.id);
+      const office = createOffice(b.name, path.resolve(b.rootPath), b.extraDirs, req.user.id);
+      const setup: { imported?: string[]; error?: string } = {};
+      try {
+        if (b.skills?.from) setup.imported = importSkills(office, b.skills.from).copied;
+        else startHistory(office);
+        if (b.skills?.remote) setRemote(office, b.skills.remote);
+      } catch (e) {
+        // o escritório já existe: o problema das skills aparece e se resolve na Equipe
+        setup.error = (e as Error).message.split('\n')[0];
+      }
+      return { ...office, skillsSetup: setup };
     });
 
     r.post('/api/offices/join', async (req, reply) => {
@@ -765,6 +803,28 @@ export async function api(app: FastifyInstance) {
       try { decideLearning(l, b.approve, `user:${req.user.id}`); } catch (e) { return reply.code(500).send({ error: (e as Error).message }); }
       return { ok: true };
     });
+
+    // pasta de skills do escritório: estado, histórico, importação e cópia remota (só o dono mexe)
+    const officeOf = (req: FastifyRequest) => one<Office>('SELECT * FROM offices WHERE id = ?', (req.params as any).officeId)!;
+    r.get('/api/offices/:officeId/skills/estado', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return skillsState(officeOf(req));
+    });
+    const skillsAction = (name: string, schema: z.ZodTypeAny, fn: (o: Office, b: any) => unknown, method: 'post' | 'put' = 'post') =>
+      r[method](`/api/offices/:officeId/skills/${name}`, async (req, reply) => {
+        if (!requireOwner(req, reply)) return;
+        const b = body(schema, req, reply);
+        if (!b) return;
+        try {
+          const out = fn(officeOf(req), b);
+          logActivity((req.params as any).officeId, `user:${req.user.id}`, `skills: ${name}`);
+          return { result: out ?? null, state: skillsState(officeOf(req)) };
+        } catch (e) { return reply.code(409).send({ error: (e as Error).message.split('\n')[0] }); }
+      });
+    skillsAction('historico', z.object({}), (o) => startHistory(o));
+    skillsAction('importar', z.object({ from: z.string().min(2).max(400) }), (o, b) => importSkills(o, b.from));
+    skillsAction('remoto', z.object({ url: z.string().max(400).nullable() }), (o, b) => setRemote(o, b.url), 'put');
+    skillsAction('enviar', z.object({}), (o) => pushSkills(o));
 
     // o caminho único para mudar as skills: aprovado > proposta do curador > o dono aplica
     r.get('/api/offices/:officeId/aprendizados/aprovados', async (req, reply) => {

@@ -69,7 +69,7 @@ interface State {
   tour: number | null;
 
   boot(): Promise<void>;
-  login(name: string, pin?: string, invite?: string): Promise<void>;
+  login(name: string, pin?: string, invite?: string, create?: boolean): Promise<void>;
   logout(): void;
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
@@ -110,8 +110,8 @@ export const useStore = create<State>((set, get) => ({
     }
   },
 
-  async login(name, pin, invite) {
-    const r = await api('/api/auth/enter', { body: { name, pin: pin || undefined, invite: invite || undefined } });
+  async login(name, pin, invite, create) {
+    const r = await api('/api/auth/enter', { body: { name, pin: pin || undefined, invite: invite || undefined, create: create || undefined } });
     setToken(r.token);
     // quem entrou por convite já cai direto no escritório
     if (r.officeId) try { localStorage.setItem('office.last', r.officeId); } catch { /* ok */ }
