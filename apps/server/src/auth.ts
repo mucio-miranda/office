@@ -1,9 +1,12 @@
 import { createHash, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { isIP } from 'node:net';
 import { hostname } from 'node:os';
+import { readFileSync } from 'node:fs';
+import path from 'node:path';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import type { User } from '@office/shared';
 import { db, one, now } from './db.ts';
+import { config } from './config.ts';
 
 export const MIN_PIN = 8;
 const SESSION_DAYS = 30;
@@ -106,15 +109,49 @@ export const resetAttempts = () => fails.clear();
 
 const LOOPBACK = ['127.0.0.1', '::1', '::ffff:127.0.0.1'];
 
+/**
+ * Acesso externo pelo túnel (Cloudflare Tunnel): os endereços públicos do Office e se o Cloudflare Access (login Google)
+ * é obrigatório. Vem de `OFFICE_HOSTS` e de `<dados>/acesso-externo.json` ({ "hosts": ["office.exemplo.com"], "exigirAccess": true }).
+ */
+let cached: { at: number; value: { hosts: string[]; requireAccess: boolean } } | null = null;
+export function externalAccess(): { hosts: string[]; requireAccess: boolean } {
+  // lido a cada poucos segundos: muda sem reiniciar o Office e não pesa em cada requisição
+  if (cached && Date.now() - cached.at < 5000) return cached.value;
+  let file: { hosts?: unknown; exigirAccess?: unknown } = {};
+  try {
+    file = JSON.parse(readFileSync(path.join(config.dataDir, 'acesso-externo.json'), 'utf8'));
+  } catch { /* sem arquivo: sem túnel */ }
+  const hosts = [
+    ...(process.env.OFFICE_HOSTS ?? '').split(','),
+    ...(Array.isArray(file.hosts) ? file.hosts.filter((h): h is string => typeof h === 'string') : []),
+  ].map((s) => s.trim().toLowerCase()).filter(Boolean);
+  cached = { at: Date.now(), value: { hosts: [...new Set(hosts)], requireAccess: file.exigirAccess !== false } };
+  return cached.value;
+}
+export const resetExternalAccess = () => { cached = null; };
+
+const hostOf = (header: string | undefined) => (header ?? '').replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+
+/**
+ * Chegou pelo túnel? O Cloudflare sempre põe `cf-ray` e `cf-connecting-ip`, e quem está de fora não consegue tirá-los.
+ * Pelo túnel a conexão vem do `cloudflared`, em 127.0.0.1: sem essa conferência, todo acesso de fora pareceria local.
+ */
+export const viaTunnel = (req: FastifyRequest) =>
+  !!(req.headers['cf-ray'] || req.headers['cf-connecting-ip'] || req.headers['cdn-loop']) || externalAccess().hosts.includes(hostOf(req.headers.host));
+
 export function clientIp(req: FastifyRequest) {
   const socketIp = req.socket.remoteAddress ?? '';
-  // atrás do proxy do Vite (dev) a conexão vem de 127.0.0.1; o IP real chega no X-Forwarded-For
-  const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim();
-  return LOOPBACK.includes(socketIp) && fwd ? fwd : socketIp;
+  if (!LOOPBACK.includes(socketIp)) return socketIp;
+  // pelo túnel: o endereço que o Cloudflare viu (ele sobrescreve esse cabeçalho, ninguém de fora o falsifica)
+  const cf = String(req.headers['cf-connecting-ip'] ?? '').trim();
+  if (cf) return cf;
+  // atrás do proxy do Vite (dev): vale o último endereço da lista, o que o proxy acrescentou; os anteriores vêm do cliente
+  const fwd = String(req.headers['x-forwarded-for'] ?? '').split(',').map((s) => s.trim()).filter(Boolean).pop();
+  return fwd || socketIp;
 }
 
-/** Quem está no próprio computador que roda o Office. */
-export const isLocal = (req: FastifyRequest) => LOOPBACK.includes(clientIp(req));
+/** Quem está no próprio computador que roda o Office. Pelo túnel, nunca. */
+export const isLocal = (req: FastifyRequest) => !viaTunnel(req) && LOOPBACK.includes(clientIp(req));
 
 /**
  * Só atende por endereço IP, pelo nome desta máquina ou por nomes da VPN. Sem isso, um site malicioso aberto
@@ -122,14 +159,19 @@ export const isLocal = (req: FastifyRequest) => LOOPBACK.includes(clientIp(req))
  */
 export function hostAllowed(header: string | undefined) {
   if (!header) return false;
-  const h = header.replace(/:\d+$/, '').replace(/^\[|\]$/g, '').toLowerCase();
+  const h = hostOf(header);
   const me = hostname().toLowerCase();
-  const extra = (process.env.OFFICE_HOSTS ?? '').toLowerCase().split(',').map((s) => s.trim()).filter(Boolean);
-  return isIP(h) !== 0 || h === 'localhost' || h === me || h === `${me}.local` || h.endsWith('.netbird.cloud') || extra.includes(h);
+  return isIP(h) !== 0 || h === 'localhost' || h === me || h === `${me}.local` || h.endsWith('.netbird.cloud') || externalAccess().hosts.includes(h);
 }
 
 export async function guardHost(req: FastifyRequest, reply: FastifyReply) {
   if (!hostAllowed(req.headers.host)) return reply.code(403).send({ error: 'Endereço não permitido.' });
+  // pelo túnel, só depois do login do Cloudflare Access (Google), além do login do próprio Office
+  if (viaTunnel(req)) {
+    if (!externalAccess().hosts.includes(hostOf(req.headers.host))) return reply.code(403).send({ error: 'Endereço não permitido.' });
+    if (externalAccess().requireAccess && !req.headers['cf-access-jwt-assertion']) return reply.code(403).send({ error: 'Entre pelo login da agência (Cloudflare Access).' });
+    reply.header('Strict-Transport-Security', 'max-age=31536000');
+  }
   reply.header('X-Frame-Options', 'DENY');
   reply.header('X-Content-Type-Options', 'nosniff');
 }
@@ -149,8 +191,8 @@ declare module 'fastify' {
 
 export const SESSION_COOKIE = 'office_session';
 
-export function sessionCookie(token: string) {
-  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${60 * 60 * 24 * SESSION_DAYS}`;
+export function sessionCookie(token: string, secure = false) {
+  return `${SESSION_COOKIE}=${token}; Path=/; HttpOnly; SameSite=Strict;${secure ? ' Secure;' : ''} Max-Age=${60 * 60 * 24 * SESSION_DAYS}`;
 }
 
 function cookieToken(req: FastifyRequest) {

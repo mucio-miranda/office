@@ -22,7 +22,7 @@ export function Team() {
   const { office, members, presences, agents, user, notify, enterOffice, logout } = useStore();
   const isOwner = office!.role === 'dono';
   const online = new Set([user!.id, ...Object.keys(presences)]);
-  const [urls, setUrls] = useState<{ lan: string[]; vpn: string[] }>({ lan: [], vpn: [] });
+  const [urls, setUrls] = useState<{ lan: string[]; vpn: string[]; web?: string[] }>({ lan: [], vpn: [], web: [] });
   const [autoStart, setAutoStart] = useState(false);
   const [resetCode, setResetCode] = useState<{ name: string; code: string } | null>(null);
   const [editing, setEditing] = useState<Member | null>(null);
@@ -47,6 +47,7 @@ export function Team() {
         </div>
         <div className="stack" style={{ gap: 4 }}>
           {urls.lan.map((u) => <span key={u} className="small">Na mesma rede: <code>{u}</code></span>)}
+          {urls.web?.map((u) => <span key={u} className="small">De qualquer lugar, com o login da agência: <code>{u}</code></span>)}
           {urls.vpn.map((u) => <span key={u} className="small">De outro lugar, pela VPN: <code>{u}</code></span>)}
         </div>
         {isOwner && (
@@ -61,7 +62,7 @@ export function Team() {
               })}><RefreshCw size={13} /> Trocar código</button>
             </div>
             <p className="muted small" style={{ margin: 0 }}>Convide só quem é de confiança: membros pedem tarefas aos funcionários de IA, que rodam neste computador.</p>
-            {urls.vpn.length === 0 && (
+            {urls.vpn.length === 0 && !urls.web?.length && (
               <div className="stack" style={{ gap: 4 }}>
                 <b className="small">Para quem está em outro lugar</b>
                 <ol className="small muted" style={{ margin: 0, paddingLeft: 18 }}>
@@ -69,7 +70,7 @@ export function Team() {
                   <li>Cada pessoa instala o NetBird e entra na mesma rede, com o convite que você manda por lá.</li>
                   <li>Quando a VPN conectar, o endereço de fora aparece aqui.</li>
                 </ol>
-                <p className="small muted" style={{ margin: 0 }}>Nunca libere a porta do Office no roteador nem use um túnel público: a VPN é o que mantém estranhos fora.</p>
+                <p className="small muted" style={{ margin: 0 }}>Nunca libere a porta do Office no roteador. Sem VPN, o único caminho seguro é o Cloudflare Tunnel com o Access (login Google) na frente, configurado em acesso-externo.json (veja o README).</p>
               </div>
             )}
           </>

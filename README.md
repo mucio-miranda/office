@@ -364,8 +364,9 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
   por 15 minutos, as sessões valem 30 dias e o banco guarda só o hash delas.
 - Só o dono mexe em pastas, permissões dos funcionários, convite, backup e contas. **Todo membro pode pedir tarefas aos
   funcionários de IA, que rodam no computador do escritório: convide só quem é de confiança.**
-- **Não exponha a porta na internet**, nem com túnel público ou proxy. Para quem está em outro lugar, use uma VPN privada
-  (veja abaixo). Um túnel faz o acesso externo parecer local para o Office.
+- **Não exponha a porta na internet**, nem com túnel público ou proxy aberto. Para quem está em outro lugar, use a VPN privada
+  ou o Cloudflare Tunnel com o Access na frente (veja abaixo). Pelo túnel, o Office reconhece o acesso como de fora (pelos
+  cabeçalhos do Cloudflare, que ninguém de fora tira), exige o login do Access, recusa endereço não configurado e marca o cookie como `Secure`.
 
 </details>
 
@@ -381,7 +382,21 @@ recomendamos o [NetBird](https://netbird.io), uma VPN open source com plano grat
    o código de convite. O tráfego vai criptografado pela VPN.
 
 Se o endereço não abrir, confira se o Firewall do Windows libera o Office na rede da VPN.
-Outro nome de domínio que você use para chegar ao Office precisa entrar na variável `OFFICE_HOSTS`.
+
+**Sem instalar nada nos colegas: Cloudflare Tunnel + Access.** Um endereço como `https://office.suaagencia.com`, com login
+Google na frente, e o Office continua no computador do escritório (nenhuma porta aberta no roteador):
+
+1. Domínio no Cloudflare (plano grátis). Pode ser um domínio só para isso, para não mexer no DNS do site.
+2. Zero Trust > Access > Applications: aplicação *self-hosted* para `office.suaagencia.com`, com política que libera só os
+   e-mails da equipe e login Google.
+3. No computador do escritório: `winget install Cloudflare.cloudflared`, `cloudflared tunnel login`,
+   `cloudflared tunnel create office`, `cloudflared tunnel route dns office office.suaagencia.com` e um `config.yml` com
+   `ingress: [{hostname: office.suaagencia.com, service: http://localhost:4747}, {service: http_status:404}]`.
+   Para rodar sempre: `cloudflared service install`.
+4. Crie `acesso-externo.json` na pasta de dados do Office (menu **Abrir pasta de dados**):
+   `{ "hosts": ["office.suaagencia.com"], "exigirAccess": true }`. Vale em segundos, sem reiniciar.
+
+O endereço aparece em **Equipe**, e cada pessoa ainda entra com o convite e a própria senha do Office.
 
 </details>
 
@@ -414,7 +429,7 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 ## 🗺️ Roadmap
 
 - [x] Escritório 3D, multi-escritório, presença na LAN
-- [x] Login seguro, acesso de fora por VPN privada e backup diário do banco
+- [x] Login seguro, acesso de fora por VPN privada ou Cloudflare Tunnel com login Google, e backup diário do banco
 - [x] Processos da casa na pasta do cliente, sessão contínua por peça e mesa de trabalho
 - [x] Trabalho em andamento no HD com as peças na mesa, e skills protegidas contra edição pelos funcionários
 - [x] Moodboards por nicho e por cliente, no painel e no estúdio de design

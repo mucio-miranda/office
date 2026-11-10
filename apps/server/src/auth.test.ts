@@ -10,7 +10,7 @@ const dataDir = mkdtempSync(path.join(tmpdir(), 'office-auth-'));
 process.env.OFFICE_DATA = dataDir;
 const { api } = await import('./routes/api.ts');
 const { db } = await import('./db.ts');
-const { guardHost, hostAllowed, resetAttempts } = await import('./auth.ts');
+const { guardHost, hostAllowed, resetAttempts, resetExternalAccess } = await import('./auth.ts');
 const { backupDir, listBackups, runBackup } = await import('./backup.ts');
 
 const LOCAL = '127.0.0.1';
@@ -18,10 +18,10 @@ const VPN = '100.70.1.2';
 const STRONG = 'senha-forte-1';
 let app: FastifyInstance;
 
-const call = async (method: string, url: string, o: { ip?: string; token?: string; body?: unknown; host?: string } = {}) => {
+const call = async (method: string, url: string, o: { ip?: string; token?: string; body?: unknown; host?: string; headers?: Record<string, string> } = {}) => {
   const res = await app.inject({
     method: method as 'GET', url, remoteAddress: o.ip ?? VPN,
-    headers: { host: o.host ?? 'localhost:4747', ...(o.token ? { authorization: `Bearer ${o.token}` } : {}) },
+    headers: { host: o.host ?? 'localhost:4747', ...(o.token ? { authorization: `Bearer ${o.token}` } : {}), ...o.headers },
     ...(o.body !== undefined ? { payload: o.body as object } : {}),
   });
   return { status: res.statusCode, json: res.body ? JSON.parse(res.body) : {} };
@@ -252,6 +252,34 @@ test('nomes de domínio estranhos são recusados (DNS rebinding)', async () => {
   assert.equal((await call('GET', '/api/me', { token: owner, host: 'site-malicioso.com:4747', ip: LOCAL })).status, 403);
   for (const h of ['localhost:4747', '127.0.0.1:4747', '[::1]:4747', '100.70.1.2:4747', '192.168.0.10:4747', 'meu-pc.netbird.cloud:4747']) assert.ok(hostAllowed(h), h);
   for (const h of ['site-malicioso.com', 'localhost.site-malicioso.com', 'netbird.cloud.site-malicioso.com', undefined]) assert.ok(!hostAllowed(h), String(h));
+});
+
+test('túnel do Cloudflare: nunca parece local, exige o Access e não se engana com cabeçalho forjado', async () => {
+  const PUB = 'office.agencia-teste.com';
+  const tunnel = (extra: Record<string, string> = {}) => ({ ip: LOCAL, host: PUB, headers: { 'cf-ray': 'abc-GRU', 'cf-connecting-ip': '203.0.113.9', ...extra } });
+  // sem configurar o endereço público, o túnel é recusado
+  assert.equal((await call('GET', '/api/auth/local', tunnel())).status, 403);
+  writeFileSync(path.join(dataDir, 'acesso-externo.json'), JSON.stringify({ hosts: [PUB] }));
+  resetExternalAccess();
+  // sem passar pelo login da agência (Access), nada
+  assert.equal((await call('GET', '/api/auth/local', tunnel())).status, 403);
+  const ok = tunnel({ 'cf-access-jwt-assertion': 'jwt' });
+  // com o Access: chega ao Office, mas como quem está de fora
+  assert.deepEqual((await call('GET', '/api/auth/local', ok)).json, { local: false, first: false, accounts: [] });
+  assert.equal((await call('GET', '/api/system/browse', { ...ok, token: owner })).status, 403);
+  assert.equal((await call('POST', '/api/auth/enter', { ...ok, body: { name: 'Intruso', pin: STRONG, create: true } })).status, 401, 'conta nova sem convite');
+  assert.equal((await call('POST', '/api/auth/redefinir', { ...ok, body: { name: 'Dona', pin: 'tomada-123' } })).status, 401, 'trocar senha sem código');
+  // X-Forwarded-For forjado pelo cliente não vira local
+  const forged = { ip: LOCAL, headers: { 'x-forwarded-for': '127.0.0.1, 203.0.113.9' } };
+  assert.equal((await call('GET', '/api/auth/local', forged)).json.local, false);
+  // o endereço público sem os cabeçalhos do Cloudflare (alguém apontando o domínio para cá) também não é local
+  assert.equal((await call('GET', '/api/auth/local', { ip: LOCAL, host: PUB })).status, 403);
+  // e o login pelo túnel entrega o cookie com Secure
+  const res = await app.inject({ method: 'POST', url: '/api/auth/enter', remoteAddress: LOCAL, headers: { host: PUB, 'cf-ray': 'x', 'cf-connecting-ip': '203.0.113.10', 'cf-access-jwt-assertion': 'jwt' }, payload: { name: 'Dona', pin: STRONG } });
+  assert.equal(res.statusCode, 200);
+  assert.match(String(res.headers['set-cookie']), /Secure/);
+  rmSync(path.join(dataDir, 'acesso-externo.json'));
+  resetExternalAccess();
 });
 
 test('backup: a cópia abre íntegra, tem os dados e só as 14 mais recentes ficam', async () => {

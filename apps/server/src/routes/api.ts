@@ -10,7 +10,7 @@ import { POST_FORMATS, POST_STATUSES,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
 import {
-  MIN_PIN, attemptKeys, blocked, checkPin, checkResetCode, clearFails, createResetCode, createSession, hashPin, isLocal, membership, noteFail,
+  MIN_PIN, externalAccess, viaTunnel, attemptKeys, blocked, checkPin, checkResetCode, clearFails, createResetCode, createSession, hashPin, isLocal, membership, noteFail,
   requireFinance, requireMember, requireWorker, seesFinance, requireOwner, requireUser, revokeSession, revokeSessions, sessionCookie, setPin,
 } from '../auth.ts';
 import { disconnectUser, invalidate, onlineUsers, refreshPresence } from '../realtime.ts';
@@ -210,7 +210,7 @@ export async function api(app: FastifyInstance) {
     }
     const { pinHash: _, ...pub } = user;
     const token = createSession(user.id);
-    reply.header('Set-Cookie', sessionCookie(token));
+    reply.header('Set-Cookie', sessionCookie(token, viaTunnel(req)));
     return { token, user: pub, officeId: invited?.id ?? null };
   });
 
@@ -239,7 +239,7 @@ export async function api(app: FastifyInstance) {
     r.get('/api/me', async (req, reply) => {
       // renova o cookie de sessão (usado por <video>/<img>) a partir do token da UI
       const h = req.headers.authorization;
-      if (h?.startsWith('Bearer ')) reply.header('Set-Cookie', sessionCookie(h.slice(7)));
+      if (h?.startsWith('Bearer ')) reply.header('Set-Cookie', sessionCookie(h.slice(7), viaTunnel(req)));
       return {
         user: req.user,
         offices: all<Office & { role: string; inviteCode: string }>(
@@ -503,7 +503,7 @@ export async function api(app: FastifyInstance) {
         .filter((i) => i.family === 'IPv4' && !i.internal).map((i) => i.address);
       const isVpn = (ip: string) => { const [a, b] = ip.split('.').map(Number); return a === 100 && b >= 64 && b <= 127; };
       const url = (ip: string) => `http://${ip}:${config.port}`;
-      return { lan: ips.filter((ip) => !isVpn(ip)).map(url), vpn: ips.filter(isVpn).map(url) };
+      return { lan: ips.filter((ip) => !isVpn(ip)).map(url), vpn: ips.filter(isVpn).map(url), web: externalAccess().hosts.map((h) => `https://${h}`) };
     });
 
     r.get('/api/offices/:officeId/backups', async (req, reply) => {
