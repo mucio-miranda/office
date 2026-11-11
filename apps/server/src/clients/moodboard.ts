@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Client, MoodboardItem, MoodboardSummary, MoodboardTheme, Office } from '@office/shared';
 import { clientDir, isFolder } from './folder.ts';
+import { clientPaths } from './layout.ts';
 
 /**
  * Moodboards: um por nicho, da biblioteca da agência (REFERENCIAS\<segmento> + indice.json, mantidos pela skill
@@ -125,7 +126,7 @@ function nicheTheme(refs: IndexRef[], niche: string, office?: Office) {
 interface Marca { cores?: Record<string, string>; fontes?: { titulo?: string; apoio?: string }; segmento?: string; nome?: string; handle?: string }
 
 function marcaOf(dir: string | null): Marca | null {
-  const file = dir && path.join(dir, 'DOCUMENTOS', 'IDENTIDADE VISUAL', 'marca.json');
+  const file = dir && clientPaths(dir).marca;
   if (!file || !existsSync(file)) return null;
   try { return JSON.parse(readFileSync(file, 'utf8').replace(/^﻿/, '')); } catch { return null; }
 }

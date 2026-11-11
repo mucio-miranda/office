@@ -1014,3 +1014,6 @@ label.check input { width: auto; height: auto; }
 
 .wall-panel label { display: flex; flex-direction: column; gap: 4px; font-size: 12px; }
 .wall-panel select { width: 100%; }
+
+.update-banner { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 99px; background: var(--primary); color: var(--primary-foreground); box-shadow: var(--shadow); font-size: 13px; max-width: calc(100vw - 24px); }
+.update-banner .primary { background: var(--primary-foreground); color: var(--primary); border: 0; border-radius: 99px; }

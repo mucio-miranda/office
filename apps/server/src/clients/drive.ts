@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
-import { createReadStream, existsSync, readdirSync, statfsSync, statSync } from 'node:fs';
+import { createReadStream, existsSync, readdirSync, realpathSync, statfsSync, statSync } from 'node:fs';
 import { constants, copyFile, mkdir } from 'node:fs/promises';
 import path from 'node:path';
 import type { Client } from '@office/shared';
 import { folderName, insideDir, kindOf, type FileKind } from './folder.ts';
+import { clientPaths, isNewLayout, type LayoutKey } from './layout.ts';
 
 /**
  * Envio do trabalho aprovado para o Drive: a pasta do Drive montada no Windows (Google Drive para computador).
@@ -21,9 +22,26 @@ export function driveInfo(root: string | null) {
   return { root, ok: true, free: st.bavail * st.bsize };
 }
 
+/** Pastas do Drive que nunca são a pasta de trabalho de um cliente: cópias, lixeira e arquivo morto. */
+const NOT_CLIENT_DIR = /^(duplicados|_apagados|apagados|lixeira|de lado|arquivo morto)$/i;
+
+/**
+ * A pasta do Drive para onde a pasta local do cliente aponta (atalho/link simbólico para o Drive). É a fonte mais
+ * confiável: o nome local pode ser diferente do nome no Drive (o apelido da pessoa no PC e o nome da clínica no Drive).
+ */
+export function linkedDriveFolder(root: string, localDir: string) {
+  try {
+    const real = realpathSync.native(localDir);
+    const base = realpathSync.native(root);
+    const rel = path.relative(base, real);
+    if (!rel || rel.startsWith('..') || path.isAbsolute(rel)) return null;
+    return rel.split(path.sep).join('/');
+  } catch { return null; }
+}
+
 /** A pasta que já existe no Drive para algum destes nomes, até três níveis abaixo. Sem achar, fica sem pasta. */
 export function existingDriveFolders(root: string) {
-  const subdirs = (rel: string) => driveDirs(root, rel)?.dirs.map((d) => (rel ? `${rel}/${d}` : d)) ?? [];
+  const subdirs = (rel: string) => (driveDirs(root, rel)?.dirs ?? []).filter((d) => !NOT_CLIENT_DIR.test(d)).map((d) => (rel ? `${rel}/${d}` : d));
   const first = subdirs('');
   const second = first.flatMap(subdirs);
   const all = [...first, ...second, ...second.flatMap(subdirs)];
@@ -49,7 +67,7 @@ export function clientDriveFolder(root: string, client: Pick<Client, 'name' | 'd
   if (!client) return '';
   if (client.driveFolder && insideDir(root, client.driveFolder) && existsSync(path.join(root, client.driveFolder))) return client.driveFolder;
   const want = folderName(client.name);
-  const subdirs = (rel: string) => driveDirs(root, rel)?.dirs.map((d) => (rel ? `${rel}/${d}` : d)) ?? [];
+  const subdirs = (rel: string) => (driveDirs(root, rel)?.dirs ?? []).filter((d) => !NOT_CLIENT_DIR.test(d)).map((d) => (rel ? `${rel}/${d}` : d));
   const same = (rel: string) => folderName(rel.split('/').pop()!) === want;
   const first = subdirs('');
   const second = first.flatMap(subdirs);
@@ -58,12 +76,23 @@ export function clientDriveFolder(root: string, client: Pick<Client, 'name' | 'd
   return first.some((d) => d.toUpperCase() === 'CLIENTES') ? `${first.find((d) => d.toUpperCase() === 'CLIENTES')}/${want}` : want;
 }
 
-/** Subpasta de um arquivo na pasta do cliente: a mesma da pasta local ou, fora do padrão, a do tipo de arquivo. */
-export function driveSubdir(localClientDir: string | null, file: string) {
-  if (localClientDir) {
-    const rel = path.relative(localClientDir, file).split(path.sep);
-    if (rel.length > 1 && /^(DOCUMENTOS|FOTOS|VIDEOS)$/i.test(rel[0])) return rel.slice(0, -1).join('/');
+/** Na estrutura nova, onde cada tipo de arquivo aprovado entra: o que vai ao ar na pasta do mês, o resto em ARQUIVOS. */
+const KEY_BY_KIND: Record<FileKind, LayoutKey> = { imagem: 'mes', video: 'mes', design: 'projetos', audio: 'musicas', doc: 'documentos', outro: 'documentos' };
+
+/**
+ * Subpasta de um arquivo na pasta do cliente no Drive. Se a pasta do Drive já está na estrutura nova (REDES SOCIAIS +
+ * ARQUIVOS), segue o mapa de pastas; senão, a mesma subpasta da pasta local ou, fora do padrão, a do tipo de arquivo.
+ */
+export function driveSubdir(localClientDir: string | null, file: string, driveClientDir?: string | null) {
+  const local = localClientDir ? path.relative(localClientDir, file).split(path.sep) : [];
+  const inside = local.length > 1 && !local[0].startsWith('..');
+  if (driveClientDir && (isNewLayout(driveClientDir) || (localClientDir && isNewLayout(localClientDir)))) {
+    if (inside && /^(REDES SOCIAIS|ARQUIVOS\b)/i.test(local[0]) && !/^TRABALHOS$/i.test(local[1] ?? '')) return local.slice(0, -1).join('/');
+    const paths = clientPaths(driveClientDir, undefined, 'novo');
+    const rel = paths.rel(KEY_BY_KIND[kindOf(file)]);
+    return kindOf(file) === 'doc' ? `${rel}/PDFS` : rel;
   }
+  if (inside && /^(DOCUMENTOS|FOTOS|VIDEOS)$/i.test(local[0])) return local.slice(0, -1).join('/');
   return SUB_BY_KIND[kindOf(file)];
 }
 

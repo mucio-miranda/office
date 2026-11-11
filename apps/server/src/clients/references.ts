@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Client, Office } from '@office/shared';
 import { clientDir, insideDir, isFolder } from './folder.ts';
+import { clientPaths, layoutMap } from './layout.ts';
 
 /**
  * Referências editáveis pelo Office: adicionar (arquivo ou link de imagem) e remover. Remover nunca apaga: o arquivo vai
@@ -143,10 +144,15 @@ export function setNicheFont(office: Office, niche: string, font: { titulo: stri
 
 // ---------------------------------------------------------------- por cliente
 
-/** A pasta de referências do cliente: a primeira que já existe (nome começando com REFERENCIA), ou DOCUMENTOS\REFERENCIAS. */
+/**
+ * A pasta de referências do cliente: na estrutura nova, ARQUIVOS – CLIENTE\REFERENCIAS; na antiga, a primeira que já
+ * existe (nome começando com REFERENCIA), ou DOCUMENTOS\REFERENCIAS.
+ */
 export function clientRefDir(office: Office, client: Client) {
   const dir = clientDir(office, client);
   if (!dir) throw new Error('Este cliente não tem pasta.');
+  const paths = clientPaths(dir, layoutMap(office.rootPath));
+  if (paths.estrutura === 'novo') return paths.abs('referencias');
   const find = (abs: string, depth: number): string | null => {
     if (depth > 3) return null;
     let entries: Dirent[] = [];

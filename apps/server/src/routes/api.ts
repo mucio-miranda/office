@@ -22,7 +22,7 @@ import { postsOf, progress, savePosts, type PostInput } from '../agents/calendar
 import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
 import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '../agents/skillsRepo.ts';
 import { detectDirs, mergeDirs, rootProblem } from '../agents/officeSetup.ts';
-import { driveDirs, existingDriveFolders } from '../clients/drive.ts';
+import { driveDirs, existingDriveFolders, linkedDriveFolder } from '../clients/drive.ts';
 import { discoverClients } from '../clients/discover.ts';
 import { listSkills } from '../agents/skills.ts';
 import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/sessions.ts';
@@ -680,7 +680,7 @@ export async function api(app: FastifyInstance) {
       const errors: string[] = [];
       for (const { dir, name } of b.items) {
         if (!found.delete(dir)) { skipped.push(dir); continue; }
-        const row = { id: uid(), officeId, name, folder: path.join('CLIENTES', dir), driveFolder: driveFolder(dir, name), monthlyFee: 0, status: 'ativo', color: pick(), briefing: {}, approvalMode: 'humano', niche: null } as Client;
+        const row = { id: uid(), officeId, name, folder: path.join('CLIENTES', dir), driveFolder: (office.driveRoot && linkedDriveFolder(office.driveRoot, path.join(office.rootPath, 'CLIENTES', dir))) || driveFolder(dir, name), monthlyFee: 0, status: 'ativo', color: pick(), briefing: {}, approvalMode: 'humano', niche: null } as Client;
         insert('clients', row as never);
         created.push(row);
         if (b.rascunho) {

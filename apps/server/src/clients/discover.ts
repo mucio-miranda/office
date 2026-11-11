@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import type { Client, Office } from '@office/shared';
 import { clientDir, isFolder } from './folder.ts';
+import { clientPaths, isNewLayout } from './layout.ts';
 
 /**
  * Importação: as pastas de CLIENTES que ainda não viraram cliente no Office. Só lê: nada é criado, movido nem renomeado.
@@ -10,7 +11,7 @@ export interface FoundClient {
   /** Nome da pasta dentro de CLIENTES. */
   dir: string;
   name: string;
-  /** Tem DOCUMENTOS, FOTOS ou VIDEOS. As outras podem ser projeto, não cliente. */
+  /** Tem REDES SOCIAIS/ARQUIVOS (estrutura nova) ou DOCUMENTOS, FOTOS, VIDEOS. As outras podem ser projeto, não cliente. */
   standard: boolean;
   marca: boolean;
   idv: boolean;
@@ -47,14 +48,14 @@ export function discoverClients(office: Office, clients: Pick<Client, 'folder'>[
     if (/^[._$]/.test(e.name)) continue;
     const abs = path.join(root, e.name);
     if (!isFolder(e, abs) || taken.some((t) => samePath(t, abs))) continue;
-    const idv = path.join(abs, 'DOCUMENTOS', 'IDENTIDADE VISUAL');
-    const marca = path.join(idv, 'marca.json');
+    const paths = clientPaths(abs);
+    const marca = paths.marca;
     found.push({
       dir: e.name,
       name: brandName(marca) ?? prettyName(e.name),
-      standard: ['DOCUMENTOS', 'FOTOS', 'VIDEOS'].some((d) => existsSync(path.join(abs, d))),
+      standard: isNewLayout(abs) || ['DOCUMENTOS', 'FOTOS', 'VIDEOS'].some((d) => existsSync(path.join(abs, d))),
       marca: existsSync(marca),
-      idv: existsSync(path.join(idv, 'IDV.md')),
+      idv: existsSync(paths.idvMd),
     });
   }
   return found.sort((a, b) => a.name.localeCompare(b.name));

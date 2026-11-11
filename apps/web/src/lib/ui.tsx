@@ -42,3 +42,31 @@ export function ThemeToggle({ up = true }: { up?: boolean }) {
     </div>
   );
 }
+
+/**
+ * Aviso de versão nova: a aba aberta antes de uma atualização continua com a tela antiga. Confere a versão do servidor
+ * a cada minuto e quando a janela volta ao foco; mudou, oferece recarregar.
+ */
+export function UpdateBanner() {
+  const [first, setFirst] = useState<string | null>(null);
+  const [now, setNow] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    const check = () => fetch('/api/health', { cache: 'no-store' }).then((r) => r.json()).then((h: { version?: string }) => {
+      if (!alive || !h.version) return;
+      setFirst((f) => f ?? h.version!);
+      setNow(h.version);
+    }).catch(() => { /* servidor fora: tenta de novo depois */ });
+    check();
+    const timer = setInterval(check, 60_000);
+    window.addEventListener('focus', check);
+    return () => { alive = false; clearInterval(timer); window.removeEventListener('focus', check); };
+  }, []);
+  if (!first || !now || first === now) return null;
+  return (
+    <div className="update-banner" role="status">
+      <span>Saiu uma versão nova do Office ({now}).</span>
+      <button className="primary small" onClick={() => location.reload()}>Atualizar</button>
+    </div>
+  );
+}

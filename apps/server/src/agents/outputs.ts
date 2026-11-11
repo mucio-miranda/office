@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Demand, Office, ReviewMark, Stage } from '@office/shared';
 import { isFolder } from '../clients/folder.ts';
+import { clientPaths } from '../clients/layout.ts';
 
 /**
  * Peças que cada etapa da esteira produz: onde a etapa grava, quais arquivos saíram de uma tarefa (para a mesa
@@ -14,6 +15,19 @@ export const slug = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').to
 export function stageOutput(stage: Stage, d: Demand, dir: string): { path: string; isDir: boolean } | null {
   const name = slug(d.title);
   const p = (...parts: string[]) => path.join(dir, ...parts);
+  const paths = clientPaths(dir);
+  if (paths.estrutura === 'novo') {
+    // estrutura nova: o trabalho fica em ARQUIVOS – CLIENTE; a pasta do mês (o que o cliente vê) só recebe o aprovado
+    const docs = paths.abs('documentos');
+    const job = path.join(paths.abs('trabalhos'), `${(d.createdAt || new Date().toISOString()).slice(0, 10)} ${name}`);
+    switch (stage) {
+      case 'pauta': return { path: path.join(docs, 'PAUTAS', `${name}.md`), isDir: false };
+      case 'copy': return { path: path.join(docs, 'COPYS', `${name}.md`), isDir: false };
+      case 'arte': return { path: path.join(job, 'arte'), isDir: true };
+      case 'video': return { path: path.join(job, 'video'), isDir: true };
+      default: return null;
+    }
+  }
   switch (stage) {
     case 'pauta': return { path: p('DOCUMENTOS', 'PAUTAS', `${name}.md`), isDir: false };
     case 'copy': return { path: p('DOCUMENTOS', 'COPYS', `${name}.md`), isDir: false };

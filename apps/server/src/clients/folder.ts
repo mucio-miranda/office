@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync, type Dirent } from 'node:fs';
 import path from 'node:path';
 import type { Client, Office } from '@office/shared';
+import { clientPaths, isNewLayout, type LayoutKey } from './layout.ts';
 
 /**
  * Pasta do cliente no padrão da casa (o mesmo da skill organizar-pasta). O Office só cria pastas que faltam:
@@ -32,9 +33,28 @@ export function isFolder(e: Dirent, full: string) {
   try { return statSync(full).isDirectory(); } catch { return false; }
 }
 
-/** Cria as subpastas que faltam. Devolve as que foram criadas agora. */
+/** Pastas da estrutura nova (REDES SOCIAIS + ARQUIVOS – CLIENTE), pelas chaves do mapa de pastas. */
+const NEW_KEYS: LayoutKey[] = ['perfil', 'mes', 'trabalhos', 'idv', 'documentos', 'projetos', 'referencias', 'brutos', 'banco'];
+
+const isEmptyDir = (dir: string) => { try { return readdirSync(dir).every((n) => /^(desktop\.ini|\.DS_Store|Thumbs\.db)$/i.test(n)); } catch { return true; } };
+
+/**
+ * Cria as subpastas que faltam. Devolve as que foram criadas agora. Pasta nova ou vazia nasce na estrutura nova;
+ * pasta que já usa o padrão antigo (DOCUMENTOS, FOTOS, VIDEOS) só ganha o que falta dele, sem misturar os dois.
+ */
 export function ensureStructure(dir: string) {
   const created: string[] = [];
+  if (isNewLayout(dir) || isEmptyDir(dir)) {
+    const paths = clientPaths(dir, undefined, 'novo');
+    for (const key of NEW_KEYS) {
+      const rel = paths.rel(key);
+      if (!existsSync(path.join(dir, ...rel.split('/')))) {
+        mkdirSync(path.join(dir, ...rel.split('/')), { recursive: true });
+        created.push(rel);
+      }
+    }
+    return created;
+  }
   for (const rel of STANDARD_DIRS) {
     const p = path.join(dir, ...rel.split('/'));
     if (!existsSync(p)) {
@@ -77,13 +97,13 @@ export const kindOf = (file: string): FileKind => EXT[path.extname(file).slice(1
 const GROUPS: { key: string; label: string; test: (rel: string, kind: FileKind) => boolean }[] = [
   { key: 'idv', label: 'Identidade visual', test: (r) => /(^|\/)IDENTIDADE VISUAL\//i.test(r) },
   { key: 'logos', label: 'Logos', test: (r) => /(^|\/)LOGOS?\//i.test(r) || /logo/i.test(path.basename(r)) },
-  { key: 'ensaio', label: 'Ensaio e fotos brutas', test: (r, k) => k === 'imagem' && /^FOTOS\//i.test(r) && !/\/EDITADAS?\//i.test(r) },
-  { key: 'fotos-editadas', label: 'Fotos editadas', test: (r) => /^FOTOS\/.*EDITADAS?\//i.test(r) },
-  { key: 'brutos', label: 'Vídeos brutos', test: (r) => /^VIDEOS\/BRUTOS\//i.test(r) },
+  { key: 'ensaio', label: 'Ensaio e fotos brutas', test: (r, k) => k === 'imagem' && (/\/FOTOS BRUTAS\//i.test(r) || (/^FOTOS\//i.test(r) && !/\/EDITADAS?\//i.test(r))) },
+  { key: 'fotos-editadas', label: 'Fotos editadas', test: (r) => /^FOTOS\/.*EDITADAS?\//i.test(r) || /\/Fotos Editadas[^/]*\//i.test(r) },
+  { key: 'brutos', label: 'Vídeos brutos', test: (r) => /^VIDEOS\/BRUTOS\//i.test(r) || /\/VIDEOS BRUTOS\//i.test(r) },
   { key: 'referencias', label: 'Referências', test: (r) => /REFERENCIAS?\//i.test(r) },
-  { key: 'editados', label: 'Vídeos editados', test: (r) => /^VIDEOS\/EDITADOS\//i.test(r) },
+  { key: 'editados', label: 'Vídeos editados', test: (r, k) => /^VIDEOS\/EDITADOS\//i.test(r) || (k === 'video' && /^REDES SOCIAIS\//i.test(r)) },
   { key: 'musicas', label: 'Músicas', test: (r, k) => k === 'audio' || /MUSICAS?\//i.test(r) },
-  { key: 'artes', label: 'Artes', test: (r) => /(^|\/)ARTES\//i.test(r) },
+  { key: 'artes', label: 'Artes', test: (r, k) => /(^|\/)ARTES\//i.test(r) || (/^REDES SOCIAIS\//i.test(r) && (k === 'imagem' || k === 'design')) || /(^|\/)PROJETOS\//i.test(r) },
   { key: 'documentos', label: 'Documentos e briefing', test: (r, k) => k === 'doc' },
   { key: 'outros', label: 'Outros arquivos', test: () => true },
 ];

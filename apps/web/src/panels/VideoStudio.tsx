@@ -481,7 +481,7 @@ function NewTimeline({ onPick, onClose }: { onPick: (dir: string, name: string) 
         <header className="modal-head"><h3>Nova timeline</h3><button type="button" className="icon" onClick={onClose}><X size={16} /></button></header>
         <div className="modal-body">
           <label>Nome<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="reels-depoimento-maria" /></label>
-          <p className="muted small" style={{ margin: 0 }}>Em seguida, escolha a pasta de saída (ex.: VIDEOS\EDITADOS do cliente). Os brutos podem estar em qualquer pasta do escritório.</p>
+          <p className="muted small" style={{ margin: 0 }}>Em seguida, escolha a pasta de saída (ex.: a pasta do mês em REDES SOCIAIS do cliente). Os brutos podem estar em qualquer pasta do escritório.</p>
         </div>
         <footer className="modal-foot"><span /><div className="row gap"><button type="button" className="ghost" onClick={onClose}>Cancelar</button><button className="primary" disabled={!name.trim()}>Escolher pasta</button></div></footer>
       </form>

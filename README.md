@@ -102,7 +102,12 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   marca áreas na imagem, comenta um tempo do vídeo e aprova, sem procurar nas pastas. Se você editar uma peça à mão, a mesa
   nota e oferece usar como versão atual.
 - **Envio ao Drive**: um botão na demanda aprovada copia as peças para a pasta do cliente no Google Drive para
-  computador, com a mesma estrutura da pasta local. Você escolhe a pasta e os arquivos; nada é apagado nem sobrescrito lá.
+  computador. Na estrutura nova, a arte e o vídeo aprovados vão para a pasta do mês (o que o cliente vê) e o PSD para
+  `ARQUIVOS – CLIENTE\PROJETOS`; na antiga, a mesma estrutura da pasta local. Você escolhe a pasta e os arquivos; nada é apagado nem sobrescrito lá.
+- **Pastas do cliente**: duas estruturas convivem. A nova separa `REDES SOCIAIS` (identidade visual e uma pasta por mês,
+  `2026-11 Novembro – Cliente`, com os posts, o PDF de legendas e `ENSAIOS – Mês`) de `ARQUIVOS – CLIENTE` (trabalhos,
+  documentos, projetos, referências, brutos por captação, banco e músicas), que só a equipe vê. A antiga (DOCUMENTOS,
+  FOTOS e VIDEOS) continua funcionando. Os nomes vêm de `.claude/skills/_global/pastas.json`, o mesmo mapa que as skills usam.
 - **Arquivo dos clientes**: um armário por cliente na redação; clicar abre a pasta dele por grupo, com busca e
   prévia de imagem, vídeo, áudio, PDF e texto. Editar um PDF vira uma tarefa para o funcionário com o PdfCraft
 
@@ -111,7 +116,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - **Sessões do cliente**: o botão **Sessões** lista as conversas do Office e as que você abriu no terminal (Claude Code) na pasta do cliente. Leia qualquer uma e continue de onde parou, no Office.
 - **Demanda pelo mapa**: chegue perto de um funcionário e aperte <kbd>E</kbd>, ou use **Nova demanda** no topo. Escolha cliente, pedido, processo, prazo e quem faz, e a sessão do cliente já começa.
 - **Importar da pasta** lista o que já existe em `CLIENTES\` e ainda não é cliente no Office, sem criar, mover nem renomear nada lá. Opcionalmente, o gerente lê cada pasta e preenche um rascunho do briefing para a equipe conferir.
-- **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com DOCUMENTOS, FOTOS e VIDEOS); só cria
+- **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com REDES SOCIAIS e ARQUIVOS – NOME); só cria
   as pastas que faltam, nada é movido nem apagado
 - **Entrevista de briefing**: o gerente de IA lê a pasta, pergunta o que falta pelo chat, grava o `BRIEFING.md`
   e sugere as primeiras demandas

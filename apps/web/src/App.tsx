@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { ArrowRight, LogOut } from 'lucide-react';
 import { useStore } from './lib/store';
 import { api } from './lib/api';
-import { Brand, ThemeToggle } from './lib/ui';
+import { Brand, ThemeToggle, UpdateBanner } from './lib/ui';
 import { AsciiOffice } from './lib/AsciiOffice';
 import { PathField, PathList } from './lib/PathPicker';
 import { OfficeView } from './OfficeView';
@@ -15,8 +15,7 @@ export function App() {
   const [booted, setBooted] = useState(false);
   useEffect(() => { useStore.getState().boot().finally(() => setBooted(true)); }, []);
   if (!booted) return <div className="splash"><Brand /></div>;
-  if (!user || !office || user.mustChangePin) return <Gate />;
-  return <OfficeView />;
+  return <>{!user || !office || user.mustChangePin ? <Gate /> : <OfficeView />}<UpdateBanner /></>;
 }
 
 /** Tela de entrada no estilo do login do Paperclip: formulário à esquerda, arte ASCII à direita. */

@@ -94,7 +94,7 @@ function ClientDetail({ c }: { c: Client }) {
           <small className="muted">Pasta do cliente</small>
           <div className="row gap">
             <code className="truncate">{c.folder ?? 'sem pasta'}</code>
-            <button className="ghost small" title="Cria só as pastas que faltam (DOCUMENTOS, FOTOS, VIDEOS…); nada é movido nem apagado"
+            <button className="ghost small" title="Cria só as pastas que faltam (REDES SOCIAIS e ARQUIVOS no padrão novo); nada é movido nem apagado"
               onClick={async () => { const r = await api(`${base}/folder`, { body: {} }); notify(r.createdDirs.length ? `${r.createdDirs.length} pasta(s) criada(s)` : 'A estrutura já estava completa'); }}>
               <FolderPlus size={14} /> Estrutura padrão
             </button>
@@ -180,7 +180,7 @@ function FilesCard({ c, base }: { c: Client; base: string }) {
       {err && <div className="error">{err}</div>}
       {idx && !idx.root && <p className="muted small">Sem pasta definida. Use "Estrutura padrão" para criar uma.</p>}
       {idx?.root && !idx.exists && <p className="muted small">A pasta {idx.root} não existe.</p>}
-      {idx?.exists && idx.total === 0 && <p className="muted small">A pasta está vazia. Coloque o ensaio em FOTOS\BRUTAS, os logos em DOCUMENTOS\LOGOS e os vídeos em VIDEOS\BRUTOS.</p>}
+      {idx?.exists && idx.total === 0 && <p className="muted small">A pasta está vazia. Coloque os brutos em ARQUIVOS – CLIENTE\BRUTOS\&lt;captação&gt; e o kit da marca em REDES SOCIAIS\IDENTIDADE VISUAL.</p>}
       {idx?.groups.map((g) => {
         const imgs = g.files.filter((f) => WEB_IMG.test(f.rel)).slice(0, 8);
         const others = g.files.filter((f) => !WEB_IMG.test(f.rel)).slice(0, imgs.length ? 3 : 6);
@@ -295,7 +295,7 @@ function NewClient({ onClose }: { onClose: (id?: string) => void }) {
             <label className="check"><input type="radio" checked={f.folderMode === 'nova'} onChange={() => setF({ ...f, folderMode: 'nova' })} /> Criar <code>{preview}</code> no padrão da casa</label>
             <label className="check"><input type="radio" checked={f.folderMode === 'existente'} onChange={() => setF({ ...f, folderMode: 'existente' })} /> Usar uma pasta que já existe</label>
             {f.folderMode === 'existente' && <PathField value={f.folder} onChange={(v) => setF({ ...f, folder: v })} scope="office" officeId={office!.id} placeholder="Pasta do cliente" title="Pasta do cliente" />}
-            <span className="muted small">O Office só cria as pastas que faltam (DOCUMENTOS, FOTOS, VIDEOS…). Nada é movido nem apagado.</span>
+            <span className="muted small">O Office só cria as pastas que faltam (REDES SOCIAIS, que o cliente vê, e ARQUIVOS, só da equipe). Nada é movido nem apagado.</span>
           </div>
           <div className="col gap-s">
             <small className="muted">Quem aprova as peças</small>

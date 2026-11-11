@@ -200,7 +200,7 @@ export const PROCESSES: ProcessDef[] = [
     needs: [
       { label: 'Tokens de marca (marca.json)', test: 'marca\\.json$' },
       { label: 'Identidade visual', test: '(^|/)IDENTIDADE VISUAL/' },
-      { label: 'Fotos editadas', test: '(^|/)FOTOS/.*EDITADAS?/' },
+      { label: 'Fotos editadas', test: '(^|/)FOTOS/.*EDITADAS?/|/Fotos Editadas[^/]*/' },
     ],
   },
   {
@@ -209,9 +209,9 @@ export const PROCESSES: ProcessDef[] = [
   },
   { id: 'story-broll', label: 'Story de b-roll', kind: 'video', stage: 'video', agent: 'editor-de-video', skill: 'story-broll', needs: [NEEDS_BRUTOS] },
   { id: 'story-reuniao', label: 'Story de reunião', kind: 'video', stage: 'video', agent: 'editor-de-video', skill: 'story-reuniao', needs: [NEEDS_BRUTOS] },
-  { id: 'fotos-ensaio', label: 'Tratar ensaio', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'editar-ensaio', needs: [{ label: 'Fotos do ensaio', test: '(^|/)FOTOS/' }] },
-  { id: 'fotos-comida', label: 'Tratar fotos de comida', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'editar-comida', needs: [{ label: 'Fotos', test: '(^|/)FOTOS/' }] },
-  { id: 'retoque', label: 'Retoque de retrato', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'retoque-retrato', needs: [{ label: 'Fotos', test: '(^|/)FOTOS/' }] },
+  { id: 'fotos-ensaio', label: 'Tratar ensaio', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'editar-ensaio', needs: [{ label: 'Fotos do ensaio', test: '(^|/)FOTOS/|/FOTOS BRUTAS/|/Fotos Editadas[^/]*/' }] },
+  { id: 'fotos-comida', label: 'Tratar fotos de comida', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'editar-comida', needs: [{ label: 'Fotos', test: '(^|/)FOTOS/|/FOTOS BRUTAS/|/Fotos Editadas[^/]*/' }] },
+  { id: 'retoque', label: 'Retoque de retrato', kind: 'foto', stage: 'arte', agent: 'designer', skill: 'retoque-retrato', needs: [{ label: 'Fotos', test: '(^|/)FOTOS/|/FOTOS BRUTAS/|/Fotos Editadas[^/]*/' }] },
   { id: 'roteiro', label: 'Roteiro de Reels', kind: 'copy', stage: 'copy', agent: 'copywriter', skill: 'guia-de-roteiro', needs: [] },
 ];
 export const processById = (id: string | null | undefined) => PROCESSES.find((p) => p.id === id);
