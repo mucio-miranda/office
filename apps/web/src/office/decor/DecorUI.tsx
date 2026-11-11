@@ -239,7 +239,7 @@ function WallToolButton() {
               {WALL_FINISHES.map((t) => <option key={t} value={t}>{WALL_LABEL[t]}</option>)}
             </select>
           </label>
-          <p className="muted small" style={{ margin: 0 }}>Os padrões valem para toda parede sem acabamento próprio, inclusive das salas novas. Para trocar uma parede só, escolha abaixo e clique nela.</p>
+          <p className="muted small" style={{ margin: 0 }}>Os padrões valem para toda parede sem acabamento próprio, inclusive das salas novas. As salas do andar aberto (recepção, gerência, redação, copa e design) começam sem parede entre elas: para fechar uma, escolha o acabamento abaixo e use “Aplicar na sala” ou clique nas faixas rosa.</p>
           <div className="wall-types">
             {WALL_OPTIONS.map((t) => (
               <button key={t} className={tool === t ? 'on' : ''} onClick={() => setTool(t)}><i style={{ background: WALL_SWATCH[t] }} />{WALL_LABEL[t]}</button>

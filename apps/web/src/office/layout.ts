@@ -47,7 +47,7 @@ export const WALL_H = 0.6;
 export interface Box { x0: number; z0: number; x1: number; z1: number }
 
 /** Paredes como segmentos (x1,z1)-(x2,z2) com portas (centro no eixo da parede). */
-interface WallDef { a: Vec2; b: Vec2; doors: number[] }
+interface WallDef { a: Vec2; b: Vec2; doors: number[]; /** Divisa do andar aberto: existe, mas começa sem parede até alguém escolher um acabamento. */ open?: boolean }
 const WALL_DEFS: WallDef[] = [
   // contorno (porta de entrada na frente da recepção)
   { a: { x: -27, z: -18 }, b: { x: 27, z: -18 }, doors: [] },
@@ -60,6 +60,13 @@ const WALL_DEFS: WallDef[] = [
   // ilha de vídeo (aberta para o estúdio de design)
   { a: { x: 9, z: -3 }, b: { x: 27, z: -3 }, doors: [21] },
   { a: { x: 9, z: -3 }, b: { x: 9, z: 7.5 }, doors: [2.2] },
+  // divisas do andar aberto (recepção, gerência, redação, copa e design): começam sem parede, mas dá para
+  // fechar cada sala no modo Decorar (vidro, por exemplo), com porta já prevista
+  { a: { x: -9, z: -3 }, b: { x: 9, z: -3 }, doors: [0], open: true },
+  { a: { x: -9, z: -18 }, b: { x: -9, z: -3 }, doors: [-10.5], open: true },
+  { a: { x: 9, z: -18 }, b: { x: 9, z: -3 }, doors: [-10.5], open: true },
+  { a: { x: 9, z: 7.5 }, b: { x: 9, z: 18 }, doors: [13], open: true },
+  { a: { x: 9, z: 7.5 }, b: { x: 27, z: 7.5 }, doors: [23], open: true },
 ];
 
 export interface WallSeg { key: string; x: number; z: number; w: number; d: number }
@@ -96,6 +103,8 @@ const wallSegs = ({ a, b, doors }: WallDef): WallSeg[] => {
   return segs;
 };
 export const WALLS: WallSeg[] = WALL_DEFS.flatMap(wallSegs);
+/** Trechos que começam sem parede (as divisas do andar aberto). */
+const OPEN_KEYS = new Set(WALL_DEFS.filter((d) => d.open).flatMap(wallSegs).map((s) => s.key));
 
 export type FurnitureKind =
   | 'mesa' | 'cadeira' | 'sofa' | 'planta' | 'quadro' | 'calendario' | 'tv' | 'mesa-reuniao'
@@ -217,7 +226,7 @@ export const FURN_BOX = (f: Furniture): Box => {
 };
 
 const wallBox = (w: WallSeg): Box => ({ x0: w.x - w.w / 2, z0: w.z - w.d / 2, x1: w.x + w.w / 2, z1: w.z + w.d / 2 });
-export const WALL_BOXES: Box[] = WALLS.map(wallBox);
+export const WALL_BOXES: Box[] = WALLS.filter((w) => !OPEN_KEYS.has(w.key)).map(wallBox);
 const SOLIDS: Box[] = [
   ...WALL_BOXES,
   ...FURNITURE.filter((f) => f.solid).map(FURN_BOX),
@@ -243,8 +252,13 @@ export const wallTypeOf = (key: string): WallType => styleOf(wallStyles, key);
  * Acabamento de um trecho: a escolha dele; numa divisória entre salas, o padrão das divisórias; senão o padrão do
  * escritório; senão a alvenaria.
  */
-export const styleOf = (map: Record<string, WallType>, key: string): WallType =>
-  map[key] ?? (isDivider(key) ? map.divisorias : undefined) ?? map.padrao ?? 'alvenaria';
+export const styleOf = (map: Record<string, WallType>, key: string): WallType => map[key] ?? baseStyle(map, key);
+/**
+ * O que o trecho mostra sem escolha própria. As divisas do andar aberto ficam sem parede (os padrões não fecham
+ * as salas sozinhos); as outras seguem o padrão das divisórias, o do escritório ou a alvenaria.
+ */
+export const baseStyle = (map: Record<string, WallType>, key: string): WallType =>
+  OPEN_KEYS.has(key) ? 'removida' : (isDivider(key) ? map.divisorias : undefined) ?? map.padrao ?? 'alvenaria';
 
 /** Divisórias: trechos com uma sala de cada lado (as paredes externas do prédio ficam de fora). */
 const dividers = new Set<string>();
@@ -268,7 +282,7 @@ export const dividerKeys = () => WALLS.filter((w) => isDivider(w.key)).map((w) =
 
 function rebuildSolids() {
   WALL_BOXES.length = 0;
-  WALL_BOXES.push(...WALLS.filter((w) => wallStyles[w.key] !== 'removida').map(wallBox));
+  WALL_BOXES.push(...WALLS.filter((w) => wallTypeOf(w.key) !== 'removida').map(wallBox));
   SOLIDS.length = 0;
   SOLIDS.push(...WALL_BOXES, ...FURNITURE.filter((f) => f.solid).map(FURN_BOX), ...agentDesks);
   resetGrid();

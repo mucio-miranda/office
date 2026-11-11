@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { WALL_TYPES, type WallType } from '@office/shared';
 import { useStore } from '../../lib/store';
 import { api } from '../../lib/api';
-import { ROOMS, WALLS, isDivider, setWallStyles, wallTypeOf } from '../layout';
+import { ROOMS, WALLS, baseStyle, setWallStyles, wallTypeOf } from '../layout';
 import { wallsOfRoomIn } from './wallsOfRoom';
 
 /** Ferramenta de paredes do modo Decorar: um tipo escolhido e cada clique numa parede aplica. */
@@ -55,8 +55,7 @@ export function applyWall(keys: string[], type: WallType) {
   const next = { ...useStore.getState().walls };
   // igual ao padrão do escritório: fica sem escolha própria e acompanha o padrão se ele mudar
   for (const k of keys) {
-    const base = (isDivider(k) ? next.divisorias : undefined) ?? next.padrao ?? 'alvenaria';
-    if (type === base) delete next[k];
+    if (type === baseStyle(next, k)) delete next[k];
     else next[k] = type;
   }
   return saveWalls(next);

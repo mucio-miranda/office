@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CustomRoom } from '@office/shared';
 import { wallsOfRoomIn } from '../../../web/src/office/decor/wallsOfRoom.ts';
-import { BOUNDS, HUMAN_DESKS, ROOMS, SPAWN, WALLS, agentSeat, blocked, deskSeat, findDeskSpot, findPath, setAgentDesks, setCustomRooms, setWallStyles } from '../../../web/src/office/layout.ts';
+import { BOUNDS, HUMAN_DESKS, ROOMS, SPAWN, WALLS, agentSeat, styleOf, blocked, deskSeat, findDeskSpot, findPath, freeSpotNear, setAgentDesks, setCustomRooms, setWallStyles } from '../../../web/src/office/layout.ts';
 
 /** A planta é do cliente, mas é lógica pura e sem teste própria na web: rotas e colisão se testam aqui. */
 const room = (slot: number): CustomRoom => ({ id: `sala-${slot}`, officeId: 'o', name: `Sala ${slot}`, emoji: '🚪', floor: '#eeeeee', slot });
@@ -57,6 +57,25 @@ test('parede removida deixa passar; a de vidro continua bloqueando', () => {
   assert.ok(blocked(across));
 });
 
+test('salas do andar aberto: começam sem parede e podem ser fechadas (vidro), com porta', () => {
+  reset();
+  const gerencia = ROOMS.find((r) => r.id === 'gerencia')!;
+  const keys = wallsOfRoomIn(gerencia, WALLS);
+  const divisa = WALLS.find((w) => w.w > w.d && w.z === -3 && w.x > -9 && w.x < 9)!;
+  assert.ok(divisa, 'a divisa gerência/recepção existe');
+  assert.ok(keys.includes(divisa.key));
+  assert.equal(styleOf({}, divisa.key), 'removida');
+  assert.equal(styleOf({ padrao: 'tijolo', divisorias: 'vidro' }, divisa.key), 'removida', 'os padrões não fecham a sala sozinhos');
+  assert.ok(!blocked({ x: divisa.x, z: divisa.z }), 'aberta deixa passar');
+  setWallStyles(Object.fromEntries(keys.map((k) => [k, 'vidro'])));
+  assert.equal(styleOf(Object.fromEntries(keys.map((k) => [k, 'vidro'])), divisa.key), 'vidro');
+  assert.ok(blocked({ x: divisa.x, z: divisa.z }), 'vidro fecha');
+  assert.ok(arrives(center('gerencia')), 'fechada continua alcançável pela porta');
+  setWallStyles(Object.fromEntries(WALLS.map((w) => [w.key, 'vidro'])));
+  for (const id of ['gerencia', 'copa', 'copy', 'design', 'video', 'reuniao']) assert.ok(arrives(freeSpotNear(center(id))), `${id} com tudo em vidro`);
+  reset();
+});
+
 test('todos os funcionários de uma sala cheia ganham lugares diferentes, sem bater em nada', () => {
   reset();
   setCustomRooms([room(0)]);
@@ -91,8 +110,9 @@ test('sala inteira: pega todas as paredes em volta, e só as dela', () => {
   const walls = WALLS.filter((w) => keys.includes(w.key));
   assert.ok(walls.some((w) => w.x === 27), 'parede leste');
   assert.ok(walls.some((w) => w.z === 18), 'parede da frente');
-  // o estúdio é aberto para a recepção e para a ilha de vídeo: só tem as duas paredes externas
-  assert.ok(walls.every((w) => w.x === 27 || w.z === 18));
+  // as divisas com a recepção e a ilha de vídeo também contam (começam abertas, mas dá para fechar a sala)
+  assert.ok(walls.some((w) => w.x === 9), 'divisa com a recepção');
+  assert.ok(walls.some((w) => w.z === 7.5), 'divisa com a ilha de vídeo');
   assert.ok(walls.every((w) => (w.w > w.d ? w.x > 9 && w.x < 27 : w.z > 7.5 && w.z < 18)), 'nenhuma passa da divisa');
   const reuniao = wallsOfRoomIn(ROOMS.find((r) => r.id === 'reuniao')!, WALLS);
   assert.ok(reuniao.length >= 4);
