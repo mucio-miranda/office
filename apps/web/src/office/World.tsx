@@ -16,7 +16,7 @@ import { ClientArchive, cabinets, openArchive } from './Archive';
 import { MoodboardWall } from './MoodboardWall';
 
 const MAQUETE_WALL: Record<string, string> = { branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f', vidro: '#bfe6f5', 'vidro-fume': '#39444c' };
-import { agentSeat, wallTypeOf, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALLS, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+import { agentSeat, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -490,8 +490,8 @@ function Floor({ p }: { p: ScenePalette }) {
         <planeGeometry args={[54, 36]} />
         <shadowMaterial transparent opacity={p.shadow + 0.04} />
       </mesh>
-      {WALLS.filter((w) => wallTypeOf(w.key) !== 'removida').map((w) => {
-        const type = wallTypeOf(w.key);
+      {wallRuns().filter((w) => w.type !== 'removida').map((w) => {
+        const type = w.type;
         return (
           <mesh key={`${w.key}:${type}`} position={[w.x, WALL_H / 2, w.z]} castShadow receiveShadow>
             <boxGeometry args={[w.w, WALL_H, w.d]} />

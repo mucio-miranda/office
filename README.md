@@ -95,7 +95,9 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - **Do seu jeito**: crie salas novas (com vidro, por exemplo), contrate mais funcionários a partir dos modelos e mude nome e
   aparência de qualquer avatar: pele, cabelo, barba, óculos e roupa.
 - **Paredes e pisos**: no modo Decorar, cada parede pode ser removida ou virar vidro, vidro fumê, branca, preta, concreto ou
-  madeira, uma a uma ou na sala inteira, inclusive as salas padrão do andar aberto, que já têm as divisas e as portas previstas. Os pisos ganharam vidro, branco e preto polidos, mármore preto, microcimento e resina.
+  madeira, por trecho ou na sala inteira, inclusive as salas padrão do andar aberto, que já têm as divisas e as portas previstas.
+  Em **Desenhar** e **Apagar**, a parede vira pedaços de meio metro: arraste pelo chão para criar uma divisória solta, um "L"
+  ou meia parede no meio do salão, ou para abrir só um vão. As paredes de fora do prédio trocam de acabamento, mas não somem. Os pisos ganharam vidro, branco e preto polidos, mármore preto, microcimento e resina.
 - **Moodboards**: um por nicho, da biblioteca `REFERENCIAS`, e um por cliente, das pastas de referência dele, cada um com as
   cores e a tipografia da marca. Aparecem em cavaletes no estúdio de design e dão início a uma arte com a referência escolhida.
 - **Mesa de trabalho**: o que está esperando você, peça por peça, com os caminhos reais de cada arquivo. Você responde,
@@ -462,6 +464,8 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [ ] Google Calendar, Notion e Trello
 - [x] Papéis com financeiro só do ADM, demanda pelo mapa, sessões do terminal no Office, calendário de conteúdo preenchido pelo agente e skills alteradas só pela Mesa
 - [x] Servidor MCP do Office (calendário de conteúdo)
+- [x] Paredes em pedaços de meio metro: desenhar e apagar arrastando pelo chão, pintar por trecho
+- [ ] Salas com tamanho ajustável (arrastar a divisa) e juntar salas
 - [x] Paredes: 12 acabamentos com textura (reboco, tijolinho, concreto, azulejo, ripado, verde, terracota, vidro, fumê...), padrão do escritório e padrão próprio para as divisórias entre salas (ex.: tudo em vidro), em Decorar > Paredes ou Ctrl+K
 - [x] Temas da interface: claro, escuro, ultradark (preto puro) e vidro (glassmorphism); o mundo fica só em pixel art, à espera de novas skins
 - [x] Moodboards editáveis: buscar, adicionar (arquivo, link ou arrastando), remover para `_apagados` (fora do alcance das skills) e pedir novas ao agente; tipografia própria por nicho

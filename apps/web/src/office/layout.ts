@@ -81,8 +81,8 @@ const doorZones = ({ a, b, doors }: WallDef): Box[] => doors.map((c) => (a.z ===
   : { x0: a.x - 1.2, x1: a.x + 1.2, z0: c - DOOR / 2, z1: c + DOOR / 2 }));
 export const DOOR_ZONES: Box[] = WALL_DEFS.flatMap(doorZones);
 
-/** Quebra cada parede em blocos retangulares, deixando os vãos das portas. */
-const wallSegs = ({ a, b, doors }: WallDef): WallSeg[] => {
+/** Trechos das versões até a 0.11.8 (entre portas e divisas): as escolhas salvas com essas chaves continuam valendo. */
+const legacySegs = ({ a, b, doors }: WallDef): WallSeg[] => {
   const horizontal = a.z === b.z;
   const from = horizontal ? a.x : a.z;
   const to = horizontal ? b.x : b.z;
@@ -102,9 +102,165 @@ const wallSegs = ({ a, b, doors }: WallDef): WallSeg[] => {
   }
   return segs;
 };
-export const WALLS: WallSeg[] = WALL_DEFS.flatMap(wallSegs);
-/** Trechos que começam sem parede (as divisas do andar aberto). */
-const OPEN_KEYS = new Set(WALL_DEFS.filter((d) => d.open).flatMap(wallSegs).map((s) => s.key));
+/**
+ * Paredes em pedaços de meio metro (desde a 0.11.9). Cada pedaço tem uma chave `h:<x início>:<z>` (horizontal) ou
+ * `v:<z início>:<x>` (vertical). A planta-base gera os pedaços das paredes de sempre; o modo Decorar desenha pedaços
+ * novos em qualquer linha da grade e apaga os existentes. No mapa salvo ficam só as diferenças da planta-base.
+ */
+export const PIECE = 0.5;
+export const pieceKey = (horizontal: boolean, start: number, line: number) => `${horizontal ? 'h' : 'v'}:${coord(start)}:${coord(line)}`;
+const PIECE_RE = /^([hv]):(-?[\d.]+):(-?[\d.]+)$/;
+const LEGACY_RE = /^-?[\d.]+:-?[\d.]+$/;
+export const isPieceKey = (k: string) => PIECE_RE.test(k);
+export function pieceOf(key: string): WallSeg | null {
+  const m = PIECE_RE.exec(key);
+  if (!m) return null;
+  const a = Number(m[2]), line = Number(m[3]);
+  return m[1] === 'h' ? { key, x: a + PIECE / 2, z: line, w: PIECE, d: WALL_T } : { key, x: line, z: a + PIECE / 2, w: WALL_T, d: PIECE };
+}
+/** Pedaços de uma parede da planta-base, sem os das portas. */
+const defPieces = ({ a, b, doors }: WallDef): string[] => {
+  const h = a.z === b.z;
+  const from = h ? Math.min(a.x, b.x) : Math.min(a.z, b.z), to = h ? Math.max(a.x, b.x) : Math.max(a.z, b.z);
+  const out: string[] = [];
+  for (let s = Math.ceil(from / PIECE - 1e-6) * PIECE; s + PIECE <= to + 1e-6; s += PIECE) {
+    if (doors.some((c) => Math.abs(s + PIECE / 2 - c) < DOOR / 2)) continue;
+    out.push(pieceKey(h, s, h ? a.z : a.x));
+  }
+  return out;
+};
+
+const DEFAULT_PIECES = new Set<string>();
+/** Pedaços das divisas do andar aberto: existem na planta, mas começam sem parede. */
+const OPEN_PIECES = new Set<string>();
+const LEGACY_OF = new Map<string, string>();
+const LEGACY_PIECES = new Map<string, string[]>();
+const dividerCache = new Map<string, boolean>();
+let wallStyles: Record<string, WallType> = {};
+/** Pedaços com parede possível: os da planta-base mais os desenhados. */
+export const WALLS: WallSeg[] = [];
+
+function setDefs(defs: WallDef[]) {
+  DEFAULT_PIECES.clear(); OPEN_PIECES.clear(); LEGACY_OF.clear(); LEGACY_PIECES.clear(); dividerCache.clear();
+  for (const d of defs) for (const k of defPieces(d)) { DEFAULT_PIECES.add(k); if (d.open) OPEN_PIECES.add(k); }
+  for (const s of defs.flatMap(legacySegs)) {
+    const h = s.w > s.d;
+    const lo = h ? s.x - s.w / 2 : s.z - s.d / 2, hi = h ? s.x + s.w / 2 : s.z + s.d / 2;
+    const keys: string[] = [];
+    for (let a = Math.ceil(lo / PIECE - 1e-6) * PIECE; a + PIECE <= hi + 1e-6; a += PIECE) {
+      const k = pieceKey(h, a, h ? s.z : s.x);
+      if (DEFAULT_PIECES.has(k)) { keys.push(k); LEGACY_OF.set(k, s.key); }
+    }
+    LEGACY_PIECES.set(s.key, keys);
+  }
+}
+function rebuildWalls() {
+  const keys = new Set(DEFAULT_PIECES);
+  for (const [k, t] of Object.entries(wallStyles)) if (t !== 'removida' && isPieceKey(k)) keys.add(k);
+  WALLS.length = 0;
+  for (const k of keys) WALLS.push(pieceOf(k)!);
+}
+
+/** Salas dos dois lados de um pedaço (null onde é fora do prédio). */
+function sidesOf(key: string) {
+  const w = pieceOf(key)!;
+  const across = w.w > w.d;
+  return [roomAt(across ? { x: w.x, z: w.z - 0.6 } : { x: w.x - 0.6, z: w.z }), roomAt(across ? { x: w.x, z: w.z + 0.6 } : { x: w.x + 0.6, z: w.z })];
+}
+/** Divisórias: pedaços com uma sala diferente de cada lado (as paredes externas do prédio ficam de fora). */
+export function isDivider(key: string) {
+  let v = dividerCache.get(key);
+  if (v === undefined) {
+    const [a, b] = isPieceKey(key) ? sidesOf(key) : [null, null];
+    v = !!(a && b && a.id !== b.id);
+    dividerCache.set(key, v);
+  }
+  return v;
+}
+/** Parede de fora do prédio: só troca de acabamento, nunca some (ninguém sai andando pelo vazio). */
+export function isExterior(key: string) {
+  const [a, b] = sidesOf(key);
+  return !a || !b;
+}
+/** Acabamento de um pedaço: a escolha dele (ou a do trecho antigo onde ele está); senão o que a planta-base mostra. */
+export function styleOf(map: Record<string, WallType>, key: string): WallType {
+  const legacy = LEGACY_OF.get(key);
+  return map[key] ?? (legacy ? map[legacy] : undefined) ?? baseStyle(map, key);
+}
+/**
+ * O que o pedaço mostra sem escolha própria: fora da planta-base e nas divisas do andar aberto, nada (os padrões não
+ * fecham as salas sozinhos); nas divisórias, o padrão delas; senão o padrão do escritório ou a alvenaria.
+ */
+export function baseStyle(map: Record<string, WallType>, key: string): WallType {
+  if (!DEFAULT_PIECES.has(key) || OPEN_PIECES.has(key)) return 'removida';
+  return (isDivider(key) ? map.divisorias : undefined) ?? map.padrao ?? 'alvenaria';
+}
+
+/** Pedaços vizinhos do mesmo acabamento numa mesma linha viram um trecho só (para desenhar e para colidir). */
+export interface WallRun extends WallSeg { keys: string[]; type: WallType }
+export function wallRuns(map: Record<string, WallType> = wallStyles): WallRun[] {
+  const groups = new Map<string, { a: number; key: string }[]>();
+  for (const w of WALLS) {
+    const m = PIECE_RE.exec(w.key)!;
+    const g = `${m[1]}|${m[3]}|${styleOf(map, w.key)}`;
+    let list = groups.get(g);
+    if (!list) groups.set(g, (list = []));
+    list.push({ a: Number(m[2]), key: w.key });
+  }
+  const out: WallRun[] = [];
+  for (const [g, list] of groups) {
+    const [o, line, type] = g.split('|');
+    list.sort((p, q) => p.a - q.a);
+    for (let i = 0; i < list.length;) {
+      let j = i;
+      while (j + 1 < list.length && Math.abs(list[j + 1].a - list[j].a - PIECE) < 1e-6) j++;
+      const s = list[i].a, e = list[j].a + PIECE, ln = Number(line);
+      out.push({
+        key: `${o}:${coord(s)}:${line}:${type}`, keys: list.slice(i, j + 1).map((x) => x.key), type: type as WallType,
+        ...(o === 'h' ? { x: (s + e) / 2, z: ln, w: e - s, d: WALL_T } : { x: ln, z: (s + e) / 2, w: WALL_T, d: e - s }),
+      });
+      i = j + 1;
+    }
+  }
+  return out;
+}
+
+/** Pedaços de uma linha arrastada de `s` até `p`, no eixo em que o arraste andou mais. */
+export function lineKeys(s: Vec2, p: Vec2): string[] {
+  const r = (v: number) => Math.round(v / PIECE) * PIECE;
+  const h = Math.abs(p.x - s.x) >= Math.abs(p.z - s.z);
+  const line = r(h ? s.z : s.x);
+  const a = r(Math.min(h ? s.x : s.z, h ? p.x : p.z));
+  let b = r(Math.max(h ? s.x : s.z, h ? p.x : p.z));
+  if (b <= a) b = a + PIECE;
+  const out: string[] = [];
+  for (let v = a; v < b - 1e-6; v += PIECE) out.push(pieceKey(h, v, line));
+  return out;
+}
+/** Dá para pôr esse acabamento no pedaço? Só dentro do prédio, e as paredes de fora não podem sumir. */
+export function canSetPiece(key: string, type: WallType) {
+  if (!isPieceKey(key)) return false;
+  const [a, b] = sidesOf(key);
+  if (!a && !b) return false;
+  return type !== 'removida' || (!!a && !!b);
+}
+/**
+ * Mapa no formato de pedaços: as escolhas por trecho antigo viram escolhas dos pedaços dele, e o que fica igual à
+ * planta-base sai do mapa.
+ */
+export function normalizeWalls(map: Record<string, WallType>): Record<string, WallType> {
+  const out = { ...map };
+  for (const k of Object.keys(map)) {
+    if (!LEGACY_RE.test(k)) continue;
+    for (const p of LEGACY_PIECES.get(k) ?? []) if (!(p in out)) out[p] = map[k];
+    delete out[k];
+  }
+  for (const k of Object.keys(out)) if (isPieceKey(k) && out[k] === baseStyle(out, k)) delete out[k];
+  return out;
+}
+
+setDefs(WALL_DEFS);
+rebuildWalls();
 
 export type FurnitureKind =
   | 'mesa' | 'cadeira' | 'sofa' | 'planta' | 'quadro' | 'calendario' | 'tv' | 'mesa-reuniao'
@@ -226,7 +382,7 @@ export const FURN_BOX = (f: Furniture): Box => {
 };
 
 const wallBox = (w: WallSeg): Box => ({ x0: w.x - w.w / 2, z0: w.z - w.d / 2, x1: w.x + w.w / 2, z1: w.z + w.d / 2 });
-export const WALL_BOXES: Box[] = WALLS.filter((w) => !OPEN_KEYS.has(w.key)).map(wallBox);
+export const WALL_BOXES: Box[] = wallRuns().filter((r) => r.type !== 'removida').map(wallBox);
 const SOLIDS: Box[] = [
   ...WALL_BOXES,
   ...FURNITURE.filter((f) => f.solid).map(FURN_BOX),
@@ -245,44 +401,13 @@ const annexRect = (slot: number) => {
   return { col, row, x0, x1: x0 + ANNEX_W, z0, z1: z0 + ANNEX_D };
 };
 
-let wallStyles: Record<string, WallType> = {};
 let agentDesks: Box[] = [];
 export const wallTypeOf = (key: string): WallType => styleOf(wallStyles, key);
-/**
- * Acabamento de um trecho: a escolha dele; numa divisória entre salas, o padrão das divisórias; senão o padrão do
- * escritório; senão a alvenaria.
- */
-export const styleOf = (map: Record<string, WallType>, key: string): WallType => map[key] ?? baseStyle(map, key);
-/**
- * O que o trecho mostra sem escolha própria. As divisas do andar aberto ficam sem parede (os padrões não fecham
- * as salas sozinhos); as outras seguem o padrão das divisórias, o do escritório ou a alvenaria.
- */
-export const baseStyle = (map: Record<string, WallType>, key: string): WallType =>
-  OPEN_KEYS.has(key) ? 'removida' : (isDivider(key) ? map.divisorias : undefined) ?? map.padrao ?? 'alvenaria';
-
-/** Divisórias: trechos com uma sala de cada lado (as paredes externas do prédio ficam de fora). */
-const dividers = new Set<string>();
-let dividersOf: WallSeg[] | null = null;
-let dividersLen = -1;
-export function isDivider(key: string) {
-  if (dividersOf !== WALLS || dividersLen !== WALLS.length) {
-    dividers.clear();
-    for (const w of WALLS) {
-      const across = w.w > w.d;
-      const a = roomAt(across ? { x: w.x, z: w.z - 0.6 } : { x: w.x - 0.6, z: w.z });
-      const b = roomAt(across ? { x: w.x, z: w.z + 0.6 } : { x: w.x + 0.6, z: w.z });
-      if (a && b && a.id !== b.id) dividers.add(w.key);
-    }
-    dividersOf = WALLS;
-    dividersLen = WALLS.length;
-  }
-  return dividers.has(key);
-}
 export const dividerKeys = () => WALLS.filter((w) => isDivider(w.key)).map((w) => w.key);
 
 function rebuildSolids() {
   WALL_BOXES.length = 0;
-  WALL_BOXES.push(...WALLS.filter((w) => wallTypeOf(w.key) !== 'removida').map(wallBox));
+  WALL_BOXES.push(...wallRuns().filter((r) => r.type !== 'removida').map(wallBox));
   SOLIDS.length = 0;
   SOLIDS.push(...WALL_BOXES, ...FURNITURE.filter((f) => f.solid).map(FURN_BOX), ...agentDesks);
   resetGrid();
@@ -291,6 +416,7 @@ function rebuildSolids() {
 /** Tipo de cada trecho de parede; a removida deixa de bloquear a passagem. */
 export function setWallStyles(map: Record<string, WallType>) {
   wallStyles = map;
+  rebuildWalls();
   rebuildSolids();
 }
 
@@ -321,9 +447,8 @@ export function setCustomRooms(list: CustomRoom[]) {
   // a parede leste do prédio abre uma porta para cada sala da primeira coluna
   const eastDoors = [0, 1, 2].filter((row) => has(0, row)).map((row) => BOUNDS.z0 + (row + 0.5) * ANNEX_D);
   const defs = [...MAIN.walls.map((d) => (d.a.x === MAIN.x1 && d.b.x === MAIN.x1 && d.a.z === BOUNDS.z0 ? { ...d, doors: eastDoors } : d)), ...extra];
-  WALLS.length = 0;
-  WALLS.push(...defs.flatMap(wallSegs));
-  dividersLen = -1;
+  setDefs(defs);
+  rebuildWalls();
   DOOR_ZONES.length = 0;
   DOOR_ZONES.push(...defs.flatMap(doorZones));
   const desks = list.flatMap((r): HumanDesk[] => {

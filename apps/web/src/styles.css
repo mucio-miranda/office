@@ -985,6 +985,9 @@ label.check input { width: auto; height: auto; }
 .wall-types button { display: flex; align-items: center; justify-content: flex-start; gap: 8px; height: 34px; padding: 0 8px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 12px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: inherit; cursor: pointer; }
 .wall-types button.on { border-color: var(--foreground); }
 .wall-types i { flex: none; width: 16px; height: 16px; border-radius: 4px; border: 1px solid var(--border-strong); }
+.wall-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+.wall-modes button { height: 32px; font-size: 12px; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: inherit; cursor: pointer; }
+.wall-modes button.on { border-color: var(--foreground); background: var(--muted, rgba(127,127,127,.12)); font-weight: 600; }
 
 
 /* sessões do cliente (Office e terminal) */

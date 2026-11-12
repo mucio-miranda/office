@@ -418,7 +418,7 @@ export async function api(app: FastifyInstance) {
       if (!requireMember(req, reply)) return;
       const { officeId } = req.params as { officeId: string };
       if (membership(officeId, req.user.id)?.role === 'convidado') return reply.code(403).send({ error: 'Convidados não mudam as paredes.' });
-      const b = body(z.record(z.string().regex(/^(-?[\d.]+:-?[\d.]+|padrao|divisorias)$/).max(24), z.enum(WALL_TYPES)).refine((m) => Object.keys(m).length <= 600, 'Paredes demais.'), req, reply);
+      const b = body(z.record(z.string().regex(/^([hv]:-?[\d.]+:-?[\d.]+|-?[\d.]+:-?[\d.]+|padrao|divisorias)$/).max(24), z.enum(WALL_TYPES)).refine((m) => Object.keys(m).length <= 6000, 'Paredes demais.'), req, reply);
       if (!b) return;
       db.prepare('UPDATE offices SET walls = ? WHERE id = ?').run(JSON.stringify(b), officeId);
       invalidate(officeId, 'walls');

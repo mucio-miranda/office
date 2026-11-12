@@ -8,7 +8,7 @@ import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
 import { ROOMS } from '../layout';
-import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, applyWall, defaultWall, dividerWall, saveWalls, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom } from './walls';
+import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, applyWall, defaultWall, dividerWall, saveWalls, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
 } from './state';
@@ -214,9 +214,16 @@ const WALL_SWATCH: Record<string, string> = {
   vidro: 'linear-gradient(135deg, #e4f6fb 40%, #a9d5e5)', 'vidro-fume': 'linear-gradient(135deg, #5b6c77 40%, #2b3338)', removida: 'repeating-linear-gradient(45deg, #fff 0 4px, #ff5c8a 4px 6px)',
 };
 
-/** Paredes: escolha um tipo e clique nas paredes, ou aplique na sala inteira. Parede removida deixa passar. */
+const MODE_LABEL: Record<WallMode, string> = { pintar: 'Pintar trecho', desenhar: 'Desenhar', apagar: 'Apagar' };
+const MODE_HELP: Record<WallMode, (t: string) => string> = {
+  pintar: (t) => `Clique num trecho de parede para aplicar ${t}. As paredes que não existem aparecem em rosa (as divisas do andar aberto, por exemplo): clicar nelas cria a parede.`,
+  desenhar: (t) => `Arraste pelo chão para criar parede em ${t}, de meio em meio metro, na linha da grade. Deixe um vão onde quiser uma porta.`,
+  apagar: () => 'Arraste por cima de uma parede para tirar só os pedaços por onde passar. As paredes de fora do prédio só trocam de acabamento.',
+};
+
+/** Paredes: pintar trechos, desenhar e apagar em pedaços, ou aplicar na sala inteira. Parede removida deixa passar. */
 function WallToolButton() {
-  const { tool, setTool } = useWallTool();
+  const { tool, setTool, mode, setMode } = useWallTool();
   useStore((s) => s.walls);
   const [room, setRoom] = useState(ROOMS[0]?.id ?? '');
   useEffect(() => () => setTool(null), [setTool]);
@@ -239,19 +246,24 @@ function WallToolButton() {
               {WALL_FINISHES.map((t) => <option key={t} value={t}>{WALL_LABEL[t]}</option>)}
             </select>
           </label>
-          <p className="muted small" style={{ margin: 0 }}>Os padrões valem para toda parede sem acabamento próprio, inclusive das salas novas. As salas do andar aberto (recepção, gerência, redação, copa e design) começam sem parede entre elas: para fechar uma, escolha o acabamento abaixo e use “Aplicar na sala” ou clique nas faixas rosa.</p>
-          <div className="wall-types">
+          <p className="muted small" style={{ margin: 0 }}>Os padrões valem para toda parede sem acabamento próprio, inclusive das salas novas.</p>
+          <div className="wall-modes">
+            {(Object.keys(MODE_LABEL) as WallMode[]).map((m) => (
+              <button key={m} className={mode === m ? 'on' : ''} onClick={() => setMode(m)}>{MODE_LABEL[m]}</button>
+            ))}
+          </div>
+          <div className="wall-types" style={mode === 'apagar' ? { opacity: 0.4, pointerEvents: 'none' } : undefined}>
             {WALL_OPTIONS.map((t) => (
               <button key={t} className={tool === t ? 'on' : ''} onClick={() => setTool(t)}><i style={{ background: WALL_SWATCH[t] }} />{WALL_LABEL[t]}</button>
             ))}
           </div>
-          <p className="muted small" style={{ margin: 0 }}>Clique numa parede para aplicar {WALL_LABEL[tool].toLowerCase()}. As removidas aparecem em rosa enquanto este painel estiver aberto.</p>
+          <p className="muted small" style={{ margin: 0 }}>{MODE_HELP[mode](WALL_LABEL[tool].toLowerCase())}</p>
           <label>Sala inteira
             <select value={room} onChange={(e) => setRoom(e.target.value)}>{ROOMS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select>
           </label>
           <div className="row gap">
             <button className="primary small" onClick={() => applyWall(wallsOfRoom(room), tool)}>Aplicar na sala</button>
-            <button className="ghost small" onClick={() => { if (confirm('Tirar o acabamento próprio de todas as paredes? Elas ficam com o padrão do escritório.')) { const w = useStore.getState().walls; saveWalls(w.padrao ? { padrao: w.padrao } : {}); } }}>Tudo no padrão</button>
+            <button className="ghost small" onClick={() => { if (confirm('Voltar todas as paredes para a planta original? As desenhadas somem, as apagadas voltam e cada uma fica com o padrão do escritório.')) { const w = useStore.getState().walls; saveWalls(w.padrao ? { padrao: w.padrao } : {}); } }}>Tudo no padrão</button>
           </div>
         </div>
       )}

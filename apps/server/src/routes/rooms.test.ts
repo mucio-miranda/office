@@ -99,6 +99,7 @@ test('paredes: o tipo de cada trecho fica salvo, com validação', async () => {
   assert.deepEqual((await call('GET', `${O}/walls`, member)).json, {});
   assert.equal((await call('PUT', `${O}/walls`, member, { '-18:-3': 'vidro', '9:2.5': 'removida' })).status, 200);
   assert.deepEqual((await call('GET', `${O}/walls`, owner)).json, { '-18:-3': 'vidro', '9:2.5': 'removida' });
+  assert.equal((await call('PUT', `${O}/walls`, owner, { 'h:-1.5:6': 'vidro', 'v:2:-9': 'removida' })).status, 200, 'pedaços de parede');
   assert.equal((await call('PUT', `${O}/walls`, owner, { '-18:-3': 'papelao' })).status, 400);
   assert.equal((await call('PUT', `${O}/walls`, owner, { 'x; drop': 'vidro' })).status, 400);
 });
