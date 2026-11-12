@@ -92,4 +92,10 @@ export function wallsOfRoom(id: string) {
   return r ? wallsOfRoomIn(r, WALLS) : [];
 }
 
+/** Todas as paredes de pé do escritório (as divisas abertas e os pedaços apagados ficam de fora, para não fechar o andar). */
+export function allWalls() {
+  const walls = useStore.getState().walls;
+  return WALLS.filter((w) => styleOf(walls, w.key) !== 'removida').map((w) => w.key);
+}
+
 export const removedCount = () => WALLS.filter((w) => wallTypeOf(w.key) === 'removida').length;

@@ -8,7 +8,7 @@ import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
 import { ROOMS } from '../layout';
-import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, applyWall, defaultWall, dividerWall, saveWalls, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
+import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, allWalls, applyWall, defaultWall, dividerWall, saveWalls, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
 } from './state';
@@ -214,6 +214,8 @@ const WALL_SWATCH: Record<string, string> = {
   vidro: 'linear-gradient(135deg, #e4f6fb 40%, #a9d5e5)', 'vidro-fume': 'linear-gradient(135deg, #5b6c77 40%, #2b3338)', removida: 'repeating-linear-gradient(45deg, #fff 0 4px, #ff5c8a 4px 6px)',
 };
 
+const ALL_ROOMS = '*';
+
 const MODE_LABEL: Record<WallMode, string> = { pintar: 'Pintar trecho', desenhar: 'Desenhar', apagar: 'Apagar' };
 const MODE_HELP: Record<WallMode, (t: string) => string> = {
   pintar: (t) => `Clique num trecho de parede para aplicar ${t}. As paredes que não existem aparecem em rosa (as divisas do andar aberto, por exemplo): clicar nelas cria a parede.`,
@@ -225,7 +227,7 @@ const MODE_HELP: Record<WallMode, (t: string) => string> = {
 function WallToolButton() {
   const { tool, setTool, mode, setMode } = useWallTool();
   useStore((s) => s.walls);
-  const [room, setRoom] = useState(ROOMS[0]?.id ?? '');
+  const [room, setRoom] = useState(ALL_ROOMS);
   useEffect(() => () => setTool(null), [setTool]);
   return (
     <>
@@ -258,11 +260,14 @@ function WallToolButton() {
             ))}
           </div>
           <p className="muted small" style={{ margin: 0 }}>{MODE_HELP[mode](WALL_LABEL[tool].toLowerCase())}</p>
-          <label>Sala inteira
-            <select value={room} onChange={(e) => setRoom(e.target.value)}>{ROOMS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}</select>
+          <label>Aplicar de uma vez
+            <select value={room} onChange={(e) => setRoom(e.target.value)}>
+              <option value={ALL_ROOMS}>Todo o escritório (todas as paredes)</option>
+              {ROOMS.map((r) => <option key={r.id} value={r.id}>{r.label}</option>)}
+            </select>
           </label>
           <div className="row gap">
-            <button className="primary small" onClick={() => applyWall(wallsOfRoom(room), tool)}>Aplicar na sala</button>
+            <button className="primary small" onClick={() => applyWall(room === ALL_ROOMS ? allWalls() : wallsOfRoom(room), tool)}>{room === ALL_ROOMS ? 'Aplicar em todas' : 'Aplicar na sala'}</button>
             <button className="ghost small" onClick={() => { if (confirm('Voltar todas as paredes para a planta original? As desenhadas somem, as apagadas voltam e cada uma fica com o padrão do escritório.')) { const w = useStore.getState().walls; saveWalls(w.padrao ? { padrao: w.padrao } : {}); } }}>Tudo no padrão</button>
           </div>
         </div>
