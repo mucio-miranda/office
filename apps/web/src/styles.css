@@ -1020,3 +1020,9 @@ label.check input { width: auto; height: auto; }
 
 .update-banner { position: fixed; top: 12px; left: 50%; transform: translateX(-50%); z-index: 200; display: flex; align-items: center; gap: 12px; padding: 8px 8px 8px 14px; border-radius: 99px; background: var(--primary); color: var(--primary-foreground); box-shadow: var(--shadow); font-size: 13px; max-width: calc(100vw - 24px); }
 .update-banner .primary { background: var(--primary-foreground); color: var(--primary); border: 0; border-radius: 99px; }
+
+/* squads na lista de clientes */
+.client-group { display: flex; flex-direction: column; gap: 2px; }
+.client-group + .client-group { margin-top: 10px; }
+.squad-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-foreground); }
+.squad-head b { font-weight: 600; flex: 1; min-width: 0; }

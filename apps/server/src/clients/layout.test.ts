@@ -24,6 +24,7 @@ test('pasta nova: IDV em ARQUIVOS, mês com o nome do marca.json e brutos por ca
   const p = clientPaths(dir);
   assert.equal(p.estrutura, 'novo');
   assert.equal(p.rel('mes', { mes: '2026-11' }), 'REDES SOCIAIS/2026-11 Novembro – Maria Exemplo');
+  assert.equal(p.rel('videos', { mes: '2026-10' }), 'REDES SOCIAIS/2026-10 Outubro – Maria Exemplo/VÍDEOS – Outubro');
   assert.equal(p.rel('fotos_editadas', { mes: '2026-10' }), 'REDES SOCIAIS/2026-10 Outubro – Maria Exemplo/ENSAIOS – Outubro/Fotos Editadas – Outubro');
   assert.equal(p.rel('videos_brutos', { captacao: '2026-11-08 Gravação' }), 'ARQUIVOS – MARIA EXEMPLO/BRUTOS/2026-11-08 Gravação/VIDEOS BRUTOS');
   assert.ok(p.marca.endsWith(path.join('ARQUIVOS – MARIA EXEMPLO', 'DOCUMENTOS', 'IDENTIDADE VISUAL', 'marca.json')));

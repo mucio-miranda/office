@@ -1,6 +1,6 @@
 import { canSeeFinance } from '@office/shared';
 import { useEffect, useState } from 'react';
-import { Bot, FileText, Film, FolderInput, FolderPlus, Image, Music, Plus, RefreshCw, Sparkles, X } from 'lucide-react';
+import { Bot, FileText, Film, FolderInput, FolderPlus, Image, Music, Plus, RefreshCw, Sparkles, Users, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
@@ -20,28 +20,48 @@ const WEB_IMG = /\.(jpe?g|png|webp|gif)$/i;
  * índice dos arquivos da pasta e as demandas do cliente com a esteira.
  */
 export function Clients() {
-  const { clients, panelArg } = useStore();
+  const { clients, panelArg, office } = useStore();
   const [sel, setSel] = useState<string | null>(panelArg ?? null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [sq, setSq] = useState<SquadInfo>({ squads: [], byClient: {} });
   useEffect(() => { if (panelArg) setSel(panelArg); }, [panelArg]);
+  const sig = clients.map((c) => `${c.id}:${c.folder}:${c.name}`).join('|');
+  useEffect(() => {
+    if (office) api<SquadInfo>(`/api/offices/${office.id}/squads`).then(setSq).catch(() => setSq({ squads: [], byClient: {} }));
+  }, [office?.id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
   const current = clients.find((c) => c.id === sel) ?? clients[0];
+  // com squads definidos, a lista vem agrupada: um bloco por squad e os sem squad no fim
+  const groups = sq.squads.length
+    ? [...sq.squads.map((s) => ({ key: s.id, squad: s as Squad | null, items: clients.filter((c) => sq.byClient[c.id] === s.id) })),
+      { key: '-', squad: null, items: clients.filter((c) => !sq.byClient[c.id]) }].filter((g) => g.items.length)
+    : [{ key: '-', squad: null, items: clients }];
+  const squadOf = (c: Client) => sq.squads.find((s) => s.id === sq.byClient[c.id]) ?? null;
 
   return (
     <div className="clients-page">
       <aside className="clients-list">
         <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Novo cliente</button>
         <button className="ghost" onClick={() => setImporting(true)}><FolderInput size={14} /> Importar da pasta</button>
-        {clients.map((c) => (
-          <button key={c.id} className={`client-item ${current?.id === c.id ? 'active' : ''}`} onClick={() => setSel(c.id)}>
-            <span className="dot" style={{ background: c.color }} />
-            <span className="truncate">{c.name}</span>
-            <span className={`badge ${c.briefing?.feitoEm ? '' : 'outline'}`}>{c.briefing?.feitoEm ? 'briefing ok' : BRIEFING_FIELDS.some((x) => c.briefing?.[x.key]) ? 'rascunho' : 'sem briefing'}</span>
-          </button>
+        {groups.map((g) => (
+          <div key={g.key} className="client-group">
+            {sq.squads.length > 0 && (
+              <div className="squad-head" title={g.squad ? squadRoles(g.squad) : 'Clientes que não estão em nenhum squad (squads.json)'}>
+                <Users size={12} /> <b className="truncate">{g.squad?.nome ?? 'Sem squad'}</b> <span className="muted">{g.items.length}</span>
+              </div>
+            )}
+            {g.items.map((c) => (
+              <button key={c.id} className={`client-item ${current?.id === c.id ? 'active' : ''}`} onClick={() => setSel(c.id)}>
+                <span className="dot" style={{ background: c.color }} />
+                <span className="truncate">{c.name}</span>
+                <span className={`badge ${c.briefing?.feitoEm ? '' : 'outline'}`}>{c.briefing?.feitoEm ? 'briefing ok' : BRIEFING_FIELDS.some((x) => c.briefing?.[x.key]) ? 'rascunho' : 'sem briefing'}</span>
+              </button>
+            ))}
+          </div>
         ))}
         {clients.length === 0 && <p className="muted small">Nenhum cliente ainda.</p>}
       </aside>
-      {current ? <ClientDetail key={current.id} c={current} /> : (
+      {current ? <ClientDetail key={current.id} c={current} squad={squadOf(current)} /> : (
         <div className="empty">
           <p>Cadastre o primeiro cliente: o Office cria a pasta no padrão da casa e a Rafa faz a entrevista de briefing. Se as pastas já existem, é só importar.</p>
           <div className="row gap">
@@ -56,7 +76,11 @@ export function Clients() {
   );
 }
 
-function ClientDetail({ c }: { c: Client }) {
+interface Squad { id: string; nome: string; socialMedia: string | null; designProducao: string | null }
+interface SquadInfo { squads: Squad[]; byClient: Record<string, string | null> }
+const squadRoles = (s: Squad) => [s.socialMedia && `Social media: ${s.socialMedia}`, s.designProducao && `Design/produção: ${s.designProducao}`].filter(Boolean).join(' · ');
+
+function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   const { office, demands, agents, open, notify } = useStore();
   const base = `/api/offices/${office!.id}/clients/${c.id}`;
   const patch = (body: Partial<Client>) => api(base, { method: 'PATCH', body });
@@ -80,6 +104,7 @@ function ClientDetail({ c }: { c: Client }) {
           <option value="ativo">ativo</option><option value="pausado">pausado</option><option value="encerrado">encerrado</option>
         </select>
         {canSeeFinance(office?.role) && <span className="muted small">{brl(c.monthlyFee)}/mês</span>}
+        {squad && <span className="badge" title={squadRoles(squad)}><Users size={11} /> {squad.nome}</span>}
       </header>
 
       <div className="client-settings">

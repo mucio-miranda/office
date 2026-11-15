@@ -107,9 +107,12 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   computador. Na estrutura nova, a arte e o vídeo aprovados vão para a pasta do mês (o que o cliente vê) e o PSD para
   `ARQUIVOS – CLIENTE\PROJETOS`; na antiga, a mesma estrutura da pasta local. Você escolhe a pasta e os arquivos; nada é apagado nem sobrescrito lá.
 - **Pastas do cliente**: duas estruturas convivem. A nova separa `REDES SOCIAIS` (identidade visual e uma pasta por mês,
-  `2026-11 Novembro – Cliente`, com os posts, o PDF de legendas e `ENSAIOS – Mês`) de `ARQUIVOS – CLIENTE` (trabalhos,
+  `2026-11 Novembro – Cliente`, com os posts, o PDF de legendas, `VÍDEOS – Mês` para Reels e capas e `ENSAIOS – Mês`) de `ARQUIVOS – CLIENTE` (trabalhos,
   documentos, projetos, referências, brutos por captação, banco e músicas), que só a equipe vê. A antiga (DOCUMENTOS,
   FOTOS e VIDEOS) continua funcionando. Os nomes vêm de `.claude/skills/_global/pastas.json`, o mesmo mapa que as skills usam.
+- **Squads**: com `.claude/skills/_global/squads.json` (cada squad com nome, social media, design/produção e a lista de
+  clientes com a pasta de cada um), a lista de Clientes vem agrupada por squad e cada cliente mostra o dele. Sem o arquivo,
+  a lista fica como sempre.
 - **Arquivo dos clientes**: um armário por cliente na redação; clicar abre a pasta dele por grupo, com busca e
   prévia de imagem, vídeo, áudio, PDF e texto. Editar um PDF vira uma tarefa para o funcionário com o PdfCraft
 

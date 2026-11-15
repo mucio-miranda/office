@@ -34,7 +34,7 @@ export function isFolder(e: Dirent, full: string) {
 }
 
 /** Pastas da estrutura nova (REDES SOCIAIS + ARQUIVOS – CLIENTE), pelas chaves do mapa de pastas. */
-const NEW_KEYS: LayoutKey[] = ['perfil', 'mes', 'trabalhos', 'idv', 'documentos', 'projetos', 'referencias', 'brutos', 'banco'];
+const NEW_KEYS: LayoutKey[] = ['perfil', 'mes', 'videos', 'trabalhos', 'idv', 'documentos', 'projetos', 'referencias', 'brutos', 'banco'];
 
 const isEmptyDir = (dir: string) => { try { return readdirSync(dir).every((n) => /^(desktop\.ini|\.DS_Store|Thumbs\.db)$/i.test(n)); } catch { return true; } };
 

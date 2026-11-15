@@ -10,7 +10,7 @@ import path from 'node:path';
  */
 
 export type LayoutKey =
-  | 'redes' | 'arquivos' | 'idv_kit' | 'perfil' | 'mes' | 'legendas' | 'ensaios' | 'making_of' | 'fotos_editadas'
+  | 'redes' | 'arquivos' | 'idv_kit' | 'perfil' | 'mes' | 'legendas' | 'videos' | 'ensaios' | 'making_of' | 'fotos_editadas'
   | 'trabalhos' | 'documentos' | 'idv' | 'projetos' | 'referencias' | 'brutos' | 'fotos_brutas' | 'videos_brutos'
   | 'banco' | 'musicas' | 'sfx' | 'broll' | 'sem_data';
 
@@ -25,6 +25,7 @@ export const DEFAULT_LAYOUT: LayoutMap = {
     perfil: '{redes}/IDENTIDADE VISUAL/PERFIL E DESTAQUES',
     mes: '{redes}/{AAAA}-{MM} {Mes} – {Cliente}',
     legendas: '{mes}/LEGENDAS – {Mes} – {Cliente}.pdf',
+    videos: '{mes}/VÍDEOS – {Mes}',
     ensaios: '{mes}/ENSAIOS – {Mes}',
     making_of: '{ensaios}/Making Of – {Mes} – {Cliente}',
     fotos_editadas: '{ensaios}/Fotos Editadas – {Mes}',
@@ -46,7 +47,7 @@ export const DEFAULT_LAYOUT: LayoutMap = {
     redes: '.', arquivos: '.',
     idv_kit: 'DOCUMENTOS/IDENTIDADE VISUAL', perfil: 'DOCUMENTOS/IDENTIDADE VISUAL',
     mes: 'DOCUMENTOS/ARTES', legendas: 'DOCUMENTOS/ARTES/LEGENDAS.pdf',
-    ensaios: 'FOTOS/EDITADAS', making_of: 'VIDEOS/EDITADOS', fotos_editadas: 'FOTOS/EDITADAS',
+    videos: 'VIDEOS/EDITADOS', ensaios: 'FOTOS/EDITADAS', making_of: 'VIDEOS/EDITADOS', fotos_editadas: 'FOTOS/EDITADAS',
     trabalhos: 'TRABALHOS', documentos: 'DOCUMENTOS', idv: 'DOCUMENTOS/IDENTIDADE VISUAL', projetos: 'DOCUMENTOS/ARTES',
     referencias: 'VIDEOS/REFERENCIAS', brutos: '.',
     fotos_brutas: 'FOTOS/BRUTAS/{captacao}', videos_brutos: 'VIDEOS/BRUTOS/{captacao}',

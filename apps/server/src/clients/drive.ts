@@ -77,7 +77,7 @@ export function clientDriveFolder(root: string, client: Pick<Client, 'name' | 'd
 }
 
 /** Na estrutura nova, onde cada tipo de arquivo aprovado entra: o que vai ao ar na pasta do mês, o resto em ARQUIVOS. */
-const KEY_BY_KIND: Record<FileKind, LayoutKey> = { imagem: 'mes', video: 'mes', design: 'projetos', audio: 'musicas', doc: 'documentos', outro: 'documentos' };
+const KEY_BY_KIND: Record<FileKind, LayoutKey> = { imagem: 'mes', video: 'videos', design: 'projetos', audio: 'musicas', doc: 'documentos', outro: 'documentos' };
 
 /**
  * Subpasta de um arquivo na pasta do cliente no Drive. Se a pasta do Drive já está na estrutura nova (REDES SOCIAIS +

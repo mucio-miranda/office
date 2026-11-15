@@ -24,6 +24,7 @@ import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '
 import { detectDirs, mergeDirs, rootProblem } from '../agents/officeSetup.ts';
 import { driveDirs, existingDriveFolders, linkedDriveFolder } from '../clients/drive.ts';
 import { discoverClients } from '../clients/discover.ts';
+import { squadOfClient, squadsOf } from '../clients/squads.ts';
 import { listSkills } from '../agents/skills.ts';
 import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/sessions.ts';
 import { resumeSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, resetConversation, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
@@ -653,6 +654,19 @@ export async function api(app: FastifyInstance) {
       invalidate(officeId, 'clients');
       const briefing = interview ? startBriefing(row, `user:${req.user.id}`) : null;
       return { client: row, createdDirs: created, briefing };
+    });
+
+    // squads da agência (.claude/skills/_global/squads.json) e o squad de cada cliente
+    r.get('/api/offices/:officeId/squads', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as any;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const squads = squadsOf(office.rootPath);
+      const clients = all<Client>('SELECT * FROM clients WHERE office_id = ?', officeId);
+      return {
+        squads: squads.map(({ match: _m, ...s }) => s),
+        byClient: Object.fromEntries(clients.map((c) => [c.id, squadOfClient(squads, c)])),
+      };
     });
 
     // pastas de CLIENTES que ainda não são clientes no Office
