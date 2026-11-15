@@ -91,3 +91,38 @@ do funcionário, com aviso. O autopop fica só para quando a pessoa está no ter
 O fluxo `start-conteudo` → `arte-referencia` já está bem amarrado. Do que aparece aqui, o que mais ajudaria já em
 dezembro, nessa ordem: 1 (escolha na Mesa), 2 (tunning como ferramenta, com prompt salvo por cliente), 6 (banco de
 fotos com etiquetas e "já usada") e 3 (diário com desfazer).
+
+## Parte 2 (15/11/2026): sites, do teste à produção
+Base: o fechamento do site do Dr. Alex (repo `mucio-miranda/site-alex-laurentino`, Netlify ligada ao git).
+
+### 13. O ciclo real de site é "prévia → olhar no celular → ajuste curto → publicar"
+- **Hoje:** cada pedido vira commit no branch `movimento`, deploy de prévia automático
+  (`movimento--alexlaurentino.netlify.app`), e o "publique" faz merge no `main`. Foram ~40 ciclos num dia.
+- **No Office:** um card de site com dois botões fixos, **Abrir prévia** e **Publicar**, e a lista do que muda entre
+  a prévia e o ar. "Publicar" só aparece com o OK do diretor (a permissão automática barrou um merge sem pedido
+  explícito, e estava certa).
+
+### 14. Variantes ao vivo pelo endereço (`?msg=a|b|c`, `?etapas=a|b|c`)
+- Funcionou melhor que folhas de print: o diretor testa rolagem, toque e animação de verdade.
+- **No Office:** padrão "gerar N variantes de uma seção" que publica a prévia com o seletor e mostra na Mesa um card
+  por variante (link + print + uma linha de motivo + recomendada). Ao escolher, o funcionário remove as outras do código.
+
+### 15. Rejeição rápida e "desfaça" frequentes
+- Sequência típica: 3 versões → "ficou frufru" → 3 versões → "ficou ruim, desfaça". Desfazer por `git revert` de um
+  intervalo resolveu, mas exigiu saber os commits.
+- **No Office:** cada pedido aplicado é uma entrada do diário (item 3) amarrada aos commits; o botão **Desfazer** faz o
+  revert do grupo. "Desfaça e desative" e "só desfaça" são ações diferentes: confirmar antes quando a frase muda no meio.
+- **Incidente:** um comando recusado pelo usuário chegou a rodar (apagou uma cópia e fez um commit). O Office deve
+  tratar recusa como cancelamento real e registrar no diário o que eventualmente rodou.
+
+### 16. Celular primeiro na conferência
+- "Vai ser a maioria do tráfego": todo ajuste foi conferido em 390/360/320 px (rolagem lateral, quebras, degradês).
+  Dois bugs só apareciam ali (coluna da FAQ vazando 2 px, aba das folhas vazando 5 px).
+- **No Office:** a prévia embutida (item 4) abre por padrão em 390 px, com um alerta automático de rolagem horizontal.
+
+### 17. Gosto do diretor para sites (vira regra do funcionário web)
+- Rejeitou: excesso de efeito ("frufru"), texto dentro de foto, numerais gigantes, fotos com cara de IA (tunning forte),
+  animação que se mexe sozinha (empurrão no botão), seção solta sem âncora visual, foto de fundo em faixa final.
+- Aprovou: chat no canto que abre o WhatsApp, barra fixa do celular com a pergunta, deslize para liberar no CTA,
+  degradê suave nas bases das fotos, movimento que "emerge do escuro", edição fotográfica real a partir da original.
+- Todo CTA vai direto ao WhatsApp; formulário de contato foi desativado.
