@@ -126,3 +126,37 @@ Base: o fechamento do site do Dr. Alex (repo `mucio-miranda/site-alex-laurentino
 - Aprovou: chat no canto que abre o WhatsApp, barra fixa do celular com a pergunta, deslize para liberar no CTA,
   degradê suave nas bases das fotos, movimento que "emerge do escuro", edição fotográfica real a partir da original.
 - Todo CTA vai direto ao WhatsApp; formulário de contato foi desativado.
+
+## Parte 3 (15/11/2026): conteúdo de feed, do calendário à pasta do mês (Dra. Ana Catunda)
+
+Peças 01 a 04 de novembro, com várias rodadas de correção. Notas de levantamento em
+`C:\REZZU-TEMP\DRA. ANA GABRIELA CATUNDA\2026-11-15 artes feed novembro\levantamento\NOTAS-OFFICE.md` (banco de fotos, datas do feed pelo shortcode, origem do material).
+
+### 18. Cada peça com estado e entrega automática
+Toda peça passou por composição > tunning > conferência > aprovação > entrega, e a entrega (copiar para a pasta do mês com
+`AAAA-MM-DD Formato – Tema – NN.png`, conferir por hash, copiar para o C:, mandar link do Drive) foi feita à mão em todas.
+**Office:** card da peça com esses estados; "Aprovar" já entrega, confere e devolve o link do Drive. Reentregar (após correção) mantém o nome e guarda a versão anterior em `_versao-N`.
+
+### 19. Tunning em um clique, com o prompt editorial da marca
+O laço do navegador (aba nova, subir `para-tunning-base.jpg`, colar prompt, esperar, baixar pelo blob, mover, `tunning.py conferir --base`, recorte do rosto) levou ~8 chamadas por peça e travou uma vez (renderer congelado na espera).
+O prompt que aprovou ("fotografia editorial... 85mm f/1.8, softbox a 45°, rim light, luminária em bokeh, paleta com os hex do marca.json, travas do rosto, onde o texto vai fica escuro e limpo") é sempre o mesmo com 3 variáveis: posição da pessoa, área do texto, roupa.
+**Office:** botão "Tunning" na peça que monta esse prompt a partir do `marca.json` + layout, roda o laço, e mostra o antes/depois e o rosto a 100% para aprovar.
+
+### 20. Mudança na marca regera o que já foi feito
+A cor-base estava errada (#181010 medido nas artes antigas, marrom; o plano dizia preto/grafite). Ao corrigir no `marca.json`, a peça 01 já entregue teve de ser regerada à mão. O mesmo com a logo (monograma) aplicada depois.
+**Office:** ao salvar `marca.json`, listar as peças afetadas e oferecer "regerar e reentregar" (a foto tunada não muda; só a camada de texto e o degradê). Validar `marca.json` contra a IDV/plano e avisar quando uma cor veio de "medida" e conflita com o guia.
+
+### 21. Checagem automática antes de mostrar a peça
+Erros que o usuário apontou e que um robô pegaria: **logo da marca ausente** (havia monograma e só o nome em texto), seta do CTA apontando para o lado quando a ação é a legenda (para baixo), contador "02/05" redundante com o indicador, `<b>` aparecendo literal, título por cima da mão/rosto, rodapé repetindo o CTA, variável CSS inexistente (`--f-texto`) deixando a fonte minúscula.
+**Office:** "lint" da peça: logo presente, texto fora da caixa do rosto (detecção facial), marcação HTML literal, fontes resolvidas, contraste do texto, coerência CTA x seta.
+
+### 22. Pedido paralelo vira funcionário em segundo plano
+No meio do lote veio "atualize as refs da minha DM pro cérebro". Foi para um agente em segundo plano (42 refs, sem parar as peças) e o usuário falou com o agente direto ("como vc acessou a dm?").
+**Office:** pedido paralelo abre um card de funcionário com status, relatório e caminho dos arquivos; a conversa com ele fica no card.
+
+### 23. Pendências do cliente por peça
+Cada legenda cita lei (CPP, Constituição) e precisa da revisão da advogada; há pendências gerais (OAB, fontes oficiais, autorização das fotos, uso do material da "Criative Conteúdos").
+**Office:** lista "validar com o cliente" por peça e por cliente, que vira a mensagem de aprovação enviada a ele.
+
+### 24. Referência sem layout vira layout novo
+A ref 0040 não tinha layout no motor: foi criado `pilulas-centro.html` medindo a referência. **Office:** ao escolher uma ref sem layout, oferecer "criar layout a partir desta ref" com a medição em 1080x1350 já preenchida.
