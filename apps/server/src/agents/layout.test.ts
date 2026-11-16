@@ -162,3 +162,25 @@ test('sala inteira: pega todas as paredes em volta, e só as dela', () => {
   assert.ok(!reuniao.some((k) => keys.includes(k)));
 });
 
+
+test('escritório aberto: as paredes entre as salas somem e voltam, as de fora ficam', () => {
+  reset();
+  setCustomRooms([room(0)]);
+  const all = Object.fromEntries(WALLS.map((w) => [w.key, 'vidro-fume' as const]));
+  const reuniao = WALLS.find((w) => w.w < w.d && w.x === -9 && w.z > 2 && w.z < 4)!; // reunião / recepção
+  const anexo = WALLS.find((w) => w.w < w.d && w.x === 27 && w.z > -12 && w.z < -10)!; // copa / sala nova
+  const fora = WALLS.find((w) => w.w > w.d && w.z === -18 && w.x > -20 && w.x < -18)!;
+  setWallStyles(all);
+  assert.ok(blocked({ x: reuniao.x, z: reuniao.z }));
+  const aberto = { ...all, aberto: 'removida' as const };
+  setWallStyles(aberto);
+  for (const w of [reuniao, anexo]) {
+    assert.equal(styleOf(aberto, w.key), 'removida');
+    assert.ok(!blocked({ x: w.x, z: w.z }), `${w.key} deixa passar`);
+  }
+  assert.equal(styleOf(aberto, fora.key), 'vidro-fume', 'parede de fora fica');
+  assert.ok(blocked({ x: fora.x, z: fora.z }));
+  setWallStyles(all);
+  assert.equal(styleOf(all, reuniao.key), 'vidro-fume', 'desligado, o acabamento volta');
+  reset();
+});

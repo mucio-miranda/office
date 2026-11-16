@@ -182,8 +182,9 @@ export function isExterior(key: string) {
   const [a, b] = sidesOf(key);
   return !a || !b;
 }
-/** Acabamento de um pedaço: a escolha dele (ou a do trecho antigo onde ele está); senão o que a planta-base mostra. */
+/** Acabamento de um pedaço (com o escritório aberto, as divisórias somem): a escolha dele (ou a do trecho antigo onde ele está); senão o que a planta-base mostra. */
 export function styleOf(map: Record<string, WallType>, key: string): WallType {
+  if (map.aberto === 'removida' && isPieceKey(key) && isDivider(key)) return 'removida';
   const legacy = LEGACY_OF.get(key);
   return map[key] ?? (legacy ? map[legacy] : undefined) ?? baseStyle(map, key);
 }

@@ -1026,3 +1026,4 @@ label.check input { width: auto; height: auto; }
 .client-group + .client-group { margin-top: 10px; }
 .squad-head { display: flex; align-items: center; gap: 6px; padding: 4px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted-foreground); }
 .squad-head b { font-weight: 600; flex: 1; min-width: 0; }
+.squad-filter { width: 100%; font-size: 12px; padding: 4px 6px; }

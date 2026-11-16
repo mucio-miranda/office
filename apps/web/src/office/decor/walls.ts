@@ -50,6 +50,15 @@ export function setDividerWall(type: WallType | null) {
 }
 export const dividerWall = (): WallType | null => useStore.getState().walls.divisorias ?? null;
 
+/** Escritório aberto: tira as paredes entre as salas sem perder os acabamentos escolhidos (voltam ao desligar). */
+export function setOpenOffice(on: boolean) {
+  const next = normalizeWalls(useStore.getState().walls);
+  if (on) next.aberto = 'removida';
+  else delete next.aberto;
+  return saveWalls(next);
+}
+export const openOffice = () => useStore.getState().walls.aberto === 'removida';
+
 /** Salva no servidor; o mapa muda na hora, e a colisão junto (parede removida deixa passar). */
 export async function saveWalls(next: Record<string, WallType>) {
   const st = useStore.getState();

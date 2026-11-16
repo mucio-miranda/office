@@ -8,7 +8,7 @@ import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
 import { ROOMS } from '../layout';
-import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, allWalls, applyWall, defaultWall, dividerWall, saveWalls, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
+import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, allWalls, applyWall, defaultWall, dividerWall, openOffice, saveWalls, setOpenOffice, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
 } from './state';
@@ -248,6 +248,11 @@ function WallToolButton() {
               {WALL_FINISHES.map((t) => <option key={t} value={t}>{WALL_LABEL[t]}</option>)}
             </select>
           </label>
+          <label className="row gap" style={{ alignItems: 'center' }}>
+            <input type="checkbox" checked={openOffice()} onChange={(e) => setOpenOffice(e.target.checked)} />
+            Escritório aberto (sem paredes entre as salas)
+          </label>
+          {openOffice() && <p className="muted small" style={{ margin: 0 }}>As paredes entre as salas estão escondidas; as de fora do prédio ficam. Os acabamentos escolhidos voltam quando desmarcar.</p>}
           <p className="muted small" style={{ margin: 0 }}>Os padrões valem para toda parede sem acabamento próprio, inclusive das salas novas.</p>
           <div className="wall-modes">
             {(Object.keys(MODE_LABEL) as WallMode[]).map((m) => (

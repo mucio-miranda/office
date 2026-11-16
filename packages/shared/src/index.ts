@@ -20,6 +20,8 @@ export const WALL_TYPES = ['alvenaria', 'reboco', 'branca', 'preta', 'verde', 't
 export const WALL_DEFAULT_KEY = 'padrao';
 /** Chave com o acabamento das divisórias entre as salas (vence o padrão do escritório nessas paredes). */
 export const WALL_DIVIDER_KEY = 'divisorias';
+/** Escritório aberto: com `removida` nessa chave, as paredes entre as salas somem (as de fora ficam). Os acabamentos escolhidos continuam salvos e voltam ao desligar. */
+export const WALL_OPEN_KEY = 'aberto';
 export type WallType = (typeof WALL_TYPES)[number];
 
 /** Sala criada no escritório: um anexo a leste do prédio, com porta para o vizinho. */

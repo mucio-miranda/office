@@ -32,10 +32,15 @@ export function Clients() {
   }, [office?.id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
   const current = clients.find((c) => c.id === sel) ?? clients[0];
   // com squads definidos, a lista vem agrupada: um bloco por squad e os sem squad no fim
-  const groups = sq.squads.length
+  const [only, setOnly] = useState<string>(() => { try { return localStorage.getItem('office.clients.squad') ?? ''; } catch { return ''; } });
+  const pick = (v: string) => { setOnly(v); try { localStorage.setItem('office.clients.squad', v); } catch { /* sem armazenamento */ } };
+  const allGroups = sq.squads.length
     ? [...sq.squads.map((s) => ({ key: s.id, squad: s as Squad | null, items: clients.filter((c) => sq.byClient[c.id] === s.id) })),
       { key: '-', squad: null, items: clients.filter((c) => !sq.byClient[c.id]) }].filter((g) => g.items.length)
     : [{ key: '-', squad: null, items: clients }];
+  // filtro: só um squad (ou só os sem squad); um squad que sumiu do mapa volta a mostrar todos
+  const filtering = !!only && allGroups.some((g) => g.key === only);
+  const groups = filtering ? allGroups.filter((g) => g.key === only) : allGroups;
   const squadOf = (c: Client) => sq.squads.find((s) => s.id === sq.byClient[c.id]) ?? null;
 
   return (
@@ -43,6 +48,13 @@ export function Clients() {
       <aside className="clients-list">
         <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Novo cliente</button>
         <button className="ghost" onClick={() => setImporting(true)}><FolderInput size={14} /> Importar da pasta</button>
+        {sq.squads.length > 0 && (
+          <select className="squad-filter" value={filtering ? only : ''} onChange={(e) => pick(e.target.value)} aria-label="Filtrar por squad">
+            <option value="">Todos os squads</option>
+            {sq.squads.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+            {allGroups.some((g) => g.key === '-') && <option value="-">Sem squad</option>}
+          </select>
+        )}
         {groups.map((g) => (
           <div key={g.key} className="client-group">
             {sq.squads.length > 0 && (
