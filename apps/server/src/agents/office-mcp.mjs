@@ -20,6 +20,8 @@ const POST = {
     status: { type: 'string', enum: ['planejado', 'referencia', 'composicao', 'tunning', 'conferencia', 'aprovado', 'drive', 'postado', 'cancelado'] },
     tunning: { type: 'string', enum: ['feito'], description: 'marque "feito" depois do tunning. Dispensar o tunning é decisão de uma pessoa, pela tela' },
     files: { type: 'array', items: { type: 'string' }, description: 'caminhos completos das peças finais' },
+    workDir: { type: 'string', description: 'pasta da peça em TRABALHOS (a que tem FINAL/ e _trabalho/). Registre ao começar a produzir a peça' },
+    finals: { type: 'array', items: { type: 'string' }, description: 'arquivos finais na ordem de postagem (lâminas do carrossel). Sem isso, o Office usa a pasta FINAL/ da peça. Quem entrega na pasta do mês, com o nome padrão, é o Office ao aprovar: não copie você' },
   },
 };
 

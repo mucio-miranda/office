@@ -18,7 +18,7 @@ import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts
 import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { authorName, cancelJob, enqueueJob, jobForToken, replyToJob } from '../agents/runtime.ts';
-import { postsOf, progress, savePosts, type PostInput } from '../agents/calendar.ts';
+import { approveAndDeliver, deliverApproved, postsOf, progress, refreshLinks, savePosts, type PostInput } from '../agents/calendar.ts';
 import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
 import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '../agents/skillsRepo.ts';
 import { detectDirs, mergeDirs, rootProblem } from '../agents/officeSetup.ts';
@@ -746,6 +746,7 @@ export async function api(app: FastifyInstance) {
       id: z.string().max(40).optional(), date: z.string().optional(), format: z.enum(POST_FORMATS).optional(), theme: z.string().max(200).optional(),
       caption: z.string().max(2200).optional(), notes: z.string().max(2000).optional(), number: z.number().nullable().optional(),
       status: z.enum(POST_STATUSES).optional(), tunning: z.enum(['feito', 'dispensado']).nullable().optional(), files: z.array(z.string().max(500)).max(40).optional(),
+      workDir: z.string().max(500).nullable().optional(), finals: z.array(z.string().max(500)).max(20).optional(),
       demandId: z.string().max(40).nullable().optional(),
     });
     r.get('/api/offices/:officeId/posts', async (req, reply) => {
@@ -763,6 +764,20 @@ export async function api(app: FastifyInstance) {
       const demandId = b.posts.find((p) => p.demandId)?.demandId ?? null;
       if (demandId && !one('SELECT id FROM demands WHERE id = ? AND office_id = ? AND client_id = ?', demandId, officeId, id)) return reply.code(400).send({ error: 'Essa demanda não é deste cliente.' });
       try { return savePosts(officeId, id, demandId, b.posts as PostInput[], `user:${req.user.id}`); } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
+    });
+    // entrega da peça: aprovar e entregar na pasta do mês, reentregar depois de corrigir, completar o link do Drive
+    for (const [name, again] of [['aprovar', false], ['reentregar', true]] as const) {
+      r.post(`/api/offices/:officeId/posts/:id/${name}`, async (req, reply) => {
+        if (!requireWorker(req, reply)) return;
+        const { officeId, id } = req.params as any;
+        const res = await approveAndDeliver(officeId, id, `user:${req.user.id}`, again);
+        return typeof res === 'string' ? reply.code(409).send({ error: res }) : res;
+      });
+    }
+    r.post('/api/offices/:officeId/posts/:id/link', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      return refreshLinks(officeId, id) ?? reply.code(404).send({ error: 'Peça não encontrada' });
     });
     r.get('/api/offices/:officeId/demands/:id/progresso', async (req, reply) => {
       if (!requireMember(req, reply)) return;
@@ -1016,7 +1031,17 @@ export async function api(app: FastifyInstance) {
       });
     pipelineAction('esteira', (id, req) => startPipeline(id, `user:${req.user.id}`));
     pipelineAction('pausar', (id) => pausePipeline(id));
-    pipelineAction('aprovar', (id, req) => approveDemand(id, `user:${req.user.id}`));
+    // aprovar a demanda também entrega as peças do calendário dela que já estavam aprovadas
+    r.post('/api/offices/:officeId/demands/:id/aprovar', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM demands WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Demanda não encontrada' });
+      const by = `user:${req.user.id}`;
+      const err = approveDemand(id, by);
+      if (err) return reply.code(409).send({ error: err });
+      const sent = await deliverApproved(officeId, id, by);
+      return { ok: true, entregues: sent.total - sent.errors.length, erros: sent.errors };
+    });
     const mark = z.object({ file: z.string().min(1), x: z.number().min(0).max(1), y: z.number().min(0).max(1), w: z.number().min(0).max(1), h: z.number().min(0).max(1), note: z.string().trim().min(1).max(500) });
     pipelineAction('ajustes', (id, req) => requestChanges(id, String((req.body as any).text), `user:${req.user.id}`, (req.body as any).marks ?? []),
       z.object({ text: z.string().trim().min(3).max(4000), marks: z.array(mark).max(20).optional() }));

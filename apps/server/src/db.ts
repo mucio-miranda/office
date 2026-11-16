@@ -134,6 +134,10 @@ const MIGRATIONS: string[] = [
      id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE, learning_ids TEXT NOT NULL,
      status TEXT NOT NULL, summary TEXT NOT NULL DEFAULT '', edits TEXT NOT NULL DEFAULT '[]', error TEXT, commit_ref TEXT,
      created_at TEXT NOT NULL, decided_by TEXT);`,
+  // v0.13: entrega da peça — pasta de trabalho, arquivos finais e histórico de entregas no Drive
+  `ALTER TABLE content_posts ADD COLUMN work_dir TEXT;
+   ALTER TABLE content_posts ADD COLUMN finals TEXT NOT NULL DEFAULT '[]';
+   ALTER TABLE content_posts ADD COLUMN deliveries TEXT NOT NULL DEFAULT '[]';`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -176,7 +180,7 @@ const camel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
-const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls', 'session_dirs', 'files', 'learning_ids', 'edits']);
+const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls', 'session_dirs', 'files', 'learning_ids', 'edits', 'finals', 'deliveries']);
 const BOOL_COLS = new Set(['paid', 'auto', 'must_change_pin']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {

@@ -5,6 +5,7 @@ import { useStore } from '../lib/store';
 import { api, getToken, mediaUrl } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { desktop } from '../lib/desktop';
+import { PostCards } from './PostCards';
 
 /**
  * Mesa do diretor de arte: as peças de cada etapa e versão lado a lado com o histórico, prévia de imagem, vídeo e
@@ -93,6 +94,7 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
   useEffect(() => { setSel(Math.max(0, versions.length - 1)); }, [versions.length]);
 
   const v: StageLogEntry | undefined = versions[sel];
+  const hasPosts = useStore((s) => s.posts.some((p) => p.demandId === d.id && p.status !== 'cancelado'));
   const active = jobs.find((j) => j.demandId === d.id && ['fila', 'rodando', 'aguardando'].includes(j.status));
   const waiting = d.stage === 'aprovacao' && d.status === 'aprovacao' && !active;
   // o funcionário parou no meio para pedir uma decisão: a resposta continua a mesma conversa
@@ -152,7 +154,8 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
                 ))}
               </div>
             )}
-            {!v && <p className="muted">Nenhuma peça registrada ainda. Elas aparecem aqui quando um funcionário termina uma etapa.</p>}
+            <PostCards d={d} onAdjust={waiting ? (prefix) => setText((x) => `${x}${x && !x.endsWith('\n') ? '\n' : ''}${prefix}`) : undefined} />
+            {!v && !hasPosts && <p className="muted">Nenhuma peça registrada ainda. Elas aparecem aqui quando um funcionário termina uma etapa.</p>}
             {v && (
               <div className="review-files">
                 {ordered(v.files!).map((f) => (
@@ -233,7 +236,14 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
                 <div className="row gap end">
                   <button type="button" className="ghost small" disabled={busy || (!marks.length && text.trim().length < 3)} onClick={sendChanges}><RotateCcw size={13} /> Pedir ajustes</button>
                   <button type="button" className="primary small" disabled={busy || marks.length > 0} title={marks.length ? 'Há áreas marcadas: mande os ajustes ou tire as marcas' : undefined}
-                    onClick={async () => { if (await act('aprovar')) { notify('Aprovado'); onClose(); } }}><Check size={13} /> Aprovar</button>
+                    onClick={async () => {
+                      setBusy(true);
+                      try {
+                        const r = await api<{ entregues?: number; erros?: string[] }>(`/api/offices/${office!.id}/demands/${d.id}/aprovar`, { body: {} });
+                        notify(r.erros?.length ? `Aprovado, mas ${r.erros.length} peça(s) não foram entregues: ${r.erros[0]}` : r.entregues ? `Aprovado: ${r.entregues} peça(s) entregues na pasta do mês` : 'Aprovado');
+                        onClose();
+                      } catch (e) { notify((e as Error).message); } finally { setBusy(false); }
+                    }}><Check size={13} /> Aprovar</button>
                 </div>
               </div>
             ) : (

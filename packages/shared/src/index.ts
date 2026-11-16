@@ -336,6 +336,20 @@ export const POST_STATUS_LABEL: Record<PostStatus, string> = {
 export const needsTunning = (f: PostFormat) => f !== 'reels';
 
 /** Um post do calendário de conteúdo de um cliente, ligado à demanda que o produz. */
+export interface PostDelivery {
+  from: string;
+  to: string;
+  sha256: string;
+  /** 1 na primeira entrega; cada reentrega com conteúdo novo soma 1 e guarda a anterior em _versoes. */
+  version: number;
+  at: string;
+  by: string;
+  /** Link do Drive (https://drive.google.com/file/d/…/view); null enquanto o Drive não terminou de subir. */
+  link: string | null;
+  /** Onde ficou a versão anterior, numa reentrega. */
+  previous?: string | null;
+}
+
 export interface ContentPost {
   id: ID;
   officeId: ID;
@@ -352,6 +366,12 @@ export interface ContentPost {
   /** `feito` quando passou pelo tunning; `dispensado` quando alguém decidiu que fica sem. */
   tunning: 'feito' | 'dispensado' | null;
   files: string[];
+  /** Pasta da peça em TRABALHOS (onde ficam FINAL/ e _trabalho/). */
+  workDir: string | null;
+  /** Arquivos finais na ordem de postagem (as lâminas do carrossel). Vazio: os da pasta FINAL/ da peça. */
+  finals: string[];
+  /** Cada arquivo entregue na pasta do mês, com o link do Drive quando o upload termina. */
+  deliveries: PostDelivery[];
   updatedAt: string;
   updatedBy: string | null;
 }
