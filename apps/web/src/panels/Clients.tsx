@@ -1,12 +1,13 @@
 import { canSeeFinance } from '@office/shared';
 import { useEffect, useState } from 'react';
-import { Bot, FileText, Film, FolderInput, FolderPlus, Image, Music, Plus, RefreshCw, Sparkles, Users, X } from 'lucide-react';
-import { BRIEFING_FIELDS, type Briefing, type Client } from '@office/shared';
+import { Bot, FileText, Film, FolderInput, FolderOpen, FolderPlus, History, Image, MessageSquarePlus, Music, Plus, RefreshCw, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
+import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
 import { PathField } from '../lib/PathPicker';
 import { StageTrack } from './Demands';
-import { Conversa } from './Conversa';
+import { Conversa, when } from './Conversa';
+import { desktop } from '../lib/desktop';
 
 interface IndexedFile { rel: string; size: number; mtime: string; kind: 'imagem' | 'video' | 'audio' | 'doc' | 'design' | 'outro' }
 interface FileGroup { key: string; label: string; count: number; size: number; files: IndexedFile[] }
@@ -20,7 +21,8 @@ const WEB_IMG = /\.(jpe?g|png|webp|gif)$/i;
  * índice dos arquivos da pasta e as demandas do cliente com a esteira.
  */
 export function Clients() {
-  const { clients, panelArg, office } = useStore();
+  const { clients, panelArg, office, jobs } = useStore();
+  const working = new Set(jobs.filter((j) => j.status === 'rodando' || j.status === 'fila').map((j) => j.clientId));
   const [sel, setSel] = useState<string | null>(panelArg ?? null);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -66,7 +68,8 @@ export function Clients() {
               <button key={c.id} className={`client-item ${current?.id === c.id ? 'active' : ''}`} onClick={() => setSel(c.id)}>
                 <span className="dot" style={{ background: c.color }} />
                 <span className="truncate">{c.name}</span>
-                <span className={`badge ${c.briefing?.feitoEm ? '' : 'outline'}`}>{c.briefing?.feitoEm ? 'briefing ok' : BRIEFING_FIELDS.some((x) => c.briefing?.[x.key]) ? 'rascunho' : 'sem briefing'}</span>
+                {working.has(c.id) && <span className="status-dot st-trabalhando" title="Trabalhando agora" />}
+                {!c.briefing?.feitoEm && !BRIEFING_FIELDS.some((x) => c.briefing?.[x.key]) && <span className="alert-dot" title="Sem briefing" />}
               </button>
             ))}
           </div>
@@ -92,12 +95,30 @@ interface Squad { id: string; nome: string; socialMedia: string | null; designPr
 interface SquadInfo { squads: Squad[]; byClient: Record<string, string | null> }
 const squadRoles = (s: Squad) => [s.socialMedia && `Social media: ${s.socialMedia}`, s.designProducao && `Design/produção: ${s.designProducao}`].filter(Boolean).join(' · ');
 
+type Tab = 'conversa' | 'sessoes' | 'briefing' | 'demandas' | 'arquivos';
+
+/**
+ * Tela do cliente: topo com o essencial (squad, situação, abrir pasta), ajustes raros num botão e abas para tudo o
+ * que é do cliente. A conversa fica com a altura toda; as sessões têm aba própria.
+ */
 function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
-  const { office, demands, agents, open, notify } = useStore();
+  const { office, demands, agents, jobs, open, notify } = useStore();
   const base = `/api/offices/${office!.id}/clients/${c.id}`;
   const patch = (body: Partial<Client>) => api(base, { method: 'PATCH', body });
   const mine = demands.filter((d) => d.clientId === c.id);
   const rafa = agents.find((a) => a.slug === 'gerente');
+  const [tab, setTab] = useState<Tab>('conversa');
+  const [settings, setSettings] = useState(false);
+  const [sessions, setSessions] = useState<ClientSession[]>([]);
+  // null = a sessão atual; um id = uma sessão anterior, só para ler até alguém continuar nela
+  const [view, setView] = useState<string | null>(null);
+  const [confirmReset, setConfirmReset] = useState(false);
+  const clientJobs = jobs.filter((j) => j.clientId === c.id);
+  const busy = clientJobs.some((j) => j.status === 'rodando' || j.status === 'fila' || j.status === 'aguardando');
+  useEffect(() => {
+    api<ClientSession[]>(`${base}/sessoes`).then(setSessions).catch(() => setSessions([]));
+  }, [base, c.sessionId, clientJobs.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const interview = async () => {
     try {
       const r = await api(`${base}/briefing`, { body: {} });
@@ -105,47 +126,128 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
       if (r.agentId) open('agente', r.agentId);
     } catch (e) { notify((e as Error).message); }
   };
+  const resume = async (id: string) => {
+    try {
+      await api(`${base}/sessoes/${id}/retomar`, { body: {} });
+      setView(null);
+      setTab('conversa');
+      notify('A próxima mensagem continua essa sessão');
+    } catch (x) { notify((x as Error).message); }
+  };
+  const reset = async () => {
+    try {
+      await api(`${base}/conversa/nova`, { body: {} });
+      setView(null);
+      setTab('conversa');
+      notify('O próximo pedido começa uma conversa nova');
+    } catch (x) { notify((x as Error).message); }
+    setConfirmReset(false);
+  };
   const running = mine.some((d) => d.pipeline?.[0] === 'briefing' && d.status !== 'entregue');
+  const hasBriefing = !!c.briefing?.feitoEm || BRIEFING_FIELDS.some((x) => c.briefing?.[x.key]);
+  const openDemands = mine.filter((d) => d.status !== 'entregue');
+  const openFolder = () => {
+    if (!c.folder) { notify('Cliente sem pasta definida'); return; }
+    if (!desktop) { notify(c.folder); return; }
+    desktop.openPath(c.folder).then((err) => { if (err) notify(`Não consegui abrir ${c.folder}`); });
+  };
+  const tabs: { id: Tab; label: string; count?: number; alert?: boolean }[] = [
+    { id: 'conversa', label: 'Conversa' },
+    { id: 'sessoes', label: 'Sessões', count: sessions.length },
+    { id: 'briefing', label: 'Briefing', alert: !hasBriefing },
+    { id: 'demandas', label: 'Demandas', count: openDemands.length },
+    { id: 'arquivos', label: 'Arquivos' },
+  ];
 
   return (
     <section className="client-detail">
       <header className="client-head">
         <span className="dot big" style={{ background: c.color }} />
-        <h2>{c.name}</h2>
-        <select value={c.status} onChange={(e) => patch({ status: e.target.value as Client['status'] })}>
-          <option value="ativo">ativo</option><option value="pausado">pausado</option><option value="encerrado">encerrado</option>
-        </select>
-        {canSeeFinance(office?.role) && <span className="muted small">{brl(c.monthlyFee)}/mês</span>}
-        {squad && <span className="badge" title={squadRoles(squad)}><Users size={11} /> {squad.nome}</span>}
+        <div className="client-title">
+          <h2 className="truncate">{c.name}</h2>
+          <div className="client-facts">
+            {squad && <span title={squadRoles(squad)}><Users size={12} /> {[squad.socialMedia, squad.designProducao].filter(Boolean).join(' · ') || squad.nome}</span>}
+            <select className={`status-pill st-${c.status}`} value={c.status} aria-label="Situação do cliente" onChange={(e) => patch({ status: e.target.value as Client['status'] })}>
+              <option value="ativo">Ativo</option><option value="pausado">Pausado</option><option value="encerrado">Encerrado</option>
+            </select>
+            {busy && <span className="working"><span className="status-dot" /> trabalhando agora</span>}
+            {canSeeFinance(office?.role) && c.monthlyFee > 0 && <span className="muted">{brl(c.monthlyFee)}/mês</span>}
+          </div>
+        </div>
+        <span className="spacer" />
+        <button className="ghost small" onClick={openFolder} title={c.folder ?? 'Sem pasta'}><FolderOpen size={14} /> Abrir pasta</button>
+        <div className="popover-anchor">
+          <button className={`icon ${settings ? 'active' : ''}`} onClick={() => setSettings((v) => !v)} aria-label="Ajustes do cliente" aria-expanded={settings} title="Ajustes do cliente"><Settings2 size={16} /></button>
+          {settings && (
+            <div className="popover client-settings" role="dialog" aria-label="Ajustes do cliente">
+              <div>
+                <small className="muted">Quem aprova as peças</small>
+                <div className="seg">
+                  <button className={c.approvalMode !== 'ia' ? 'on' : ''} onClick={() => patch({ approvalMode: 'humano' })}>Uma pessoa</button>
+                  <button className={c.approvalMode === 'ia' ? 'on' : ''} onClick={() => patch({ approvalMode: 'ia' })}><Bot size={12} /> {rafa?.name ?? 'Gerente'} (IA)</button>
+                </div>
+              </div>
+              <div>
+                <small className="muted">Pasta do cliente</small>
+                <code className="truncate" title={c.folder ?? ''}>{c.folder ?? 'sem pasta'}</code>
+                <button className="ghost small" title="Cria só as pastas que faltam (REDES SOCIAIS e ARQUIVOS no padrão novo); nada é movido nem apagado"
+                  onClick={async () => { const r = await api(`${base}/folder`, { body: {} }); notify(r.createdDirs.length ? `${r.createdDirs.length} pasta(s) criada(s)` : 'A estrutura já estava completa'); }}>
+                  <FolderPlus size={14} /> Completar a estrutura padrão
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </header>
 
-      <div className="client-settings">
-        <div>
-          <small className="muted">Aprovação das peças</small>
-          <div className="seg">
-            <button className={c.approvalMode !== 'ia' ? 'on' : ''} onClick={() => patch({ approvalMode: 'humano' })}>Uma pessoa</button>
-            <button className={c.approvalMode === 'ia' ? 'on' : ''} onClick={() => patch({ approvalMode: 'ia' })}><Bot size={12} /> {rafa?.name ?? 'Gerente'} (IA)</button>
+      <nav className="client-tabs" role="tablist" aria-label={`Seções de ${c.name}`}>
+        {tabs.map((t) => (
+          <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
+            {t.label}{t.count ? <span className="count">{t.count}</span> : null}{t.alert && <span className="alert-dot" title="Ainda não feito" />}
+          </button>
+        ))}
+      </nav>
+
+      {tab === 'conversa' && (
+        <Conversa c={c} view={view} setView={setView} sessions={sessions} resume={resume}
+          onSessions={() => setTab('sessoes')} onInterview={interview} onBriefing={() => setTab('briefing')} />
+      )}
+      {tab === 'sessoes' && (
+        <div className="card">
+          <div className="card-head">
+            <h4>Sessões de {c.name}</h4>
+            {confirmReset ? (
+              <div className="row gap">
+                <span className="muted small">O funcionário deixa de lembrar a conversa atual.</span>
+                <button className="ghost small" onClick={() => setConfirmReset(false)}>Manter</button>
+                <button className="small" onClick={reset}>Começar nova</button>
+              </div>
+            ) : (
+              <button className="ghost small" disabled={!c.sessionId || busy} onClick={() => setConfirmReset(true)}><MessageSquarePlus size={13} /> Começar conversa nova</button>
+            )}
           </div>
-        </div>
-        <div className="grow">
-          <small className="muted">Pasta do cliente</small>
-          <div className="row gap">
-            <code className="truncate">{c.folder ?? 'sem pasta'}</code>
-            <button className="ghost small" title="Cria só as pastas que faltam (REDES SOCIAIS e ARQUIVOS no padrão novo); nada é movido nem apagado"
-              onClick={async () => { const r = await api(`${base}/folder`, { body: {} }); notify(r.createdDirs.length ? `${r.createdDirs.length} pasta(s) criada(s)` : 'A estrutura já estava completa'); }}>
-              <FolderPlus size={14} /> Estrutura padrão
+          <div className="session-list" role="list">
+            <button type="button" role="listitem" className={`session-item ${view === null ? 'on' : ''}`} onClick={() => { setView(null); setTab('conversa'); }}>
+              <b>Sessão atual</b><span className="muted small">{c.sessionId ? 'o funcionário lembra desta conversa' : 'o próximo pedido começa uma sessão nova'}</span>
             </button>
+            {sessions.filter((s) => !s.current).map((s) => (
+              <div key={s.id} role="listitem" className={`session-item row ${view === s.id ? 'on' : ''}`}>
+                <button type="button" className="session-open" onClick={() => { setView(s.id); setTab('conversa'); }}>
+                  <span className="row gap">{s.origin === 'terminal' ? <Terminal size={12} /> : <History size={12} />}<b className="truncate">{s.title}</b></span>
+                  <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)}{s.costUsd > 0 ? ` · US$ ${s.costUsd.toFixed(2)}` : ''}{s.people.length ? ` · ${s.people.join(', ')}` : ''}</span>
+                </button>
+                <button type="button" className="ghost small" disabled={busy} title={busy ? 'Espere o trabalho atual terminar' : 'A próxima mensagem continua nesta sessão'} onClick={() => resume(s.id)}>Continuar</button>
+              </div>
+            ))}
+            {sessions.length === 0 && <p className="muted small">Nenhuma sessão ainda nesta pasta.</p>}
           </div>
         </div>
-      </div>
-
-      <Conversa c={c} />
-
-      <div className="client-grid">
-        <BriefingCard c={c} onInterview={interview} interviewing={running} save={(b) => patch({ briefing: b })} />
+      )}
+      {tab === 'briefing' && <BriefingCard c={c} onInterview={interview} interviewing={running} save={(b) => patch({ briefing: b })} />}
+      {tab === 'demandas' && (
         <div className="card">
           <div className="card-head"><h4>Demandas</h4><button className="ghost small" onClick={() => open('demandas', 'nova')}><Plus size={13} /> Nova</button></div>
-          {mine.length === 0 && <p className="muted small">Nenhuma demanda. Depois do briefing, a Rafa sugere as primeiras.</p>}
+          {mine.length === 0 && <p className="muted small">Nenhuma demanda. Depois do briefing, {rafa?.name ?? 'o gerente'} sugere as primeiras.</p>}
           {mine.map((d) => (
             <button key={d.id} className="client-demand" onClick={() => open('demandas', d.id)}>
               <span className="truncate">{d.title}</span>
@@ -153,8 +255,8 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
             </button>
           ))}
         </div>
-        <FilesCard c={c} base={base} />
-      </div>
+      )}
+      {tab === 'arquivos' && <FilesCard c={c} base={base} />}
     </section>
   );
 }

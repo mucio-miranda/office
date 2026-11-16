@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowUp, History, MessageSquarePlus, Square, Terminal, Wrench } from 'lucide-react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowUp, ChevronDown, History, Square, Wrench } from 'lucide-react';
 import { canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
@@ -9,55 +9,113 @@ import { ReviewDesk, versionsOf } from './ReviewDesk';
 const ACTIVE: AgentJob['status'][] = ['fila', 'rodando', 'aguardando'];
 const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const MAX_JOBS = 30;
-const when = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+export const when = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 type Line = { role: 'usuario' | 'agente'; text: string; at: string };
+type Msg = JobMessage & { agentId: string };
+
+/** Passos técnicos do funcionário, contados por tipo e ditos em português ("leu 3 arquivos · rodou 2 comandos"). */
+const STEP_KINDS: { re: RegExp; one: string; many: (n: number) => string }[] = [
+  { re: /^(Read|NotebookRead)\b/, one: 'leu 1 arquivo', many: (n) => `leu ${n} arquivos` },
+  { re: /^(Glob|Grep|LS)\b/, one: 'procurou 1 vez', many: (n) => `procurou ${n} vezes` },
+  { re: /^(Bash|PowerShell)\b/, one: 'rodou 1 comando', many: (n) => `rodou ${n} comandos` },
+  { re: /^(Write|Edit|MultiEdit|NotebookEdit)\b/, one: 'mexeu em 1 arquivo', many: (n) => `mexeu em ${n} arquivos` },
+  { re: /^(WebSearch|WebFetch)\b/, one: 'pesquisou na web', many: (n) => `pesquisou na web ${n} vezes` },
+  { re: /^(Task|Agent)\b/, one: 'chamou um ajudante', many: (n) => `chamou ${n} ajudantes` },
+  { re: /^mcp__/, one: 'usou 1 ferramenta externa', many: (n) => `usou ${n} ferramentas externas` },
+];
+export function summarizeSteps(texts: string[]) {
+  const counts = new Map<number, number>();
+  const skills: string[] = [];
+  let other = 0;
+  for (const t of texts) {
+    const skill = /^Skill\b[:\s]*([\w:-]+)/.exec(t);
+    if (skill) { if (!skills.includes(skill[1])) skills.push(skill[1]); continue; }
+    const i = STEP_KINDS.findIndex((k) => k.re.test(t));
+    if (i < 0) other++;
+    else counts.set(i, (counts.get(i) ?? 0) + 1);
+  }
+  const parts = [...skills.map((s) => `usou a skill ${s}`), ...[...counts].sort((a, b) => a[0] - b[0]).map(([i, n]) => (n === 1 ? STEP_KINDS[i].one : STEP_KINDS[i].many(n)))];
+  if (other) parts.push(other === 1 ? 'fez mais 1 passo' : `fez mais ${other} passos`);
+  return parts.join(' · ');
+}
+
+/** Resposta que é só JSON (em bloco de código ou não): devolve o objeto, para não mostrar dado cru na conversa. */
+export function asJson(text: string): Record<string, unknown> | null {
+  const t = text.trim().replace(/^```[\w-]*\s*/, '').replace(/\s*```$/, '').trim();
+  if (!t.startsWith('{')) return null;
+  try {
+    const v = JSON.parse(t);
+    if (v && typeof v === 'object' && !Array.isArray(v)) return v;
+  } catch { /* cortado ou com texto junto: decide pelas chaves */ }
+  const keys = [...t.matchAll(/"([\w-]{2,40})"\s*:/g)].map((m) => m[1]);
+  return keys.length >= 2 ? Object.fromEntries(keys.map((k) => [k, true])) : null;
+}
+const BRIEFING_KEYS = ['segmento', 'publico', 'objetivos', 'tomDeVoz', 'diferenciais'];
+
+/** Atalhos das tarefas de todo dia: preenchem o pedido para a pessoa completar e enviar. */
+const SHORTCUTS: { label: string; text: string }[] = [
+  { label: 'Conteúdo do mês', text: '/start-conteudo ' },
+  { label: 'Artes do calendário', text: '/arte-referencia ' },
+  { label: 'Editar vídeo', text: '/editar-video ' },
+  { label: 'Organizar pasta', text: '/organizar-pasta ' },
+];
+
+interface Props {
+  c: Client;
+  view: string | null;
+  setView: (id: string | null) => void;
+  sessions: ClientSession[];
+  resume: (id: string) => void;
+  onSessions: () => void;
+  onInterview: () => void;
+  onBriefing: () => void;
+}
 
 /**
  * A conversa do cliente: uma só, que continua de um pedido para o outro, como no terminal. A função do funcionário é só
  * um rótulo: todos têm as mesmas skills. O comando `/skill` e a correção no meio do trabalho funcionam aqui.
+ * Os passos técnicos ficam agrupados numa linha que abre, e resposta em JSON vira um aviso em vez de dado cru.
  */
-export function Conversa({ c }: { c: Client }) {
+export function Conversa({ c, view, setView, sessions, resume, onSessions, onInterview, onBriefing }: Props) {
   const { jobs, messages, loadMessages, agents, office, demands, notify } = useStore();
   const base = `/api/offices/${office!.id}`;
   const [text, setText] = useState('');
   const [newRequest, setNewRequest] = useState(false);
+  const [sendMenu, setSendMenu] = useState(false);
   const [busy, setBusy] = useState(false);
   const [skills, setSkills] = useState<{ name: string; description: string }[]>([]);
-  const [confirmReset, setConfirmReset] = useState(false);
   const [openDemand, setOpenDemand] = useState<string | null>(null);
-  const [sessions, setSessions] = useState<ClientSession[]>([]);
-  const [showSessions, setShowSessions] = useState(false);
-  // null = a sessão atual; um id = uma sessão anterior, só para ler até alguém continuar nela
-  const [view, setView] = useState<string | null>(null);
   const [tail, setTail] = useState<Line[] | null>(null);
   const list = useRef<HTMLDivElement>(null);
+  const input = useRef<HTMLTextAreaElement>(null);
 
   const clientJobs = useMemo(() => jobs.filter((j) => j.clientId === c.id && j.stage !== 'aprovacao'), [jobs, c.id]);
   const active = clientJobs.find((j) => ACTIVE.includes(j.status));
   const viewed = view ? sessions.find((s) => s.id === view) : undefined;
   const mine = useMemo(() => clientJobs.filter((j) => (view ? j.sessionId === view : !j.sessionId || j.sessionId === c.sessionId)).slice(0, MAX_JOBS), [clientJobs, view, c.sessionId]);
-  const sessionCount = clientJobs.length;
-  useEffect(() => { api<ClientSession[]>(`${base}/clients/${c.id}/sessoes`).then(setSessions).catch(() => setSessions([])); }, [base, c.id, c.sessionId, sessionCount]);
-  useEffect(() => { setView(null); }, [c.id]);
   // sessão do terminal: o Office não tem as mensagens, então lê o fim do arquivo da sessão
   useEffect(() => {
     setTail(null);
     if (view && viewed?.origin === 'terminal') api<Line[]>(`${base}/clients/${c.id}/sessoes/${view}`).then(setTail).catch((x) => notify((x as Error).message));
   }, [view, viewed?.origin]); // eslint-disable-line react-hooks/exhaustive-deps
-  const resume = async (id: string) => {
-    try {
-      await api(`${base}/clients/${c.id}/sessoes/${id}/retomar`, { body: {} });
-      setView(null);
-      setShowSessions(false);
-      notify('A próxima mensagem continua essa sessão');
-    } catch (x) { notify((x as Error).message); }
-  };
   const missing = mine.filter((j) => !messages[j.id]).map((j) => j.id).join(',');
   useEffect(() => { if (missing) missing.split(',').forEach((id) => loadMessages(id)); }, [missing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api<{ name: string; description: string }[]>(`${base}/skills`).then(setSkills).catch(() => setSkills([])); }, [base]);
 
   const msgs = useMemo(() => mine.flatMap((j) => (messages[j.id] ?? []).map((m) => ({ ...m, agentId: j.agentId }))).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [mine, messages]);
   useEffect(() => { list.current?.scrollTo(0, list.current.scrollHeight); }, [msgs.length]);
+  // passos seguidos viram um bloco só
+  const blocks = useMemo(() => {
+    const out: (Msg | { steps: Msg[] })[] = [];
+    for (const m of msgs) {
+      const last = out.at(-1);
+      if (m.role === 'ferramenta') {
+        if (last && 'steps' in last) last.steps.push(m);
+        else out.push({ steps: [m] });
+      } else out.push(m);
+    }
+    return out;
+  }, [msgs]);
 
   const cost = mine.reduce((n, j) => n + (j.costUsd ?? 0), 0);
   const running = active?.status === 'rodando' || active?.status === 'fila';
@@ -70,6 +128,7 @@ export function Conversa({ c }: { c: Client }) {
   }, [demands, c.id]);
   const open = openDemand ? demands.find((d) => d.id === openDemand) : null;
   const guest = !canWork(office!.role);
+  const current = sessions.find((s) => s.current);
 
   const send = async (e?: React.FormEvent) => {
     e?.preventDefault();
@@ -82,57 +141,50 @@ export function Conversa({ c }: { c: Client }) {
     } catch (x) { notify((x as Error).message); }
     setBusy(false);
   };
-  const reset = async () => {
-    try {
-      await api(`${base}/clients/${c.id}/conversa/nova`, { body: {} });
-      notify('O próximo pedido começa uma conversa nova');
-    } catch (x) { notify((x as Error).message); }
-    setConfirmReset(false);
-  };
+  const shortcut = (t: string) => { setText(t); requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(t.length, t.length); }); };
 
-  const line = (m: JobMessage & { agentId: string }) => {
-    if (m.role === 'ferramenta') return <div key={m.id} className="msg ferramenta"><Wrench size={12} /><span>{m.text}</span></div>;
-    if (m.role === 'usuario') return <div key={m.id} className="msg usuario">{m.author && <div className="who">{m.author}</div>}<div className="msg-text">{m.text}</div></div>;
-    if (m.role === 'sistema') return <div key={m.id} className="msg sistema">{m.text}</div>;
+  const agentLine = (m: Msg) => {
     const a = agents.find((x) => x.id === m.agentId);
-    return (
-      <div key={m.id} className="msg">
-        <div className="who"><span className="avatar" style={{ background: a?.color, width: 18, height: 18, fontSize: 10 }}>{a?.name[0]}</span>{a?.name}</div>
-        <div className="msg-text md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }} />
-      </div>
-    );
+    const who = <div className="who"><span className="avatar" style={{ background: a?.color, width: 18, height: 18, fontSize: 10 }}>{a?.name[0]}</span>{a?.name}</div>;
+    const json = asJson(m.text);
+    if (json) {
+      const briefing = BRIEFING_KEYS.some((k) => k in json);
+      return (
+        <div key={m.id} className="msg">
+          {who}
+          {briefing
+            ? <div className="msg-note">Briefing preenchido. <button type="button" className="link" onClick={onBriefing}>Ver o briefing</button></div>
+            : <details className="msg-data"><summary>Dados técnicos ({Object.keys(json).length} campos)</summary><pre>{m.text}</pre></details>}
+        </div>
+      );
+    }
+    return <div key={m.id} className="msg">{who}<div className="msg-text md" dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }} /></div>;
+  };
+  const block = (b: Msg | { steps: Msg[] }, i: number) => {
+    if ('steps' in b) {
+      const a = agents.find((x) => x.id === b.steps[0].agentId);
+      return (
+        <details key={`s${i}-${b.steps[0].id}`} className="msg passos">
+          <summary><Wrench size={12} /> {a?.name ?? 'O funcionário'} {summarizeSteps(b.steps.map((s) => s.text))}</summary>
+          <div className="passos-list">{b.steps.map((s) => <div key={s.id}>{s.text}</div>)}</div>
+        </details>
+      );
+    }
+    if (b.role === 'usuario') return <div key={b.id} className="msg usuario">{b.author && <div className="who">{b.author}</div>}<div className="msg-text">{b.text}</div></div>;
+    if (b.role === 'sistema') return <div key={b.id} className="msg sistema">{b.text}</div>;
+    return agentLine(b);
   };
 
   return (
-    <div className="card conversa">
-      <div className="card-head">
-        <h4>Conversa {cost > 0 && <span className="muted small mono">· US$ {cost.toFixed(2)}</span>}</h4>
-        <button className={`ghost small ${showSessions ? 'active' : ''}`} onClick={() => setShowSessions((v) => !v)} title="Sessões deste cliente, do Office e do terminal">
-          <History size={13} /> Sessões{sessions.length ? ` (${sessions.length})` : ''}</button>
-        {confirmReset ? (
-          <div className="row gap">
-            <span className="muted small">O agente deixa de lembrar esta conversa.</span>
-            <button className="ghost small" onClick={() => setConfirmReset(false)}>Manter</button>
-            <button className="small" onClick={reset}>Começar nova</button>
-          </div>
-        ) : (
-          <button className="ghost small" disabled={!c.sessionId || !!active} onClick={() => setConfirmReset(true)}><MessageSquarePlus size={13} /> Nova conversa</button>
-        )}
+    <div className="conversa">
+      <div className="conversa-bar">
+        <button type="button" className="ghost small" onClick={onSessions} title="Ver as sessões anteriores, do Office e do terminal">
+          <History size={13} /> {view ? 'Sessão anterior (só leitura)' : c.sessionId ? `Sessão atual${current ? ` · desde ${when(current.startedAt)}` : msgs[0] ? ` · desde ${when(msgs[0].createdAt)}` : ''}` : 'Sessão nova'}
+          {sessions.length > 1 && <span className="muted"> · {sessions.length} sessões</span>}
+        </button>
+        <span className="spacer" />
+        {cost > 0 && <span className="muted small mono" title="Custo desta sessão">US$ {cost.toFixed(2)}</span>}
       </div>
-      {showSessions && (
-        <div className="session-list" role="list" aria-label={`Sessões de ${c.name}`}>
-          <button type="button" role="listitem" className={`session-item ${view === null ? 'on' : ''}`} onClick={() => { setView(null); setShowSessions(false); }}>
-            <b>Sessão atual</b><span className="muted small">{c.sessionId ? 'o agente lembra desta conversa' : 'o próximo pedido começa uma sessão nova'}</span>
-          </button>
-          {sessions.filter((s) => !s.current).map((s) => (
-            <button type="button" role="listitem" key={s.id} className={`session-item ${view === s.id ? 'on' : ''}`} onClick={() => { setView(s.id); setShowSessions(false); }}>
-              <span className="row gap">{s.origin === 'terminal' ? <Terminal size={12} /> : <History size={12} />}<b className="truncate">{s.title}</b></span>
-              <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)}{s.costUsd > 0 ? ` · US$ ${s.costUsd.toFixed(2)}` : ''}{s.people.length ? ` · ${s.people.join(', ')}` : ''}</span>
-            </button>
-          ))}
-          {sessions.length === 0 && <p className="muted small">Nenhuma sessão ainda nesta pasta.</p>}
-        </div>
-      )}
       {view && (
         <div className="session-banner">
           <span className="small">{viewed?.origin === 'terminal' ? 'Sessão do terminal' : 'Sessão anterior'}{viewed ? ` de ${when(viewed.startedAt)}` : ''}. Só leitura.</span>
@@ -145,8 +197,12 @@ export function Conversa({ c }: { c: Client }) {
           ? <div key={i} className="msg usuario"><div className="msg-text">{l.text}</div></div>
           : <div key={i} className="msg"><div className="msg-text md" dangerouslySetInnerHTML={{ __html: renderMarkdown(l.text) }} /></div>)}
         {view && viewed?.origin === 'terminal' && !tail && <p className="muted small">Lendo o fim da sessão…</p>}
-        {!view && msgs.length === 0 && <p className="muted small">Peça o que precisar para {c.name}. O agente trabalha na pasta do cliente, com todas as skills, e lembra de um pedido para o outro. Digite / para ver os comandos.</p>}
-        {msgs.map(line)}
+        {!view && msgs.length === 0 && (
+          <div className="conversa-empty">
+            <p>Peça o que precisar para <b>{c.name}</b>. O funcionário trabalha na pasta do cliente, com todas as skills, e lembra de um pedido para o outro.</p>
+          </div>
+        )}
+        {blocks.map((b, i) => <Fragment key={i}>{block(b, i)}</Fragment>)}
         {running && <div className="typing st-trabalhando"><span className="status-dot" />{worker?.name ?? 'O funcionário'} {active?.status === 'fila' ? 'está na fila' : 'está trabalhando'}…</div>}
       </div>
       {pieces && pieces.files.length > 0 && (
@@ -154,26 +210,45 @@ export function Conversa({ c }: { c: Client }) {
           {pieces.files.map((f) => <img key={f} src={mediaUrl(office!.id, f)} alt="" loading="lazy" />)}
         </button>
       )}
-      {view ? null : guest ? <p className="muted small" style={{ margin: '8px 16px' }}>Você entrou como convidado: acompanha a conversa, mas quem pede trabalho é um membro do escritório.</p> : <form className="composer" onSubmit={send}>
-        {matches.length > 0 && (
-          <div className="slash-menu" role="listbox" aria-label="Comandos">
-            {matches.map((s) => (
-              <button key={s.name} type="button" role="option" aria-selected={false} onClick={() => setText(`/${s.name} `)}>
-                <b>/{s.name}</b><span className="muted small truncate">{s.description}</span>
-              </button>
-            ))}
-          </div>
-        )}
-        <textarea rows={2} value={text} aria-label={`Mensagem para a conversa de ${c.name}`}
-          placeholder={running ? 'Escreva para corrigir agora: o trabalho é interrompido e continua com a sua mensagem' : active ? 'Responda à decisão pedida…' : 'Peça algo, corrija ou digite / para os comandos…'}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
-        <div className="row gap conversa-actions">
-          <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> {running && !newRequest ? 'Interromper e enviar' : 'Enviar'}</button>
-          {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
-          <label className="check small"><input type="checkbox" checked={newRequest} onChange={(e) => setNewRequest(e.target.checked)} /> Novo pedido, em outro cartão</label>
-        </div>
-      </form>}
+      {view ? null : guest ? <p className="muted small" style={{ margin: '8px 16px' }}>Você entrou como convidado: acompanha a conversa, mas quem pede trabalho é um membro do escritório.</p> : (
+        <>
+          {!running && !text && (
+            <div className="shortcuts" aria-label="Atalhos">
+              <button type="button" className="chip" onClick={onInterview}>{c.briefing?.feitoEm ? 'Refazer briefing' : 'Fazer briefing'}</button>
+              {SHORTCUTS.map((s) => <button key={s.label} type="button" className="chip" onClick={() => shortcut(s.text)}>{s.label}</button>)}
+            </div>
+          )}
+          <form className="composer" onSubmit={send}>
+            {matches.length > 0 && (
+              <div className="slash-menu" role="listbox" aria-label="Comandos">
+                {matches.map((s) => (
+                  <button key={s.name} type="button" role="option" aria-selected={false} onClick={() => setText(`/${s.name} `)}>
+                    <b>/{s.name}</b><span className="muted small truncate">{s.description}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <textarea ref={input} rows={2} value={text} aria-label={`Mensagem para a conversa de ${c.name}`}
+              placeholder={running ? 'Escreva para corrigir agora: o trabalho para e continua com a sua mensagem' : active ? 'Responda à decisão pedida…' : `O que fazer para ${c.name}?`}
+              onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
+            <div className="row gap conversa-actions">
+              <span className="muted small">{newRequest ? 'Vai como pedido novo, em outro cartão' : 'Enter envia · / mostra os comandos'}</span>
+              <span className="spacer" />
+              {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
+              <div className="send-group">
+                <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> {running && !newRequest ? 'Corrigir agora' : 'Enviar'}</button>
+                <button type="button" className="primary small icon-only" aria-label="Mais opções de envio" aria-expanded={sendMenu} onClick={() => setSendMenu((v) => !v)}><ChevronDown size={14} /></button>
+                {sendMenu && (
+                  <div className="send-menu" role="menu">
+                    <label className="check small"><input type="checkbox" checked={newRequest} onChange={(e) => { setNewRequest(e.target.checked); setSendMenu(false); }} /> Enviar como pedido novo (abre outro cartão na esteira)</label>
+                  </div>
+                )}
+              </div>
+            </div>
+          </form>
+        </>
+      )}
       {open && <ReviewDesk d={open} onClose={() => setOpenDemand(null)} />}
     </div>
   );

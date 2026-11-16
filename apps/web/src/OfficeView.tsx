@@ -47,7 +47,7 @@ export function OfficeView() {
   const waiting = useStore((s) => s.jobs.filter((j) => j.status === 'aguardando').length);
   const drone = useStore((s) => s.drone);
   // páginas de tela cheia (funcionário, estúdio): o mapa abre pelo cabeçalho para não cobrir a caixa de mensagem nem a timeline
-  const flush = panel === 'agente' || panel === 'video' || panel === 'arquivo' || panel === 'moodboard';
+  const flush = panel === 'agente' || panel === 'clientes' || panel === 'video' || panel === 'arquivo' || panel === 'moodboard';
   const [peek, setPeek] = useState(false);
   const droneDragging = useStore((s) => s.droneDragging);
   const touring = useStore((s) => s.tour !== null);
