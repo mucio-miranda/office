@@ -5,8 +5,9 @@ import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
-  Plus,
+  Plus, PanelLeftClose, PanelLeftOpen,
 } from 'lucide-react';
+import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
 import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
@@ -40,6 +41,8 @@ export function OfficeView() {
   const [nearby, setNearby] = useState<Nearby | null>(null);
   const [palette, setPalette] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
+  // barra lateral recolhida: fica só com os ícones (Ctrl+B alterna)
+  const [navCollapsed, setNavCollapsed] = usePersisted<boolean>('office.nav.collapsed', false);
   const chatRef = useRef<HTMLInputElement>(null);
   const { panel, open } = useStore();
   const toast = useStore((s) => s.toast);
@@ -90,13 +93,23 @@ export function OfficeView() {
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   }, [nearby, palette, open, inWorld]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') { e.preventDefault(); setNavCollapsed(!navCollapsed); }
+    };
+    addEventListener('keydown', onKey);
+    return () => removeEventListener('keydown', onKey);
+  }, [navCollapsed]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className={`shell ${navOpen ? 'nav-open' : ''}`}>
+    <div className={`shell ${navOpen ? 'nav-open' : ''} ${navCollapsed ? 'nav-collapsed' : ''}`}>
       <Sidebar onNavigate={() => setNavOpen(false)} onSearch={() => setPalette(true)} />
       <main className="main">
         <header className="page-head">
           <button className="icon menu-btn" onClick={() => setNavOpen((v) => !v)} aria-label="Menu"><Menu size={16} /></button>
+          <button className="icon nav-toggle" onClick={() => setNavCollapsed(!navCollapsed)} aria-label={navCollapsed ? 'Expandir a barra lateral' : 'Recolher a barra lateral'} title={`${navCollapsed ? 'Expandir' : 'Recolher'} a barra lateral (Ctrl+B)`}>
+            {navCollapsed ? <PanelLeftOpen size={16} /> : <PanelLeftClose size={16} />}
+          </button>
           <PageTitle />
           <span className="spacer" />
           {!inWorld && flush && (
@@ -186,11 +199,11 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
       </div>
       <div className="sidebar-scroll">
         <nav className="nav">
-          <button className="nav-item" onClick={onSearch}><Search size={16} /> Buscar <kbd>Ctrl K</kbd></button>
+          <button className="nav-item" onClick={onSearch} title="Buscar (Ctrl K)"><Search size={16} /> Buscar <kbd>Ctrl K</kbd></button>
         </nav>
         <nav className="nav">
           {NAV.filter((n) => n.id !== 'financeiro' || canSeeFinance(office?.role)).map((n) => (
-            <button key={n.label} className={`nav-item ${panel === n.id ? 'active' : ''}`} onClick={() => go(n.id)}>
+            <button key={n.label} className={`nav-item ${panel === n.id ? 'active' : ''}`} onClick={() => go(n.id)} title={n.label}>
               <n.icon size={16} /> {n.label}
               {n.id === 'demandas' && openCount > 0 && <span className="count">{openCount}</span>}
               {n.id === 'mesa' && deskCount > 0 && <span className="count">{deskCount}</span>}
@@ -200,7 +213,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
         <div className="nav">
           <div className="section-label">Funcionários de IA</div>
           {agents.map((a) => (
-            <button key={a.id} className={`nav-item agent-row st-${a.status} ${panel === 'agente' && panelArg === a.id ? 'active' : ''}`} onClick={() => go('agente', a.id)}>
+            <button key={a.id} className={`nav-item agent-row st-${a.status} ${panel === 'agente' && panelArg === a.id ? 'active' : ''}`} onClick={() => go('agente', a.id)} title={`${a.name} · ${a.role}`}>
               <span className="avatar" style={{ background: a.color }}>{a.name[0]}<span className="status-dot" /></span>
               <div className="truncate"><span className="truncate">{a.name}</span><small className="truncate">{a.role}</small></div>
               {a.status !== 'livre' && <span className={`count ${a.status === 'aguardando' ? 'alert' : ''}`}>{AGENT_LABEL[a.status]}</span>}

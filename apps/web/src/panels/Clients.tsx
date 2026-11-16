@@ -1,6 +1,6 @@
 import { canSeeFinance } from '@office/shared';
 import { useEffect, useState } from 'react';
-import { Bot, FileText, Film, FolderInput, FolderOpen, FolderPlus, History, Image, MessageSquarePlus, Music, Plus, RefreshCw, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
+import { Bot, FileText, Film, FolderInput, FolderOpen, FolderPlus, History, Image, MessageSquarePlus, Music, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
@@ -8,6 +8,7 @@ import { PathField } from '../lib/PathPicker';
 import { StageTrack } from './Demands';
 import { Conversa, when } from './Conversa';
 import { desktop } from '../lib/desktop';
+import { usePersisted } from '../lib/persisted';
 
 interface IndexedFile { rel: string; size: number; mtime: string; kind: 'imagem' | 'video' | 'audio' | 'doc' | 'design' | 'outro' }
 interface FileGroup { key: string; label: string; count: number; size: number; files: IndexedFile[] }
@@ -34,8 +35,9 @@ export function Clients() {
   }, [office?.id, sig]); // eslint-disable-line react-hooks/exhaustive-deps
   const current = clients.find((c) => c.id === sel) ?? clients[0];
   // com squads definidos, a lista vem agrupada: um bloco por squad e os sem squad no fim
-  const [only, setOnly] = useState<string>(() => { try { return localStorage.getItem('office.clients.squad') ?? ''; } catch { return ''; } });
-  const pick = (v: string) => { setOnly(v); try { localStorage.setItem('office.clients.squad', v); } catch { /* sem armazenamento */ } };
+  const [only, pick] = usePersisted<string>('office.clients.squad', '');
+  // lista recolhida: vira uma coluna estreita só com a cor de cada cliente
+  const [collapsed, setCollapsed] = usePersisted<boolean>('office.clients.collapsed', false);
   const allGroups = sq.squads.length
     ? [...sq.squads.map((s) => ({ key: s.id, squad: s as Squad | null, items: clients.filter((c) => sq.byClient[c.id] === s.id) })),
       { key: '-', squad: null, items: clients.filter((c) => !sq.byClient[c.id]) }].filter((g) => g.items.length)
@@ -46,8 +48,25 @@ export function Clients() {
   const squadOf = (c: Client) => sq.squads.find((s) => s.id === sq.byClient[c.id]) ?? null;
 
   return (
-    <div className="clients-page">
+    <div className={`clients-page ${collapsed ? 'list-collapsed' : ''}`}>
+      {collapsed ? (
+        <aside className="clients-rail" aria-label="Clientes">
+          <button className="icon" onClick={() => setCollapsed(false)} aria-label="Expandir a lista de clientes" title="Expandir a lista de clientes"><PanelLeftOpen size={16} /></button>
+          {groups.map((g) => g.items.map((c) => (
+            <button key={c.id} className={`rail-client ${current?.id === c.id ? 'active' : ''}`} onClick={() => setSel(c.id)} title={c.name} aria-label={c.name}>
+              <span className="dot" style={{ background: c.color }} />
+              <span className="rail-initial">{c.name.replace(/^(Dra?\.?\s+)/i, '')[0]}</span>
+              {working.has(c.id) && <span className="status-dot st-trabalhando" />}
+            </button>
+          )))}
+        </aside>
+      ) : (
       <aside className="clients-list">
+        <div className="clients-list-head">
+          <b>Clientes</b><span className="muted small">{clients.length}</span>
+          <span className="spacer" />
+          <button className="icon" onClick={() => setCollapsed(true)} aria-label="Recolher a lista de clientes" title="Recolher a lista de clientes"><PanelLeftClose size={16} /></button>
+        </div>
         <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Novo cliente</button>
         <button className="ghost" onClick={() => setImporting(true)}><FolderInput size={14} /> Importar da pasta</button>
         {sq.squads.length > 0 && (
@@ -76,6 +95,7 @@ export function Clients() {
         ))}
         {clients.length === 0 && <p className="muted small">Nenhum cliente ainda.</p>}
       </aside>
+      )}
       {current ? <ClientDetail key={current.id} c={current} squad={squadOf(current)} /> : (
         <div className="empty">
           <p>Cadastre o primeiro cliente: o Office cria a pasta no padrão da casa e a Rafa faz a entrevista de briefing. Se as pastas já existem, é só importar.</p>
