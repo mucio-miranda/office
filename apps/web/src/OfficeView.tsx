@@ -5,7 +5,7 @@ import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
-  Plus, PanelLeftClose, PanelLeftOpen,
+  Plus, PanelLeftClose, PanelLeftOpen, ListChecks,
 } from 'lucide-react';
 import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
@@ -30,6 +30,7 @@ const NAV: { id: NavId; icon: typeof Box; label: string; key: string }[] = [
   { id: 'arquivo', icon: ArchiveIcon, label: 'Arquivo', key: 'J' },
   { id: 'demandas', icon: KanbanSquare, label: 'Demandas', key: 'B' },
   { id: 'calendario', icon: Calendar, label: 'Calendário', key: 'C' },
+  { id: 'mes', icon: ListChecks, label: 'Gestão do mês', key: 'M' },
   { id: 'financeiro', icon: CircleDollarSign, label: 'Financeiro', key: 'F' },
   { id: 'video', icon: Clapperboard, label: 'Estúdio de vídeo', key: 'V' },
   { id: 'equipe', icon: Users, label: 'Equipe', key: 'G' },

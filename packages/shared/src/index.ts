@@ -93,6 +93,8 @@ export interface Client {
   /** Nicho na biblioteca de referências da agência (REFERENCIAS\\<nicho>); sem valor, é deduzido da marca. */
   niche?: string | null;
   monthlyFee: number;
+  /** Dias da semana em que o cliente posta (0 = domingo … 6 = sábado). Padrão: segunda, quarta e sexta. */
+  postDays?: number[];
   status: 'ativo' | 'pausado' | 'encerrado';
   color: string;
   /** Briefing do cliente (preenchido pela entrevista com o gerente ou à mão). */
@@ -326,11 +328,11 @@ export const POST_FORMATS = ['estatico', 'carrossel', 'reels', 'capa-reels', 'st
 export type PostFormat = (typeof POST_FORMATS)[number];
 export const POST_FORMAT_LABEL: Record<PostFormat, string> = { estatico: 'estático', carrossel: 'carrossel', reels: 'reels', 'capa-reels': 'capa de reels', story: 'story' };
 /** Etapas de cada peça, na ordem do método da casa: referência, composição, tunning, conferência, aprovação e Drive. */
-export const POST_STATUSES = ['planejado', 'referencia', 'composicao', 'tunning', 'conferencia', 'aprovado', 'drive', 'postado', 'cancelado'] as const;
+export const POST_STATUSES = ['planejado', 'referencia', 'composicao', 'tunning', 'conferencia', 'aprovado', 'drive', 'programado', 'postado', 'cancelado'] as const;
 export type PostStatus = (typeof POST_STATUSES)[number];
 export const POST_STATUS_LABEL: Record<PostStatus, string> = {
   planejado: 'planejado', referencia: 'referência', composicao: 'composição', tunning: 'tunning', conferencia: 'conferência',
-  aprovado: 'aprovado', drive: 'no Drive', postado: 'postado', cancelado: 'cancelado',
+  aprovado: 'aprovado', drive: 'no Drive', programado: 'programado', postado: 'postado', cancelado: 'cancelado',
 };
 /** Arte passa pelo tunning; o reels editado não. */
 export const needsTunning = (f: PostFormat) => f !== 'reels';
@@ -375,6 +377,72 @@ export interface ContentPost {
   updatedAt: string;
   updatedBy: string | null;
 }
+
+// ---------- gestão mensal dos clientes (squad) ----------
+
+/** As etapas que o squad acompanha em cada cliente, todo mês. */
+export const MONTH_STEPS = ['ensaio', 'feito', 'aprovado', 'programado'] as const;
+export type MonthStep = (typeof MONTH_STEPS)[number];
+export const MONTH_STEP_LABEL: Record<MonthStep, string> = { ensaio: 'Ensaio do mês', feito: 'Conteúdo feito', aprovado: 'Conteúdo aprovado', programado: 'Programado' };
+/** `na`: não se aplica neste mês (ex.: cliente sem ensaio). */
+export const CHECK_STATES = ['pendente', 'andamento', 'ok', 'na'] as const;
+export type CheckState = (typeof CHECK_STATES)[number];
+export const CHECK_STATE_LABEL: Record<CheckState, string> = { pendente: 'pendente', andamento: 'em andamento', ok: 'ok', na: 'não se aplica' };
+
+export interface MonthCheck { state: CheckState; note: string; by: string | null; at: string | null }
+
+/** A checklist de um cliente num mês (AAAA-MM). */
+export interface ClientMonth {
+  clientId: ID;
+  month: string;
+  checks: Partial<Record<MonthStep, MonthCheck>>;
+  note: string;
+  updatedAt: string | null;
+  updatedBy: string | null;
+}
+
+/** Contagem automática do mês, lida do calendário de posts e da pasta do mês. */
+export interface MonthAuto {
+  /** Posts do calendário no mês (sem os cancelados). */
+  posts: number;
+  /** Posts com arquivo (peça feita). */
+  feitos: number;
+  aprovados: number;
+  programados: number;
+  postados: number;
+  /** Peças encontradas na pasta do mês do Drive (agrupando as lâminas). */
+  pecas: number;
+  /** Arquivos na pasta ENSAIOS do mês. */
+  fotosEnsaio: number;
+  /** A pasta do mês existe. */
+  pasta: string | null;
+}
+
+export interface MonthRow {
+  client: Client;
+  squad: string | null;
+  month: ClientMonth;
+  auto: MonthAuto;
+}
+
+/** Uma peça da pasta do mês: as lâminas de um carrossel viram uma peça só. */
+export interface MonthPiece {
+  key: string;
+  number: number | null;
+  date: string | null;
+  format: PostFormat | null;
+  theme: string;
+  files: string[];
+  /** Está em POSTADOS (ou com _postado no nome). */
+  posted: boolean;
+  /** Post do calendário ligado a estes arquivos. */
+  postId: ID | null;
+  /** O nome não segue o padrão: veio solto na pasta. */
+  loose: boolean;
+}
+
+/** Uma troca de nome proposta pelo "Aplicar na pasta". */
+export interface RenamePlan { from: string; to: string }
 
 export interface CalendarEvent {
   id: ID;
@@ -614,7 +682,7 @@ export type ServerMsg =
   | { t: 'chat'; from: ID; name: string; text: string; room: RoomId | null; at: string }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
+  | { t: 'invalidate'; what: 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
   /** Aviso para todo mundo do escritório (ex.: peça esperando aprovação). */
   | { t: 'notice'; text: string; demandId?: ID; agentId?: ID }
   | { t: 'job'; job: AgentJob }

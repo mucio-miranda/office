@@ -7,7 +7,7 @@ import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
 import { setAgentDesks, setCustomRooms, setWallStyles } from '../office/layout';
 
-export type PanelId = 'mesa' | 'moodboard' | 'clientes' | 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | 'arquivo' | null;
+export type PanelId = 'mes' | 'mesa' | 'moodboard' | 'clientes' | 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | 'arquivo' | null;
 
 export interface ChatLine { from: string; name: string; text: string; at: string; room: RoomId | null }
 export interface RenderState { progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string }
@@ -46,6 +46,8 @@ interface State {
   walls: Record<string, WallType>;
   /** Muda quando a planta muda: o mapa remonta. */
   mapRev: number;
+  /** Muda quando a checklist do mês ou as peças mudam: o painel Mês busca de novo. */
+  monthsRev: number;
 
   presences: Record<string, Presence>;
   chat: ChatLine[];
@@ -92,7 +94,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
-  demands: [], events: [], transactions: [], posts: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, mapRev: 0,
+  demands: [], events: [], transactions: [], posts: [], clients: [], agents: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, mapRev: 0, monthsRev: 0,
   presences: {}, chat: [], emotes: {},
   panel: null, panelArg: null, newDemand: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
@@ -283,7 +285,8 @@ function handle(m: ServerMsg) {
       showEmote(m.from, m.emoji);
       break;
     case 'invalidate':
-      s.reload(m.what);
+      if (m.what === 'months') useStore.setState((st) => ({ monthsRev: st.monthsRev + 1 }));
+      else s.reload(m.what);
       break;
     case 'notice':
       s.notify(m.text, m.demandId || m.agentId ? { demandId: m.demandId, agentId: m.demandId ? undefined : m.agentId } : undefined);

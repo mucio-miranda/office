@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto';
 import { createReadStream, existsSync, statSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
-import { POST_FORMATS, POST_STATUSES,
+import { POST_FORMATS, POST_STATUSES, MONTH_STEPS, CHECK_STATES, MONTH_STEP_LABEL,
   BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, PROCESSES, WALL_TYPES, processById, uid,
   type AgentJob, type AgentProfile, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
@@ -32,6 +32,8 @@ import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
 import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef, setNicheFont } from '../clients/references.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
+import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePlan, saveCheck, undoRenames } from '../clients/month.ts';
+import { thumbOf } from '../clients/thumb.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
@@ -629,6 +631,7 @@ export async function api(app: FastifyInstance) {
     const clientSchema = z.object({
       name: z.string().min(1), folder: z.string().nullable().optional(), monthlyFee: z.number().min(0).default(0),
       status: z.enum(['ativo', 'pausado', 'encerrado']).default('ativo'), color: z.string().optional(),
+      postDays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
       approvalMode: z.enum(['humano', 'ia']).default('humano'), briefing: briefingSchema.optional(),
       niche: z.string().regex(/^[a-z0-9-]{1,60}$/).nullable().optional(),
     });
@@ -783,6 +786,88 @@ export async function api(app: FastifyInstance) {
       if (!requireMember(req, reply)) return;
       const { officeId, id } = req.params as any;
       return progress(all('SELECT status FROM content_posts WHERE office_id = ? AND demand_id = ? AND status != \'cancelado\'', officeId, id));
+    });
+
+    // gestão mensal do squad: checklist por cliente e mês + peças da pasta do mês ligadas às datas
+    const monthCtx = (req: FastifyRequest, reply: FastifyReply, worker = false) => {
+      if (!(worker ? requireWorker(req, reply) : requireMember(req, reply))) return null;
+      const { officeId, id, mes } = req.params as any;
+      if (!isMonth(mes)) { reply.code(400).send({ error: 'Mês inválido (use AAAA-MM).' }); return null; }
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const client = id ? one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId) : null;
+      if (id && !client) { reply.code(404).send({ error: 'Cliente não encontrado' }); return null; }
+      return { officeId: officeId as string, office, client: client!, mes: mes as string };
+    };
+    r.get('/api/offices/:officeId/mes/:mes', async (req, reply) => {
+      const c = monthCtx(req, reply);
+      if (!c) return;
+      const squads = squadsOf(c.office.rootPath);
+      const clients = all<Client>("SELECT * FROM clients WHERE office_id = ? AND status = 'ativo' ORDER BY name", c.officeId);
+      return {
+        squads: squads.map(({ match: _m, ...s }) => s),
+        rows: clients.map((client) => ({ client, squad: squadOfClient(squads, client), month: monthOf(c.officeId, client.id, c.mes), auto: autoOf(c.office, client, c.mes) })),
+      };
+    });
+    r.put('/api/offices/:officeId/clients/:id/mes/:mes', async (req, reply) => {
+      const c = monthCtx(req, reply, true);
+      if (!c) return;
+      const b = body(z.object({ step: z.enum(MONTH_STEPS).optional(), state: z.enum(CHECK_STATES).optional(), note: z.string().max(300).optional(), monthNote: z.string().max(1000).optional() }), req, reply);
+      if (!b) return;
+      const month = saveCheck(c.officeId, c.client.id, c.mes, b, `user:${req.user.id}`);
+      if (b.step) logActivity(c.officeId, `user:${req.user.id}`, 'atualizou o mês', `${c.client.name} ${c.mes}: ${MONTH_STEP_LABEL[b.step]} → ${b.state ?? ''}`);
+      invalidate(c.officeId, 'months');
+      return month;
+    });
+    r.get('/api/offices/:officeId/clients/:id/mes/:mes/pecas', async (req, reply) => {
+      const c = monthCtx(req, reply);
+      if (!c) return;
+      const { dir, pieces } = piecesOf(c.office, c.client, c.mes);
+      const posts = postsOf(c.officeId, c.client.id, c.mes).filter((p) => p.status !== 'cancelado');
+      return { dir, exists: !!dir && existsSync(dir), pieces, posts, postDays: c.client.postDays ?? [1, 3, 5], plan: renamePlan(pieces) };
+    });
+    r.post('/api/offices/:officeId/clients/:id/mes/:mes/atribuir', async (req, reply) => {
+      const c = monthCtx(req, reply, true);
+      if (!c) return;
+      const b = body(z.object({ files: z.array(z.string().max(600)).min(1).max(40), date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable(), format: z.enum(POST_FORMATS).nullable().optional(), theme: z.string().max(200), posted: z.boolean().optional() }), req, reply);
+      if (!b) return;
+      if (!b.files.every((f) => inside(c.officeId, f) && existsSync(f))) return reply.code(400).send({ error: 'Arquivo fora das pastas do escritório ou que não existe mais.' });
+      const res = assignPiece(c.officeId, c.client.id, b, `user:${req.user.id}`);
+      if (typeof res === 'string') return reply.code(409).send({ error: res });
+      invalidate(c.officeId, 'posts');
+      invalidate(c.officeId, 'months');
+      return { post: res };
+    });
+    r.post('/api/offices/:officeId/clients/:id/mes/:mes/aplicar', async (req, reply) => {
+      const c = monthCtx(req, reply, true);
+      if (!c) return;
+      try {
+        const res = applyRenames(c.office, c.client, c.mes, `user:${req.user.id}`);
+        if (res.renamed.length) logActivity(c.officeId, `user:${req.user.id}`, 'organizou a pasta do mês', `${c.client.name} ${c.mes}: ${res.renamed.length} arquivos renomeados`);
+        invalidate(c.officeId, 'posts');
+        invalidate(c.officeId, 'months');
+        return res;
+      } catch (e) { return reply.code(409).send({ error: `Nada mudou: ${(e as Error).message}` }); }
+    });
+    r.post('/api/offices/:officeId/renomeacoes/:rid/desfazer', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { officeId, rid } = req.params as any;
+      const res = undoRenames(officeId, rid);
+      if (typeof res === 'string') return reply.code(409).send({ error: res });
+      logActivity(officeId, `user:${req.user.id}`, 'desfez a organização da pasta', `${res.undone} arquivos`);
+      invalidate(officeId, 'posts');
+      invalidate(officeId, 'months');
+      return res;
+    });
+    // miniatura (JPEG pequeno, em cache) para as grades de peças: a imagem original pode ter dezenas de MB
+    r.get('/api/offices/:officeId/thumb', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const file = path.resolve((req.query as any).path ?? '');
+      const w = Math.max(80, Math.min(640, Number((req.query as any).w) || 320));
+      if (!inside((req.params as any).officeId, file) || !existsSync(file)) return reply.code(404).send({ error: 'Arquivo não encontrado' });
+      const thumb = await thumbOf(file, w);
+      if (!thumb) return sendMedia(req, reply, file);
+      reply.header('Cache-Control', 'private, max-age=86400');
+      return sendMedia(req, reply, thumb);
     });
 
     // sessões do cliente: as do Office e as abertas no terminal na mesma pasta

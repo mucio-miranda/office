@@ -8,7 +8,7 @@ const KIND_COLOR: Record<CalendarEvent['kind'], string> = { reuniao: 'var(--runn
 const WEEK = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
-const DONE: ContentPost['status'][] = ['aprovado', 'drive', 'postado'];
+const DONE: ContentPost['status'][] = ['aprovado', 'drive', 'programado', 'postado'];
 const FORMAT_SHORT: Record<ContentPost['format'], string> = { estatico: 'EST', carrossel: 'CAR', reels: 'REEL', 'capa-reels': 'CAPA', story: 'STORY' };
 
 /** "7 de 15 prontas · 2 no tunning": responde o "e aí, falta muito?" sem precisar perguntar. */

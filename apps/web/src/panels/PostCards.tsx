@@ -12,7 +12,7 @@ import { desktop } from '../lib/desktop';
 
 const TRAIL = ['composicao', 'tunning', 'conferencia', 'aprovado', 'drive'] as const;
 const TRAIL_LABEL: Record<(typeof TRAIL)[number], string> = { composicao: 'composição', tunning: 'tunning', conferencia: 'conferência', aprovado: 'aprovada', drive: 'entregue' };
-const ORDER = ['planejado', 'referencia', ...TRAIL, 'postado'];
+const ORDER = ['planejado', 'referencia', ...TRAIL, 'programado', 'postado'];
 const IMG = /\.(png|jpe?g|webp)$/i;
 const base = (f: string) => f.split(/[\\/]/).pop() ?? f;
 

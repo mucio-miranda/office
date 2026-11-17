@@ -123,6 +123,19 @@ Quem quiser endurecer o binário pode desligá-lo e apontar `OFFICE_RENDER_CMD` 
 - `panels/`: Demandas (kanban com cronômetro e delegação para IA), Calendário, Financeiro, Funcionário de IA,
   Estúdio de vídeo (timeline), Equipe e Atividade.
 
+## Gestão do mês (squad)
+
+- Painel **Gestão do mês** (`web/src/panels/MonthPanel.tsx`): clientes ativos × as 4 etapas do mês (`MONTH_STEPS`: ensaio, conteúdo feito,
+  aprovado, programado), com filtro por squad. Cada etapa é marcada à mão (`client_months.checks`) e mostra a contagem automática de
+  `autoOf` (posts do calendário por status, peças e fotos de ENSAIOS na pasta do mês). Rotas em `/api/offices/:id/mes/:AAAA-MM` e
+  `/clients/:id/mes/:AAAA-MM[/pecas|/atribuir|/aplicar]`.
+- Organizador (`server/src/clients/month.ts`): lê a pasta do mês (raiz, POSTADOS e VÍDEOS; RESERVAS e DESCARTADAS ficam de fora), agrupa as
+  lâminas em peças pelo nome (`NN[_postado] AAAA-MM-DD Formato – Tema – LL`, o formato da entrega da Mesa e `Reels – …`) e liga cada peça
+  ao `content_posts` que tem os mesmos arquivos. Arrastar para um dia cria ou move o post.
+- "Aplicar na pasta" (`renamePlan` + `runRenames`): renomeia no padrão do squad sem mudar números existentes, em duas fases (nome
+  temporário e depois o final), nunca sobrescreve, grava em `folder_renames` e desfaz por `/renomeacoes/:id/desfazer`.
+- Miniaturas: `/thumb?path=&w=` gera JPEG com o ffmpeg em `data/thumbs` (chave: caminho, tamanho e data do arquivo).
+
 ## Conversa do cliente
 
 Cada cliente tem uma sessão do Claude Code (`clients.session_id`), retomada com `--resume` por toda tarefa dele, na pasta dele. O funcionário só muda o rótulo e a persona da rodada. A aprovação pela IA é a exceção: sessão própria e leitura apenas.

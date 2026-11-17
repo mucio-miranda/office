@@ -138,6 +138,16 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE content_posts ADD COLUMN work_dir TEXT;
    ALTER TABLE content_posts ADD COLUMN finals TEXT NOT NULL DEFAULT '[]';
    ALTER TABLE content_posts ADD COLUMN deliveries TEXT NOT NULL DEFAULT '[]';`,
+  // v0.14: gestão mensal do squad — checklist por cliente e mês, dias de post do cliente e trocas de nome desfazíveis
+  `CREATE TABLE client_months (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+     client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE, month TEXT NOT NULL,
+     checks TEXT NOT NULL DEFAULT '{}', note TEXT NOT NULL DEFAULT '', updated_at TEXT, updated_by TEXT,
+     UNIQUE (office_id, client_id, month));
+   CREATE TABLE folder_renames (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE, client_id TEXT NOT NULL,
+     month TEXT NOT NULL, renames TEXT NOT NULL, created_at TEXT NOT NULL, created_by TEXT, undone_at TEXT);
+   ALTER TABLE clients ADD COLUMN post_days TEXT NOT NULL DEFAULT '[1,3,5]';`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
@@ -180,7 +190,7 @@ const camel = (s: string) => s.replace(/_([a-z])/g, (_, c) => c.toUpperCase());
 const snake = (s: string) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 
 /** Colunas guardadas como JSON e booleanos guardados como 0/1. */
-const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls', 'session_dirs', 'files', 'learning_ids', 'edits', 'finals', 'deliveries']);
+const JSON_COLS = new Set(['extra_dirs', 'theme', 'skills', 'tools', 'allowed_tools', 'mcp', 'live', 'json', 'briefing', 'pipeline', 'stage_log', 'publish', 'look', 'seat', 'walls', 'session_dirs', 'files', 'learning_ids', 'edits', 'finals', 'deliveries', 'checks', 'post_days', 'renames']);
 const BOOL_COLS = new Set(['paid', 'auto', 'must_change_pin']);
 
 export function fromRow<T>(row: Row | undefined): T | undefined {

@@ -91,12 +91,12 @@ export function savePosts(officeId: string, clientId: string, demandId: string |
 
 /** Andamento do lote: quantas peças já passaram da produção, e onde está cada uma. */
 export function progress(posts: Pick<ContentPost, 'status'>[]) {
-  const done = posts.filter((p) => ['aprovado', 'drive', 'postado'].includes(p.status)).length;
+  const done = posts.filter((p) => ['aprovado', 'drive', 'programado', 'postado'].includes(p.status)).length;
   const by = Object.fromEntries(POST_STATUSES.map((s) => [s, posts.filter((p) => p.status === s).length]));
   return { total: posts.length, done, byStatus: by };
 }
 
-const AFTER_APPROVAL: PostStatus[] = ['aprovado', 'drive', 'postado'];
+const AFTER_APPROVAL: PostStatus[] = ['aprovado', 'drive', 'programado', 'postado'];
 
 /**
  * Aprova a peça e entrega na pasta do mês do cliente no Drive. `reentrega` é para depois de uma correção: a peça já
@@ -121,7 +121,7 @@ export async function approveAndDeliver(officeId: string, postId: string, by: st
   const res = await deliverPost(office, client, post, by);
   if (typeof res === 'string') { invalidate(officeId, 'posts'); return res; }
   const deliveries = [...post.deliveries, ...res.delivered];
-  update('content_posts', post.id, { deliveries, status: post.status === 'postado' ? 'postado' : 'drive', updatedAt: now(), updatedBy: by });
+  update('content_posts', post.id, { deliveries, status: post.status === 'postado' || post.status === 'programado' ? post.status : 'drive', updatedAt: now(), updatedBy: by });
   invalidate(officeId, 'posts');
   logActivity(officeId, by, reentrega ? 'reentregou no Drive' : 'aprovou e entregou no Drive', `${client.name}: ${post.theme}`);
   return { ...res, post: one<ContentPost>('SELECT * FROM content_posts WHERE id = ?', post.id)! };
