@@ -167,9 +167,21 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   const hasBriefing = !!c.briefing?.feitoEm || BRIEFING_FIELDS.some((x) => c.briefing?.[x.key]);
   const openDemands = mine.filter((d) => d.status !== 'entregue');
   const openFolder = () => {
-    if (!c.folder) { notify('Cliente sem pasta definida'); return; }
-    if (!desktop) { notify(c.folder); return; }
-    desktop.openPath(c.folder).then((err) => { if (err) notify(`Não consegui abrir ${c.folder}`); });
+    // a pasta no Drive é a de verdade; o `folder` antigo pode estar relativo à raiz do escritório (CLIENTES\NOME),
+    // e o app só abre caminho completo
+    const trim = (p: string) => p.replace(/[\\/]+$/, '');
+    const abs = (p: string) => (/^([a-z]:[\\/]|[\\/]{2})/i.test(p) ? p : `${trim(office!.rootPath)}\\${p.replace(/^[\\/]+/, '')}`);
+    const drive = office?.driveRoot && c.driveFolder ? `${trim(office.driveRoot)}\\${c.driveFolder.replace(/\//g, '\\')}` : null;
+    const local = c.folder ? abs(c.folder) : null;
+    const target = drive ?? local;
+    if (!target) { notify('Cliente sem pasta definida'); return; }
+    if (!desktop) { notify(target); return; }
+    desktop.openPath(target).then((err) => {
+      if (!err) return;
+      // Drive fora do ar ou pasta renomeada: tenta a pasta do cadastro antes de desistir
+      if (local && local !== target) desktop!.openPath(local).then((e2) => { if (e2) notify(`Não consegui abrir ${target}`); });
+      else notify(`Não consegui abrir ${target}`);
+    });
   };
   const tabs: { id: Tab; label: string; count?: number; alert?: boolean }[] = [
     { id: 'conversa', label: 'Conversa' },
