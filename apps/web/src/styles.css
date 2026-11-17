@@ -413,8 +413,19 @@ input.inline { width: 120px; height: 28px; }
 /* ---------- funcionário de IA ---------- */
 .agent-page { display: grid; grid-template-columns: 260px minmax(0, 1fr); height: 100%; }
 .agent-side { border-right: 1px solid var(--border); display: flex; flex-direction: column; min-height: 0; }
-.agent-profile { padding: 20px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
-.agent-profile .avatar { width: 40px; height: 40px; font-size: 16px; }
+.agent-profile { padding: 14px 16px 10px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 8px; flex: none; }
+/* aberto, os detalhes rolam por dentro e nunca tomam mais que metade da coluna: as conversas continuam à vista */
+.agent-profile.open { max-height: 50%; overflow: auto; }
+.agent-profile .avatar { width: 36px; height: 36px; font-size: 15px; flex: none; }
+.agent-head { display: flex; align-items: center; gap: 10px; }
+.agent-head-name { flex: 1; min-width: 0; }
+.agent-head-name h3 { margin: 0; }
+.agent-details-toggle { display: flex; align-items: center; justify-content: space-between; height: auto; padding: 4px 0; border: none; background: none; font-size: 12px; color: var(--muted-foreground); }
+.agent-details-toggle:hover { color: var(--foreground); }
+.agent-details-toggle svg { transition: transform .15s; }
+.agent-details-toggle[aria-expanded="true"] svg { transform: rotate(180deg); }
+.agent-details { display: flex; flex-direction: column; gap: 10px; }
+.job-list-label { padding: 10px 16px 0; }
 .chips { display: flex; gap: 4px; flex-wrap: wrap; }
 .job-list { flex: 1; overflow: auto; padding: 8px; display: flex; flex-direction: column; gap: 2px; }
 .job-item { height: auto; flex-direction: column; align-items: flex-start; gap: 2px; padding: 8px 10px; border: none; background: none; text-align: left; white-space: normal; }

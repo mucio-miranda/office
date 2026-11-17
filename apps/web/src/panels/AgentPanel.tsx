@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, Navigation, Plus, Square, Wrench } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, Navigation, Plus, Square, Wrench } from 'lucide-react';
 import type { AgentJob } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
@@ -22,6 +22,9 @@ export function AgentPanel() {
   const [demandId, setDemandId] = useState('');
   const [err, setErr] = useState('');
   const list = useRef<HTMLDivElement>(null);
+  // skills e ferramentas ficam recolhidas para a lista de conversas ter espaço; a escolha fica lembrada neste navegador
+  const [details, setDetails] = useState(() => { try { return localStorage.getItem('office.agentDetails') === '1'; } catch { return false; } });
+  const toggleDetails = () => setDetails((v) => { try { localStorage.setItem('office.agentDetails', v ? '0' : '1'); } catch { /* sem armazenamento */ } return !v; });
   const base = `/api/offices/${office!.id}`;
 
   useEffect(() => { setJobId(myJobs[0]?.id ?? null); }, [agent?.id]);
@@ -65,19 +68,28 @@ export function AgentPanel() {
   return (
     <div className="agent-page">
       <aside className="agent-side">
-        <div className="agent-profile">
-          <div className="row gap">
+        <div className={`agent-profile ${details ? 'open' : ''}`}>
+          <div className="agent-head">
             <span className={`avatar st-${agent.status}`} style={{ background: agent.color }}>{agent.name[0]}<span className="status-dot" /></span>
-            <div>
+            <div className="agent-head-name">
               <h3>{agent.name}</h3>
               <div className="muted small">{agent.role}</div>
             </div>
+            <button className="ghost icon" title={`Ir até a mesa de ${agent.name}`} aria-label={`Ir até a mesa de ${agent.name}`} onClick={() => goToAgent(agent)}><Navigation size={14} /></button>
           </div>
-          <p className="muted small" style={{ margin: 0 }}>Tem todas as skills da casa. A função só indica o tipo de trabalho que costuma atender.</p>
-          <div className="chips">{agent.tools.map((s) => <span key={s} className="badge outline">{s}</span>)}</div>
-          <AgentTools agent={agent} />
-          <button className="ghost small" onClick={() => goToAgent(agent)}><Navigation size={13} /> Ir até a mesa de {agent.name}</button>
+          <button type="button" className="agent-details-toggle" aria-expanded={details} onClick={toggleDetails}>
+            <span>{details ? 'Esconder skills e ferramentas' : `Skills e ferramentas (${agent.tools.length})`}</span>
+            <ChevronDown size={14} />
+          </button>
+          {details && (
+            <div className="agent-details">
+              <p className="muted small" style={{ margin: 0 }}>Tem todas as skills da casa. A função só indica o tipo de trabalho que costuma atender.</p>
+              <div className="chips">{agent.tools.map((s) => <span key={s} className="badge outline">{s}</span>)}</div>
+              <AgentTools agent={agent} />
+            </div>
+          )}
         </div>
+        <div className="section-label job-list-label">Conversas ({myJobs.length})</div>
         <div className="job-list">
           <button className={`job-item ${job === null ? 'active' : ''}`} onClick={() => setJobId(null)}>
             <span className="row gap"><Plus size={14} /> Nova tarefa</span>
