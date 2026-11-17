@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import path from 'node:path';
 import type { Client, Office } from '@office/shared';
 import { clientDir, isFolder } from './folder.ts';
@@ -37,17 +37,28 @@ function brandName(file: string) {
   }
 }
 
-const samePath = (a: string, b: string) => path.resolve(a).toLowerCase() === path.resolve(b).toLowerCase();
+/** Caminho de verdade: `CLIENTES\NOME` costuma ser atalho para a pasta no Drive, e os dois são a mesma pasta. */
+const real = (p: string) => {
+  try { return realpathSync.native(p); } catch { return path.resolve(p); }
+};
+const key = (p: string) => real(p).replace(/[\\/]+$/, '').toLowerCase();
 
-export function discoverClients(office: Office, clients: Pick<Client, 'folder'>[]): FoundClient[] {
+export function discoverClients(office: Office, clients: Pick<Client, 'folder' | 'driveFolder'>[]): FoundClient[] {
   const root = path.join(office.rootPath, 'CLIENTES');
   if (!existsSync(root)) return [];
-  const taken = clients.map((c) => clientDir(office, c)).filter((d): d is string => !!d);
+  // já é cliente quem tem a mesma pasta, pelo cadastro ou pela pasta no Drive, mesmo escrita por outro caminho
+  const taken = new Set(clients.flatMap((c) => [
+    clientDir(office, c),
+    office.driveRoot && c.driveFolder ? path.join(office.driveRoot, c.driveFolder) : null,
+  ]).filter((d): d is string => !!d).map(key));
+  // sobra antiga no C: com o mesmo nome da pasta do cliente no Drive (ex.: CLIENTES\DANIELLE AZEVEDO vazia) também não é cliente novo
+  const nameKey = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').trim().toUpperCase();
+  const driveNames = new Set(clients.map((c) => c.driveFolder?.split('/').filter(Boolean).pop()).filter((n): n is string => !!n).map(nameKey));
   const found: FoundClient[] = [];
   for (const e of readdirSync(root, { withFileTypes: true })) {
     if (/^[._$]/.test(e.name)) continue;
     const abs = path.join(root, e.name);
-    if (!isFolder(e, abs) || taken.some((t) => samePath(t, abs))) continue;
+    if (!isFolder(e, abs) || taken.has(key(abs)) || driveNames.has(nameKey(e.name))) continue;
     const paths = clientPaths(abs);
     const marca = paths.marca;
     found.push({
