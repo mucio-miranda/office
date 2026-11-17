@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, FolderOpen, Play, RotateCcw, Wand2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, FolderOpen, Play, RotateCcw, Wand2, X } from 'lucide-react';
 import {
   CHECK_STATE_LABEL, MONTH_STEPS, MONTH_STEP_LABEL, POST_FORMAT_LABEL, canWork,
   type CheckState, type ContentPost, type MonthPiece, type MonthRow, type MonthStep, type RenamePlan,
@@ -192,6 +192,12 @@ function MonthOrganizer({ row, mes, label, onBack, onShift }: { row: MonthRow; m
           {p.files.some((f) => /\.(mp4|mov)$/i.test(f)) && <Play size={14} className="play" />}
           {p.files.length > 1 && <span className="count">{p.files.length}</span>}
           {p.posted && <CheckCircle2 size={14} className="posted-mark" aria-label="postado" />}
+          {small && can && (
+            <button className="unassign" title="Tirar do calendário" aria-label={`Tirar ${p.theme} do calendário`}
+              onClick={(e) => { e.stopPropagation(); assign(p, null); }} onMouseDown={(e) => e.stopPropagation()}>
+              <X size={12} />
+            </button>
+          )}
         </div>
         {!small && (
           <div className="meta">
@@ -238,7 +244,7 @@ function MonthOrganizer({ row, mes, label, onBack, onShift }: { row: MonthRow; m
           onDragOver={(e) => drag && e.preventDefault()} onDrop={() => { if (drag?.date) assign(drag, null); setDrag(null); }}
         >
           <h4><CalendarDays size={14} /> Sem data ({undated.length})</h4>
-          <p className="muted small-print">Arraste a peça para o dia do post. Arraste de volta para cá para tirar do calendário.</p>
+          <p className="muted small-print">Arraste a peça para o dia do post. Para tirar do calendário, use o × na peça ou arraste de volta para cá.</p>
           {!d && <p className="muted">Lendo a pasta…</p>}
           {undated.map((p) => <Piece key={p.key} p={p} />)}
           {!!postedList.length && <><h4><CheckCircle2 size={14} /> POSTADOS ({postedList.length})</h4>{postedList.map((p) => <Piece key={p.key} p={p} />)}</>}

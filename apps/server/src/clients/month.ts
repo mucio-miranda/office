@@ -119,8 +119,12 @@ export function groupPieces(files: string[], posts: Pick<ContentPost, 'id' | 'fi
   const pieces = [...groups.values()].map(({ slides, ...g }) => {
     // capa do reels (slide 0) vem depois do vídeo; lâminas na ordem
     g.files.sort((a, b) => (slides.get(a) || 99) - (slides.get(b) || 99) || byName(a, b));
-    const post = posts.find((x) => x.files.some((pf) => g.files.some((f) => lower(f) === lower(pf))));
-    if (post) {
+    const linked = posts.filter((x) => x.files.some((pf) => g.files.some((f) => lower(f) === lower(pf))));
+    const post = linked.find((x) => x.status !== 'cancelado') ?? linked[0];
+    if (post?.status === 'cancelado') {
+      // tirada do calendário: fica em "Sem data" até ser arrastada de novo
+      g.date = null;
+    } else if (post) {
       g.postId = post.id;
       // a data do calendário vale mais que a do nome: arrastar para outro dia move a peça antes do "Aplicar na pasta"
       g.date = post.date;
@@ -136,7 +140,8 @@ export function groupPieces(files: string[], posts: Pick<ContentPost, 'id' | 'fi
 
 export function piecesOf(office: Office, client: Client, month: string) {
   const dir = monthDir(office, client, month);
-  const posts = all<ContentPost>("SELECT * FROM content_posts WHERE office_id = ? AND client_id = ? AND status != 'cancelado'", office.id, client.id);
+  // os cancelados entram: são as peças que alguém tirou do calendário (ficam sem data mesmo com data no nome)
+  const posts = all<ContentPost>('SELECT * FROM content_posts WHERE office_id = ? AND client_id = ?', office.id, client.id);
   if (!dir || !existsSync(dir)) return { dir, pieces: [] as MonthPiece[] };
   return { dir, pieces: groupPieces(monthFiles(dir), posts) };
 }
@@ -238,7 +243,16 @@ export function assignPiece(officeId: string, clientId: string, input: { files: 
   const posts = all<ContentPost>('SELECT * FROM content_posts WHERE office_id = ? AND client_id = ?', officeId, clientId);
   const cur = posts.find((p) => p.files.some((pf) => input.files.some((f) => lower(f) === lower(pf))));
   if (input.date === null) {
-    if (!cur) return null;
+    if (!cur) {
+      // peça com data só no nome do arquivo: um post cancelado guarda que ela saiu do calendário
+      const fromName = input.files.map((f) => parseName(f)?.date).find(Boolean);
+      insert('content_posts', {
+        id: uid(), officeId, clientId, demandId: null, date: fromName ?? now().slice(0, 10), format: input.format ?? 'estatico',
+        theme: input.theme.slice(0, 200) || 'Sem tema', caption: '', notes: 'tirada do calendário na Gestão do mês', number: null,
+        status: 'cancelado', tunning: 'feito', files: input.files, workDir: null, finals: [], deliveries: [], updatedAt: now(), updatedBy: by,
+      } as never);
+      return null;
+    }
     if (cur.demandId || cur.deliveries.length) return 'Esta peça veio da produção do Office: mude a data dela pela Mesa ou pelo Calendário.';
     update('content_posts', cur.id, { status: 'cancelado', updatedAt: now(), updatedBy: by });
     return null;

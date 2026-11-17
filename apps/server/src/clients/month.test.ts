@@ -43,6 +43,10 @@ test('agrupa as lâminas em peças, marca as postadas e liga ao post do calendá
   // peça com data no nome arrastada para outro dia: vale a data do calendário
   const movida = groupPieces([`${d}/06 2026-11-16 Carrossel – Mitos – 01.png`], [{ id: 'p2', files: [`${d}/06 2026-11-16 Carrossel – Mitos – 01.png`], date: '2026-11-18', format: 'carrossel', theme: 'Mitos', number: 6, status: 'drive' }]);
   assert.equal(movida[0].date, '2026-11-18');
+  // tirada do calendário (post cancelado): fica sem data mesmo com data no nome
+  const tirada = groupPieces([`${d}/06 2026-11-16 Carrossel – Mitos – 01.png`], [{ id: 'p3', files: [`${d}/06 2026-11-16 Carrossel – Mitos – 01.png`], date: '2026-11-16', format: 'carrossel', theme: 'Mitos', number: 6, status: 'cancelado' }]);
+  assert.equal(tirada[0].date, null);
+  assert.equal(tirada[0].postId, null);
   const reels = pieces.find((p) => p.format === 'reels')!;
   assert.match(reels.files[0], /\.mp4$/, 'o vídeo vem antes da capa');
 });
