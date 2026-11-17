@@ -720,7 +720,7 @@ export async function api(app: FastifyInstance) {
     r.post('/api/offices/:officeId/clients/:id/conversa', async (req, reply) => {
       if (!requireWorker(req, reply)) return;
       const b = body(z.object({
-        text: z.string().trim().min(1).max(20000), newRequest: z.boolean().default(false),
+        text: z.string().trim().min(1).max(20000), newRequest: z.boolean().default(false), interrupt: z.boolean().default(false),
         // demanda aberta pelo mapa: já sai com quem faz, processo, prazo e prioridade
         demand: z.object({
           title: z.string().trim().max(80).optional(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -730,7 +730,7 @@ export async function api(app: FastifyInstance) {
       if (!b) return;
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
-      const err = clientMessage(officeId, id, b.text, `user:${req.user.id}`, b.demand ?? b.newRequest);
+      const err = clientMessage(officeId, id, b.text, `user:${req.user.id}`, b.demand ?? b.newRequest, b.interrupt);
       if (err) return reply.code(409).send({ error: err });
       return { ok: true };
     });

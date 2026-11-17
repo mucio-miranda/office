@@ -130,12 +130,14 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   const guest = !canWork(office!.role);
   const current = sessions.find((s) => s.current);
 
-  const send = async (e?: React.FormEvent) => {
+  // com o funcionário trabalhando, a mensagem espera ele terminar esta parte; `interrupt` para o trabalho agora
+  const send = async (e?: React.FormEvent, interrupt = false) => {
     e?.preventDefault();
     if (!text.trim() || busy) return;
     setBusy(true);
+    setSendMenu(false);
     try {
-      await api(`${base}/clients/${c.id}/conversa`, { body: { text, newRequest } });
+      await api(`${base}/clients/${c.id}/conversa`, { body: { text, newRequest, interrupt: interrupt && !newRequest } });
       setText('');
       setNewRequest(false);
     } catch (x) { notify((x as Error).message); }
@@ -229,7 +231,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
               </div>
             )}
             <textarea ref={input} rows={2} value={text} aria-label={`Mensagem para a conversa de ${c.name}`}
-              placeholder={running ? 'Escreva para corrigir agora: o trabalho para e continua com a sua mensagem' : active ? 'Responda à decisão pedida…' : `O que fazer para ${c.name}?`}
+              placeholder={running ? 'Pode mandar: as mensagens se juntam e entram quando ele terminar esta parte' : active ? 'Responda à decisão pedida…' : `O que fazer para ${c.name}?`}
               onChange={(e) => setText(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
             <div className="row gap conversa-actions">
@@ -237,10 +239,11 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
               <span className="spacer" />
               {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
               <div className="send-group">
-                <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> {running && !newRequest ? 'Corrigir agora' : 'Enviar'}</button>
+                <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> {running && !newRequest ? 'Enviar na fila' : 'Enviar'}</button>
                 <button type="button" className="primary small icon-only" aria-label="Mais opções de envio" aria-expanded={sendMenu} onClick={() => setSendMenu((v) => !v)}><ChevronDown size={14} /></button>
                 {sendMenu && (
                   <div className="send-menu" role="menu">
+                    {running && !newRequest && <button type="button" className="ghost small" role="menuitem" disabled={busy || !text.trim()} onClick={() => send(undefined, true)}>Parar e corrigir agora (o trabalho em curso é interrompido)</button>}
                     <label className="check small"><input type="checkbox" checked={newRequest} onChange={(e) => { setNewRequest(e.target.checked); setSendMenu(false); }} /> Enviar como pedido novo (abre outro cartão na esteira)</label>
                   </div>
                 )}

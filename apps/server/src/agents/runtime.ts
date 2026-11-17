@@ -29,6 +29,8 @@ const running = new Map<string, ChildProcess | null>();
 const queue: { jobId: string; input: string; resume: boolean }[] = [];
 /** Mensagem que interrompeu o trabalho: entra assim que o processo fechar. */
 const interrupts = new Map<string, string>();
+/** Mensagens que chegaram com o funcionário trabalhando: ele termina o que está fazendo e recebe todas juntas. */
+const followups = new Map<string, string>();
 /** Token de cada tarefa rodando: o servidor MCP `office` só alcança o cliente dela. Vive na memória e some ao fim. */
 const jobTokens = new Map<string, string>();
 export function issueJobToken(jobId: string) {
@@ -149,6 +151,24 @@ export function interruptJob(jobId: string, text: string, display?: string, by?:
   addMessage(jobId, job.officeId, 'usuario', display ?? text, authorName(by));
   interrupts.set(jobId, interrupts.has(jobId) ? `${interrupts.get(jobId)}\n\n${text}` : text);
   killTree(child);
+}
+
+/**
+ * Mensagem nova com o funcionário trabalhando: não interrompe. Ela fica guardada e, quando ele terminar esta parte,
+ * continua a mesma conversa com todas as mensagens que chegaram, na ordem. Na fila, junta com o pedido que espera.
+ */
+export function followUpJob(jobId: string, text: string, display?: string, by?: string) {
+  const job = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId);
+  if (!job) throw new Error('Tarefa não encontrada');
+  const waiting = queue.find((q) => q.jobId === jobId);
+  if (waiting) {
+    addMessage(jobId, job.officeId, 'usuario', display ?? text, authorName(by));
+    waiting.input += `\n\n${text}`;
+    return;
+  }
+  if (!running.has(jobId)) return replyToJob(jobId, text, display, by);
+  addMessage(jobId, job.officeId, 'usuario', display ?? text, authorName(by));
+  followups.set(jobId, followups.has(jobId) ? `${followups.get(jobId)}\n\n${text}` : text);
 }
 
 export function cancelJob(jobId: string) {
@@ -331,13 +351,26 @@ async function start(jobId: string, typed: string, resume: boolean) {
     }
     releaseLiveForJob(jobId);
     const current = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId)!;
-    if (current.status === 'cancelado') { interrupts.delete(jobId); pump(); return; }
+    if (current.status === 'cancelado') { interrupts.delete(jobId); followups.delete(jobId); pump(); return; }
     const correction = interrupts.get(jobId);
     if (correction !== undefined) {
       interrupts.delete(jobId);
+      // o que estava esperando a vez entra junto com a correção
+      const pending = followups.get(jobId);
+      followups.delete(jobId);
+      queue.unshift({ jobId, input: pending ? `${pending}\n\n${correction}` : correction, resume: true });
       addMessage(jobId, office.id, 'sistema', 'Interrompi o trabalho para seguir com a sua mensagem.');
       setJob(jobId, { status: 'fila' });
-      queue.unshift({ jobId, input: correction, resume: true });
+      pump();
+      return;
+    }
+    // mensagens que chegaram durante o trabalho: continua a mesma conversa com todas elas antes de fechar a etapa
+    const pending = followups.get(jobId);
+    if (pending !== undefined && !(session && /no conversation found/i.test(`${stderr} ${finalText}`))) {
+      followups.delete(jobId);
+      addMessage(jobId, office.id, 'sistema', 'Terminei esta parte. Sigo com as mensagens que chegaram enquanto eu trabalhava.');
+      setJob(jobId, { status: 'fila' });
+      queue.unshift({ jobId, input: pending, resume: true });
       pump();
       return;
     }
@@ -346,7 +379,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
       if (conversation) update('clients', conversation.id, { sessionId: null, sessionCost: 0 });
       setJob(jobId, { sessionId: null, status: 'fila' });
       addMessage(jobId, office.id, 'sistema', 'Não encontrei a conversa anterior deste cliente, então comecei uma nova. O agente não lembra do que foi dito antes.');
-      queue.unshift({ jobId, input: typed, resume: false });
+      followups.delete(jobId);
+      queue.unshift({ jobId, input: pending ? `${typed}\n\n${pending}` : typed, resume: false });
       pump();
       return;
     }

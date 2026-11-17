@@ -11,7 +11,7 @@ import { clientDir, folderName, indexClient, indexSummary, writeNew } from '../c
 import { clientPaths } from '../clients/layout.ts';
 import { nicheOf } from '../clients/moodboard.ts';
 import { clientDriveFolder, driveInfo, driveSubdir, sendToDrive, type DriveItem } from '../clients/drive.ts';
-import { enqueueJob, interruptJob, replyToJob } from './runtime.ts';
+import { enqueueJob, followUpJob, interruptJob, replyToJob } from './runtime.ts';
 import { baseCheck, captionFrom, isInsideAny, latestFiles, marksText, newerFiles, processFiles, slug } from './outputs.ts';
 import { mentionedDirs } from './permissions.ts';
 import { expandCommand, guessKind, listSkills, parseLearnings } from './skills.ts';
@@ -288,7 +288,7 @@ export function grantDirs(officeId: string, clientId: string, by: string, text: 
 /** Demanda aberta pelo mapa ou pelo quadro: quem faz, o processo, o prazo e a prioridade vêm junto com o pedido. */
 export interface NewRequest { title?: string; dueDate?: string | null; priority?: Demand['priority']; process?: string | null; agentId?: string | null }
 
-export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest: boolean | NewRequest = false): string | null {
+export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest: boolean | NewRequest = false, interrupt = false): string | null {
   const client = getClient(clientId);
   if (!client) return 'Cliente não encontrado.';
   const office = getOffice(officeId);
@@ -300,7 +300,9 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
       const active = jobs.find((j) => ['fila', 'rodando', 'aguardando'].includes(j.status));
       if (active) {
         if (active.status === 'aguardando') replyToJob(active.id, text, raw, by);
-        else interruptJob(active.id, text, raw, by);
+        // com o funcionário trabalhando, a mensagem espera ele terminar esta parte; parar é escolha explícita
+        else if (interrupt) interruptJob(active.id, text, raw, by);
+        else followUpJob(active.id, text, raw, by);
         return null;
       }
       const open = jobs.find((j) => {
