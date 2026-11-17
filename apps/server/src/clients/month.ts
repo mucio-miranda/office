@@ -122,7 +122,8 @@ export function groupPieces(files: string[], posts: Pick<ContentPost, 'id' | 'fi
     const post = posts.find((x) => x.files.some((pf) => g.files.some((f) => lower(f) === lower(pf))));
     if (post) {
       g.postId = post.id;
-      if (!g.date) g.date = post.date;
+      // a data do calendário vale mais que a do nome: arrastar para outro dia move a peça antes do "Aplicar na pasta"
+      g.date = post.date;
       if (!g.format) g.format = post.format;
       if (post.status === 'postado') g.posted = true;
     }

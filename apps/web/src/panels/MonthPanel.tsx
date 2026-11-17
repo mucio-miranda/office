@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CalendarDays, ChevronLeft, ChevronRight, FolderOpen, Play, RotateCcw, Wand2 } from 'lucide-react';
+import { ArrowLeft, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, FolderOpen, Play, RotateCcw, Wand2 } from 'lucide-react';
 import {
   CHECK_STATE_LABEL, MONTH_STEPS, MONTH_STEP_LABEL, POST_FORMAT_LABEL, canWork,
   type CheckState, type ContentPost, type MonthPiece, type MonthRow, type MonthStep, type RenamePlan,
@@ -173,8 +173,11 @@ function MonthOrganizer({ row, mes, label, onBack, onShift }: { row: MonthRow; m
 
   const pieces = d?.pieces ?? [];
   const onDay = (date: string) => pieces.filter((p) => p.date === date && (p.postId || !p.loose));
-  const undated = pieces.filter((p) => !p.date || (p.loose && !p.postId));
-  const outside = pieces.filter((p) => p.date && p.date.slice(0, 7) !== mes && (p.postId || !p.loose));
+  const placed = (p: MonthPiece) => !!p.date && (!!p.postId || !p.loose);
+  const undated = pieces.filter((p) => !placed(p) && !p.posted);
+  // POSTADOS fica sempre à vista (com ou sem data), para anexar ou corrigir o dia
+  const postedList = pieces.filter((p) => p.posted);
+  const outside = pieces.filter((p) => placed(p) && p.date!.slice(0, 7) !== mes && !p.posted);
 
   const Piece = ({ p, small }: { p: MonthPiece; small?: boolean }) => {
     const img = p.files.find((f) => /\.(png|jpe?g|webp)$/i.test(f)) ?? p.files[0];
@@ -188,6 +191,7 @@ function MonthOrganizer({ row, mes, label, onBack, onShift }: { row: MonthRow; m
           {img && <img src={thumbUrl(office!.id, img, small ? 120 : 240)} alt="" loading="lazy" />}
           {p.files.some((f) => /\.(mp4|mov)$/i.test(f)) && <Play size={14} className="play" />}
           {p.files.length > 1 && <span className="count">{p.files.length}</span>}
+          {p.posted && <CheckCircle2 size={14} className="posted-mark" aria-label="postado" />}
         </div>
         {!small && (
           <div className="meta">
@@ -237,6 +241,7 @@ function MonthOrganizer({ row, mes, label, onBack, onShift }: { row: MonthRow; m
           <p className="muted small-print">Arraste a peça para o dia do post. Arraste de volta para cá para tirar do calendário.</p>
           {!d && <p className="muted">Lendo a pasta…</p>}
           {undated.map((p) => <Piece key={p.key} p={p} />)}
+          {!!postedList.length && <><h4><CheckCircle2 size={14} /> POSTADOS ({postedList.length})</h4>{postedList.map((p) => <Piece key={p.key} p={p} />)}</>}
           {!!outside.length && <><h4>Datas de outro mês</h4>{outside.map((p) => <Piece key={p.key} p={p} />)}</>}
         </aside>
         <div className="org-cal">

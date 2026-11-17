@@ -1145,7 +1145,8 @@ label.check input { width: auto; height: auto; }
 .org-pieces.drop { border-color: var(--running); }
 .org-pieces h4 { margin: 4px 0 0; display: flex; gap: 6px; align-items: center; font-size: 13px; }
 .piece { display: flex; gap: 8px; align-items: center; padding: 6px; border: 1px solid var(--border); border-radius: 8px; background: var(--background); cursor: grab; }
-.piece.posted { opacity: .65; }
+.piece.posted { opacity: .8; }
+.piece .thumb .posted-mark { position: absolute; right: 3px; top: 3px; color: var(--done); background: var(--background); border-radius: 50%; }
 .piece.loose { border-style: dashed; }
 .piece .thumb { position: relative; width: 56px; aspect-ratio: 4 / 5; border-radius: 6px; overflow: hidden; background: var(--muted); flex: none; }
 .piece .thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
