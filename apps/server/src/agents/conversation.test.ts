@@ -4,18 +4,25 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { mentionedDirs } from './permissions.ts';
-import { pickRunnable, queueRank, turnCost, type QueueEntry } from './queue.ts';
+import { pickRunnable, queueRank, turnCost, waitReason, type QueueEntry } from './queue.ts';
 import { expandCommand, guessKind, listSkills, parseLearnings } from './skills.ts';
 import { listSessions, projectDirs, sessionFile, sessionTail } from './sessions.ts';
 
 const job = (id: string, clientId: string | null, lane: QueueEntry['lane'] = null, rank = 4): QueueEntry => ({ id, clientId, lane, rank });
 
-test('fila: um cliente por vez, um vídeo e um tunning por vez, e o limite vale', () => {
+test('fila: um cliente por vez, um vídeo por vez, design de clientes diferentes em paralelo, e o limite vale', () => {
   assert.deepEqual(pickRunnable([job('a', 'x'), job('b', 'x'), job('c', 'y')], [], 4), ['a', 'c']);
   assert.deepEqual(pickRunnable([job('a', 'x')], [{ clientId: 'x', lane: null }], 4), []);
-  assert.deepEqual(pickRunnable([job('a', 'x', 'video'), job('b', 'y', 'video'), job('c', 'z', 'navegador'), job('d', 'w', 'navegador')], [], 4), ['a', 'c']);
+  assert.deepEqual(pickRunnable([job('a', 'x', 'video'), job('b', 'y', 'video'), job('c', 'z'), job('d', 'w')], [], 4), ['a', 'c', 'd']);
   assert.deepEqual(pickRunnable([job('a', 'x'), job('b', 'y')], [{ clientId: 'z', lane: null }], 2), ['a']);
   assert.deepEqual(pickRunnable([job('sem', null), job('sem2', null)], [], 4), ['sem', 'sem2'], 'sem cliente não disputa conversa');
+});
+
+test('fila: quem espera sabe por quê (vídeo ou limite), e a espera do próprio cliente não avisa', () => {
+  assert.equal(waitReason(job('a', 'x'), [{ clientId: 'x', lane: null }], 4), null);
+  assert.match(waitReason(job('a', 'x', 'video'), [{ clientId: 'y', lane: 'video' }], 4) ?? '', /vídeo/);
+  assert.match(waitReason(job('a', 'x'), [{ clientId: 'y', lane: null }, { clientId: 'z', lane: null }], 2) ?? '', /limite é 2/);
+  assert.equal(waitReason(job('a', 'x'), [{ clientId: 'y', lane: null }], 4), null);
 });
 
 test('fila: prioridade passa na frente, e resposta sua vem antes de tarefa nova da mesma prioridade', () => {

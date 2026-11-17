@@ -45,6 +45,7 @@
           "server.mjs",
           "office-render.mjs",
           "office-mcp.mjs",
+          "office-hook.mjs",
           "web/**",
           "agents/**",
           "assets/**"

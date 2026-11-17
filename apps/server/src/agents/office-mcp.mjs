@@ -36,6 +36,11 @@ const TOOLS = [
     description: 'Cria ou atualiza posts do calendário do cliente desta tarefa, ligados à demanda atual. Use para registrar o calendário do mês quando ele for definido ou aprovado, e para mover cada peça de etapa (referencia > composicao > tunning > conferencia > aprovado > drive > postado). Arte só passa de conferência com tunning "feito" (ou dispensado por uma pessoa na tela). Nunca apaga: para tirar um post, use status "cancelado".',
     inputSchema: { type: 'object', properties: { posts: { type: 'array', items: POST, maxItems: 60 } }, required: ['posts'] },
   },
+  {
+    name: 'navegador_liberar',
+    description: 'Devolve a vez do navegador (Chrome e pasta Downloads, que servem a todos os clientes). Chame quando terminar o tunning e os arquivos baixados já estiverem na pasta do trabalho. Se usar o Chrome de novo, a vez é pedida sozinha.',
+    inputSchema: { type: 'object', properties: {} },
+  },
 ];
 
 async function call(name, args) {

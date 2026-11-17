@@ -108,7 +108,7 @@ test('calendário: a pessoa e o funcionário preenchem; arte não passa de confe
   rpc(4, 'tools/call', { name: 'calendario_listar', arguments: { mes: '2026-11' } });
   await wait(() => replies.length >= 4);
   mcp.kill();
-  assert.deepEqual(replies.find((x) => x.id === 2).result.tools.map((t: any) => t.name), ['calendario_listar', 'calendario_salvar']);
+  assert.deepEqual(replies.find((x) => x.id === 2).result.tools.map((t: any) => t.name), ['calendario_listar', 'calendario_salvar', 'navegador_liberar']);
   assert.ok(!replies.find((x) => x.id === 3).result.isError, JSON.stringify(replies.find((x) => x.id === 3)));
   const listed = JSON.parse(replies.find((x) => x.id === 4).result.content[0].text);
   assert.equal(listed.posts.find((p: any) => p.id === mitos.id).status, 'aprovado');
@@ -118,6 +118,23 @@ test('calendário: a pessoa e o funcionário preenchem; arte não passa de confe
   // o funcionário não dispensa o tunning
   const dispensa = await app.inject({ method: 'POST', url: '/api/agente/calendario_salvar', remoteAddress: '127.0.0.1', headers: { host: 'localhost', authorization: `Bearer ${token}` }, payload: { posts: [{ id: mitos.id, tunning: 'dispensado' }] } });
   assert.equal(dispensa.statusCode, 409);
+
+  // vez do navegador: com outro cliente no Chrome, o gancho espera; liberou, ele segue
+  const { takeBrowser, releaseBrowser } = await import('../agents/runtime.ts');
+  issueJobToken('outro-cliente');
+  assert.equal(takeBrowser({ id: 'outro-cliente', officeId: job.officeId } as any), true);
+  const hook = spawn(process.execPath, [path.resolve('src/agents/office-hook.mjs')], { env: { ...process.env, OFFICE_API: `http://127.0.0.1:${port}`, OFFICE_JOB_TOKEN: token } });
+  hook.stdin.end('{}');
+  let hookDone: number | null = null;
+  hook.on('exit', (code) => { hookDone = code ?? -1; });
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal(hookDone, null, 'espera enquanto outro cliente usa o Chrome');
+  const msgs = (db.prepare("SELECT text FROM job_messages WHERE job_id = ? AND role = 'sistema'").all(job.id) as any[]).map((m) => m.text);
+  assert.ok(msgs.some((t) => t.startsWith('Esperando a vez do navegador')), msgs.join(' | '));
+  releaseBrowser('outro-cliente');
+  await wait(() => hookDone !== null);
+  assert.equal(hookDone, 0);
+  releaseBrowser(job.id);
 
   // token errado ou de fora da máquina não entra
   const bad = await app.inject({ method: 'POST', url: '/api/agente/calendario_listar', remoteAddress: '127.0.0.1', headers: { host: 'localhost', authorization: 'Bearer x' }, payload: {} });

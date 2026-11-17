@@ -42,6 +42,7 @@ if (!existsSync(webDist)) throw new Error('Rode antes o build da UI: npm run bui
 await cp(webDist, path.join(out, 'web'), { recursive: true });
 await cp(path.join(repo, 'agents'), path.join(out, 'agents'), { recursive: true });
 await cp(path.join(repo, 'apps/server/src/agents/office-mcp.mjs'), path.join(out, 'office-mcp.mjs'));
+await cp(path.join(repo, 'apps/server/src/agents/office-hook.mjs'), path.join(out, 'office-hook.mjs'));
 await cp(path.join(desktop, 'assets'), path.join(out, 'assets'), { recursive: true });
 
 console.log('build do desktop pronto em', out);

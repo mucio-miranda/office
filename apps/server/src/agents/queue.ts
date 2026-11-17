@@ -1,11 +1,12 @@
 /**
  * Fila dos funcionários. Cada cliente tem uma conversa só, então duas tarefas dele nunca rodam juntas. Vídeo disputa a
- * máquina inteira e o tunning disputa o Chrome e a pasta Downloads: cada um desses roda um por vez.
+ * máquina inteira e roda um por vez. O Chrome (tunning, downloads) não trava a tarefa inteira: cada uso pede a vez
+ * do navegador na hora (gancho `office-hook.mjs`), e o resto do design dos clientes corre em paralelo.
  */
 export interface QueueEntry {
   id: string;
   clientId: string | null;
-  lane: 'video' | 'navegador' | null;
+  lane: 'video' | null;
   /** Menor passa na frente; empate fica por ordem de chegada. */
   rank: number;
 }
@@ -29,4 +30,12 @@ export function pickRunnable(queued: QueueEntry[], running: Pick<QueueEntry, 'cl
     picked.push(q.id);
   }
   return picked;
+}
+
+/** Por que uma tarefa da fila não começou: aparece no chat dela. Mesmo cliente não precisa de aviso (é a conversa dele). */
+export function waitReason(q: QueueEntry, running: Pick<QueueEntry, 'clientId' | 'lane'>[], max: number) {
+  if (q.clientId && running.some((t) => t.clientId === q.clientId)) return null;
+  if (q.lane === 'video' && running.some((t) => t.lane === 'video')) return 'Na fila: outro vídeo está renderizando, e vídeo roda um por vez.';
+  if (running.length >= max) return `Na fila: ${running.length} tarefas já estão rodando (o limite é ${max}). Começo assim que uma terminar.`;
+  return null;
 }

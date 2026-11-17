@@ -13,7 +13,7 @@ import { mcpConfig } from './tools.ts';
 import { openLiveForJob, releaseLiveForJob } from './live.ts';
 import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
 import { availableDirs, deniedTools } from './permissions.ts';
-import { pickRunnable, queueRank, turnCost, type QueueEntry } from './queue.ts';
+import { pickRunnable, queueRank, turnCost, waitReason, type QueueEntry } from './queue.ts';
 
 /**
  * Cada funcionário de IA é uma sessão do Claude Code em modo headless (`claude -p`). Ela roda dentro da pasta do
@@ -43,6 +43,40 @@ export const jobForToken = (token: string | undefined) => {
   for (const [jobId, t] of jobTokens) if (t === token) return one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId);
   return undefined;
 };
+
+/**
+ * Vez do navegador: o Chrome e a pasta Downloads são um só para todos os clientes. O gancho de cada tarefa pede a vez
+ * antes de usar o Chrome; ela fica com a tarefa enquanto o uso continua e volta ao fim da tarefa, com
+ * `navegador_liberar` ou depois de 10 minutos sem uso.
+ */
+const BROWSER_LEASE = 10 * 60_000;
+let browser: { jobId: string; until: number } | null = null;
+const browserWaiting = new Set<string>();
+const clientNameOf = (jobId: string) => one<{ name: string }>('SELECT c.name FROM jobs j JOIN clients c ON c.id = j.client_id WHERE j.id = ?', jobId)?.name;
+
+export function takeBrowser(job: AgentJob) {
+  const t = Date.now();
+  // o token só existe enquanto a tarefa roda: tarefa encerrada não segura o navegador
+  if (browser && browser.jobId !== job.id && jobTokens.has(browser.jobId) && browser.until > t) {
+    if (!browserWaiting.has(job.id)) {
+      browserWaiting.add(job.id);
+      const who = clientNameOf(browser.jobId);
+      addMessage(job.id, job.officeId, 'sistema', `Esperando a vez do navegador${who ? `: ${who} está usando o Chrome` : ''}. Sigo assim que ele liberar.`);
+    }
+    return false;
+  }
+  browser = { jobId: job.id, until: t + BROWSER_LEASE };
+  if (browserWaiting.delete(job.id)) addMessage(job.id, job.officeId, 'sistema', 'Peguei a vez do navegador. Seguindo.');
+  return true;
+}
+
+export function releaseBrowser(jobId: string) {
+  browserWaiting.delete(jobId);
+  if (browser?.jobId === jobId) browser = null;
+}
+
+/** Quem já foi avisado do motivo da espera na fila (o aviso sai uma vez por espera). */
+const queueNoticed = new Set<string>();
 
 const RENDER_CMD = config.renderCmd;
 
@@ -177,6 +211,8 @@ export function cancelJob(jobId: string) {
   const child = running.get(jobId);
   if (child) killTree(child);
   releaseLiveForJob(jobId);
+  releaseBrowser(jobId);
+  queueNoticed.delete(jobId);
   const job = setJob(jobId, { status: 'cancelado' });
   setAgentStatus(job.agentId, job.officeId, 'livre');
 }
@@ -185,18 +221,29 @@ function queueEntry(jobId: string, isReply: boolean): QueueEntry {
   const job = one<AgentJob>('SELECT id, client_id, demand_id, agent_id, stage FROM jobs WHERE id = ?', jobId)!;
   const d = job.demandId ? one<Pick<Demand, 'kind' | 'priority'>>('SELECT kind, priority FROM demands WHERE id = ?', job.demandId) : undefined;
   const a = one<{ slug: string; base: string | null }>('SELECT slug, base FROM agents WHERE id = ?', job.agentId);
-  // quem revisa só lê: não disputa render nem navegador
-  const lane = job.stage === 'aprovacao' ? null
-    : d?.kind === 'video' || a?.slug === 'editor-de-video' || a?.base === 'editor-de-video' ? 'video'
-    : d?.kind === 'design' ? 'navegador' : null;
+  // quem revisa só lê: não disputa o render
+  const lane = job.stage !== 'aprovacao' && (d?.kind === 'video' || a?.slug === 'editor-de-video' || a?.base === 'editor-de-video') ? 'video' : null;
   return { id: jobId, clientId: job.clientId ?? null, lane, rank: queueRank(d?.priority, isReply) };
 }
 
 function pump() {
   const entries = queue.map((q) => queueEntry(q.jobId, q.resume));
-  for (const id of pickRunnable(entries, [...running.keys()].map((j) => queueEntry(j, false)), config.maxConcurrentJobs)) {
+  const busy = [...running.keys()].map((j) => queueEntry(j, false));
+  const picked = pickRunnable(entries, busy, config.maxConcurrentJobs);
+  for (const id of picked) {
+    queueNoticed.delete(id);
     const next = queue.splice(queue.findIndex((q) => q.jobId === id), 1)[0];
     void start(next.jobId, next.input, next.resume);
+  }
+  // quem ficou na fila sabe por quê
+  const after = [...busy, ...entries.filter((e) => picked.includes(e.id))];
+  for (const e of entries) {
+    if (picked.includes(e.id) || queueNoticed.has(e.id)) continue;
+    const why = waitReason(e, after, config.maxConcurrentJobs);
+    if (!why) continue;
+    queueNoticed.add(e.id);
+    const job = one<{ officeId: string }>('SELECT office_id FROM jobs WHERE id = ?', e.id);
+    if (job) addMessage(e.id, job.officeId, 'sistema', why);
   }
 }
 
@@ -240,14 +287,16 @@ async function start(jobId: string, typed: string, resume: boolean) {
   }
   // ferramentas criativas instaladas: um servidor MCP por ferramenta, com as pastas do escritório
   const mcp = mcpConfig(isProcess ? [] : agent.mcp ?? [], office, bridges);
+  const usesChrome = !reviewer && agent.allowedTools.includes('mcp__claude-in-chrome');
+  const token = (job.clientId && !reviewer) || usesChrome ? issueJobToken(jobId) : null;
   // calendário de conteúdo: toda tarefa de cliente pode ler e atualizar o dele
-  if (job.clientId && !reviewer && existsSync(config.officeMcp)) {
-    const token = issueJobToken(jobId);
+  if (job.clientId && !reviewer && token && existsSync(config.officeMcp)) {
     mcp.servers.office = {
       command: process.execPath, args: [config.officeMcp],
       env: { ELECTRON_RUN_AS_NODE: '1', OFFICE_API: `http://127.0.0.1:${config.port}`, OFFICE_JOB_TOKEN: token },
     };
     mcp.hints.push('- **Office** (servidor MCP `office`): o calendário de conteúdo do cliente. Use `calendario_listar` antes de planejar ou produzir. Quando o calendário do mês for definido, registre cada post com `calendario_salvar` (data, formato, tema, número). Durante a produção, mova cada peça de etapa: referencia > composicao > tunning > conferencia > aprovado > drive > postado, com os caminhos das peças finais em `files`. O tunning é parte do design: arte só passa de conferência com `tunning: "feito"`. Só uma pessoa dispensa o tunning, pela tela: se alguém pedir sem tunning, avise que precisa ser marcado no calendário.');
+    if (usesChrome) mcp.hints.push('- **Navegador dividido**: o Chrome e a pasta Downloads servem a todos os clientes. Ao usar o Chrome você pega a vez dele sozinho (às vezes espera outro cliente terminar). Adiante antes o que não precisa do Chrome (base, composição, scripts); junte o uso do navegador (tunning, downloads) num trecho só e, quando os arquivos baixados já estiverem na pasta do trabalho, chame `navegador_liberar` para outro cliente usar.');
   }
   const mcpIds = Object.keys(mcp.servers);
   const sysFile = path.join(dir, 'system.md');
@@ -274,7 +323,15 @@ async function start(jobId: string, typed: string, resume: boolean) {
   // as skills ficam na raiz, fora da pasta do cliente
   if (path.resolve(cwd) !== path.resolve(office.rootPath)) args.push('--add-dir', office.rootPath);
   // tunning no navegador: usa a extensão do Chrome, e a imagem gerada cai em Downloads
-  if (!reviewer && agent.allowedTools.includes('mcp__claude-in-chrome')) args.push('--chrome', '--add-dir', path.join(homedir(), 'Downloads'));
+  if (usesChrome) args.push('--chrome', '--add-dir', path.join(homedir(), 'Downloads'));
+  // vez do navegador: o gancho pede ao Office antes de cada uso do Chrome e espera se outro cliente estiver usando
+  if (usesChrome && token && existsSync(config.officeHook)) {
+    const settingsFile = path.join(dir, 'settings.json');
+    const q = (p: string) => `"${p.replace(/\\/g, '/')}"`;
+    const hook = { type: 'command', command: `${q(process.execPath)} ${q(config.officeHook)}`, timeout: 7200 };
+    writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'mcp__claude-in-chrome__.*', hooks: [hook] }] } }, null, 2), 'utf8');
+    args.push('--settings', settingsFile);
+  }
   if (session) args.push('--resume', session);
 
   const skillsBefore = reviewer ? null : skillsFingerprint(office);
@@ -286,7 +343,9 @@ async function start(jobId: string, typed: string, resume: boolean) {
   try {
     // CLAUDE_BIN pode apontar para um script .mjs (um Claude de mentira, nos testes da esteira)
     const [bin, pre] = /\.m?js$/.test(config.claudeBin) ? [process.execPath, [config.claudeBin]] : [config.claudeBin, []];
-    child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, OFFICE_JOB_ID: jobId } });
+    // o gancho do navegador roda com o mesmo executável do Office (no app instalado, Electron em modo Node)
+    const hookEnv = token ? { ELECTRON_RUN_AS_NODE: '1', OFFICE_API: `http://127.0.0.1:${config.port}`, OFFICE_JOB_TOKEN: token } : {};
+    child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, ...hookEnv, OFFICE_JOB_ID: jobId } });
   } catch (e) {
     addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o Claude Code: ${(e as Error).message}`);
     setJob(jobId, { status: 'erro' });
@@ -341,6 +400,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   child.on('close', (code) => {
     running.delete(jobId);
     jobTokens.delete(jobId);
+    releaseBrowser(jobId);
     const skillsAfter = skillsBefore ? skillsFingerprint(office) : null;
     const touched = skillsBefore && skillsAfter ? changedSkillFiles(skillsBefore, skillsAfter) : [];
     if (touched.length || (skillsBefore && skillsAfter && skillsBefore.split('\n')[0] !== skillsAfter.split('\n')[0])) {
