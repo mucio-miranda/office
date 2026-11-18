@@ -2,7 +2,10 @@ import { randomBytes } from 'node:crypto';
 import type { Client, ContentPost, Office, PostFormat, PostStatus } from '@office/shared';
 import { POST_FORMATS, POST_STATUSES, needsTunning } from '@office/shared';
 import { all, insert, logActivity, now, one, update } from '../db.ts';
-import { deliverPost, fillLinks } from '../clients/deliver.ts';
+import { existsSync } from 'node:fs';
+import { deliverPost, fillLinks, finalsOf } from '../clients/deliver.ts';
+import { driveFolderLink } from '../clients/driveId.ts';
+import { monthDir } from '../clients/month.ts';
 import { invalidate } from '../realtime.ts';
 
 /**
@@ -146,4 +149,25 @@ export function refreshLinks(officeId: string, postId: string) {
   const { deliveries, changed } = fillLinks(post.deliveries);
   if (changed) { update('content_posts', post.id, { deliveries }); invalidate(officeId, 'posts'); }
   return deliveries;
+}
+
+/**
+ * O que a tela mostra de um post do calendário: os arquivos da peça (os entregues no Drive, senão os finais da pasta de
+ * trabalho) e a pasta do mês do cliente com o link do Drive. Só lê.
+ */
+export function postPieces(officeId: string, postId: string) {
+  const post = one<ContentPost>('SELECT * FROM content_posts WHERE id = ? AND office_id = ?', postId, officeId);
+  if (!post) return null;
+  const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+  const client = one<Client>('SELECT * FROM clients WHERE id = ?', post.clientId);
+  const delivered = post.deliveries.filter((d) => existsSync(d.to));
+  const files = delivered.length ? [...new Map(delivered.map((d) => [d.to.toLowerCase(), d.to])).values()] : finalsOf(post);
+  const dir = client ? monthDir(office, client, post.date.slice(0, 7)) : null;
+  const exists = !!dir && existsSync(dir);
+  return {
+    files,
+    links: Object.fromEntries(delivered.filter((d) => d.link).map((d) => [d.to, d.link])),
+    month: { dir, exists, link: exists ? driveFolderLink(dir!) : null },
+    workDir: post.workDir && existsSync(post.workDir) ? post.workDir : null,
+  };
 }

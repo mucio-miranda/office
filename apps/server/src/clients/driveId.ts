@@ -39,7 +39,7 @@ interface Row { id: string; stableId: number }
  * Código do arquivo no Drive, conferindo o nome e as duas pastas acima, para não confundir dois
  * arquivos com o mesmo nome em pastas diferentes. Sem achar ou ainda subindo, devolve null.
  */
-export function driveFileId(file: string, dbs = driveMetadataDbs()): string | null {
+export function driveFileId(file: string, dbs = driveMetadataDbs(), folder = false): string | null {
   const parts = path.resolve(file).split(/[\\/]+/).filter(Boolean).map(norm);
   const name = parts.at(-1);
   if (!name) return null;
@@ -48,7 +48,7 @@ export function driveFileId(file: string, dbs = driveMetadataDbs()): string | nu
     let db: DatabaseSync | null = null;
     try {
       db = new DatabaseSync(file, { readOnly: true });
-      const rows = db.prepare('SELECT id, stable_id AS stableId FROM items WHERE local_title = ? AND is_folder = 0 AND trashed = 0 AND is_tombstone = 0').all(name) as unknown as Row[];
+      const rows = db.prepare('SELECT id, stable_id AS stableId FROM items WHERE local_title = ? AND is_folder = ? AND trashed = 0 AND is_tombstone = 0').all(name, folder ? 1 : 0) as unknown as Row[];
       const parent = db.prepare('SELECT p.stable_id AS stableId, p.local_title AS title FROM stable_parents sp JOIN items p ON p.stable_id = sp.parent_stable_id WHERE sp.item_stable_id = ?');
       const matches = rows.filter((r) => {
         let sid = r.stableId;
@@ -73,3 +73,9 @@ export function driveFileId(file: string, dbs = driveMetadataDbs()): string | nu
 export const driveLinkOf = (id: string | null) => (id ? `https://drive.google.com/file/d/${id}/view` : null);
 
 export const driveLink = (file: string, dbs?: string[]) => driveLinkOf(driveFileId(file, dbs));
+
+/** Link da pasta no Drive (a pasta do mês do cliente, por exemplo). */
+export const driveFolderLink = (dir: string, dbs?: string[]) => {
+  const id = driveFileId(dir, dbs, true);
+  return id ? `https://drive.google.com/drive/folders/${id}` : null;
+};

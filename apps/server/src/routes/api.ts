@@ -18,7 +18,7 @@ import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts
 import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
 import { authorName, cancelJob, enqueueJob, jobForToken, releaseBrowser, replyToJob, takeBrowser } from '../agents/runtime.ts';
-import { approveAndDeliver, deliverApproved, postsOf, progress, refreshLinks, savePosts, type PostInput } from '../agents/calendar.ts';
+import { approveAndDeliver, deliverApproved, postPieces, postsOf, progress, refreshLinks, savePosts, type PostInput } from '../agents/calendar.ts';
 import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
 import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '../agents/skillsRepo.ts';
 import { detectDirs, mergeDirs, rootProblem } from '../agents/officeSetup.ts';
@@ -780,6 +780,12 @@ export async function api(app: FastifyInstance) {
         return typeof res === 'string' ? reply.code(409).send({ error: res }) : res;
       });
     }
+    // as peças do post para ver no calendário, com a pasta do mês e o link do Drive
+    r.get('/api/offices/:officeId/posts/:id/pecas', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      return postPieces(officeId, id) ?? reply.code(404).send({ error: 'Peça não encontrada' });
+    });
     r.post('/api/offices/:officeId/posts/:id/link', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const { officeId, id } = req.params as any;

@@ -1,8 +1,9 @@
-import { useState } from 'react';
-import { ChevronLeft, ChevronRight, Plus, Sparkles, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { ChevronLeft, ChevronRight, Copy, ExternalLink, FolderOpen, Image as ImageIcon, Plus, Sparkles, X } from 'lucide-react';
 import { POST_FORMATS, POST_FORMAT_LABEL, POST_STATUSES, POST_STATUS_LABEL, canWork, needsTunning, type CalendarEvent, type ContentPost } from '@office/shared';
 import { useStore } from '../lib/store';
-import { api } from '../lib/api';
+import { api, mediaUrl } from '../lib/api';
+import { desktop } from '../lib/desktop';
 
 const KIND_COLOR: Record<CalendarEvent['kind'], string> = { reuniao: 'var(--running)', gravacao: 'var(--review)', entrega: 'var(--done)', publicacao: 'var(--waiting)', pessoal: 'var(--idle)', outro: 'var(--waiting)' };
 const WEEK = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
@@ -10,6 +11,11 @@ const ymd = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart
 
 const DONE: ContentPost['status'][] = ['aprovado', 'drive', 'programado', 'postado'];
 const FORMAT_SHORT: Record<ContentPost['format'], string> = { estatico: 'EST', carrossel: 'CAR', reels: 'REEL', 'capa-reels': 'CAPA', story: 'STORY' };
+const IMG = /\.(png|jpe?g|webp)$/i;
+const VIDEO = /\.(mp4|mov|webm)$/i;
+const thumbUrl = (officeId: string, file: string, w = 160) => `/api/offices/${officeId}/thumb?w=${w}&path=${encodeURIComponent(file)}`;
+/** A primeira imagem da peça, para a miniatura no dia: a entregue, senão a final, senão a registrada. */
+const coverOf = (p: ContentPost) => [p.deliveries[0]?.to, p.finals[0], ...p.files].find((f): f is string => !!f && IMG.test(f));
 
 /** "7 de 15 prontas · 2 no tunning": responde o "e aí, falta muito?" sem precisar perguntar. */
 export function PostProgress({ demandId, posts: given }: { demandId?: string; posts?: ContentPost[] }) {
@@ -82,6 +88,7 @@ export function CalendarPanel() {
                 {dayPosts.map((p) => (
                   <div key={p.id} className={`cal-post st-${p.status}`} style={{ ['--cl' as any]: color(p.clientId) }} onClick={() => setPost(p)}
                     title={`${clients.find((c) => c.id === p.clientId)?.name}: ${POST_FORMAT_LABEL[p.format]} · ${POST_STATUS_LABEL[p.status]}${p.tunning === 'feito' ? ' · tunado' : ''}`}>
+                    {coverOf(p) && <img className="cal-post-thumb" src={thumbUrl(office!.id, coverOf(p)!, 80)} alt="" loading="lazy" onError={(e) => { e.currentTarget.style.display = 'none'; }} />}
                     <b>{p.number ? String(p.number).padStart(2, '0') : FORMAT_SHORT[p.format]}</b> {p.theme}{p.tunning === 'feito' && <Sparkles size={10} />}
                   </div>
                 ))}
@@ -156,7 +163,7 @@ function PostForm({ p, onClose }: { p: Partial<ContentPost>; onClose: () => void
   const blocked = !!f.format && needsTunning(f.format) && !f.tunning && POST_STATUSES.indexOf(f.status ?? 'planejado') > POST_STATUSES.indexOf('conferencia');
   return (
     <div className="modal-bg" onClick={onClose}>
-      <form className="modal" onClick={(x) => x.stopPropagation()} onSubmit={async (x) => {
+      <form className={`modal post-modal ${f.id ? '' : 'new'}`} onClick={(x) => x.stopPropagation()} onSubmit={async (x) => {
         x.preventDefault();
         setErr('');
         try {
@@ -167,6 +174,8 @@ function PostForm({ p, onClose }: { p: Partial<ContentPost>; onClose: () => void
         } catch (e) { setErr((e as Error).message); }
       }}>
         <header className="modal-head"><h3>{f.id ? 'Post do calendário' : 'Novo post'}</h3><button type="button" className="icon" onClick={onClose}><X size={16} /></button></header>
+        <div className="post-modal-body">
+        {f.id && <PostPreview id={f.id} />}
         <fieldset className="modal-body" disabled={guest} style={{ border: 0, margin: 0 }}>
           <div className="grid2">
             <label>Cliente<select required disabled={!!f.id} value={f.clientId ?? ''} onChange={(x) => setF({ ...f, clientId: x.target.value, demandId: null })}>
@@ -181,7 +190,7 @@ function PostForm({ p, onClose }: { p: Partial<ContentPost>; onClose: () => void
             </div>
           </div>
           <label>Tema<input required maxLength={200} value={f.theme ?? ''} onChange={(x) => setF({ ...f, theme: x.target.value })} /></label>
-          <label>Legenda<textarea rows={3} maxLength={2200} value={f.caption ?? ''} onChange={(x) => setF({ ...f, caption: x.target.value })} /></label>
+          <label>Legenda<textarea rows={7} maxLength={2200} value={f.caption ?? ''} onChange={(x) => setF({ ...f, caption: x.target.value })} /></label>
           <div className="grid2">
             <label>Etapa<select value={f.status} onChange={(x) => setF({ ...f, status: x.target.value as ContentPost['status'] })}>
               {POST_STATUSES.map((k) => <option key={k} value={k}>{POST_STATUS_LABEL[k]}</option>)}</select></label>
@@ -193,11 +202,74 @@ function PostForm({ p, onClose }: { p: Partial<ContentPost>; onClose: () => void
           {!!f.files?.length && <div className="small"><b>Peças</b>{f.files.map((x) => <div key={x} className="mono truncate" title={x}>{x}</div>)}</div>}
           {err && <div className="error">{err}</div>}
         </fieldset>
+        </div>
         <footer className="modal-foot">
           <span className="muted small">{f.updatedBy?.startsWith('agent:') ? 'Atualizado pelo funcionário' : ''}</span>
           <div className="row gap"><button type="button" className="ghost" onClick={onClose}>Fechar</button>{!guest && <button className="primary" disabled={blocked || !f.clientId}>Salvar</button>}</div>
         </footer>
       </form>
     </div>
+  );
+}
+
+interface Pieces { files: string[]; links: Record<string, string>; month: { dir: string | null; exists: boolean; link: string | null }; workDir: string | null }
+
+/** A peça do post em tamanho grande, lâmina por lâmina, com o link do Drive da peça e da pasta do mês. */
+function PostPreview({ id }: { id: string }) {
+  const { office, notify } = useStore();
+  const [pc, setPc] = useState<Pieces | null>(null);
+  const [i, setI] = useState(0);
+  const posts = useStore((s) => s.posts);
+  const version = posts.find((p) => p.id === id)?.updatedAt;
+  useEffect(() => {
+    let alive = true;
+    api<Pieces>(`/api/offices/${office!.id}/posts/${id}/pecas`).then((r) => { if (alive) setPc(r); }).catch(() => { if (alive) setPc({ files: [], links: {}, month: { dir: null, exists: false, link: null }, workDir: null }); });
+    return () => { alive = false; };
+  }, [id, version]);
+  const file = pc?.files[Math.min(i, (pc?.files.length ?? 1) - 1)];
+  const link = (file && pc?.links[file]) || null;
+  const copy = async (text: string) => { try { await navigator.clipboard.writeText(text); notify('Link copiado'); } catch { notify(text); } };
+  const name = (p: string) => p.split(/[\\/]/).pop() ?? p;
+
+  return (
+    <section className="post-preview">
+      <div className="post-stage">
+        {!pc ? <span className="muted small">Carregando a peça…</span>
+          : !file ? <div className="post-empty"><ImageIcon size={22} /><span className="muted small">Ainda sem peça. Quando os finais forem registrados ou entregues, aparecem aqui.</span></div>
+          : VIDEO.test(file) ? <video key={file} src={mediaUrl(office!.id, file)} controls />
+          : IMG.test(file) ? <img key={file} src={mediaUrl(office!.id, file)} alt={name(file)} />
+          : <div className="post-empty"><span className="muted small">{name(file)}</span></div>}
+        {pc && pc.files.length > 1 && (
+          <>
+            <button type="button" className="icon post-nav prev" aria-label="Lâmina anterior" disabled={i === 0} onClick={() => setI(i - 1)}><ChevronLeft size={18} /></button>
+            <button type="button" className="icon post-nav next" aria-label="Próxima lâmina" disabled={i >= pc.files.length - 1} onClick={() => setI(i + 1)}><ChevronRight size={18} /></button>
+            <span className="post-count mono">{i + 1}/{pc.files.length}</span>
+          </>
+        )}
+      </div>
+      {pc && pc.files.length > 1 && (
+        <div className="post-strip">
+          {pc.files.map((x, n) => (
+            <button type="button" key={x} className={n === i ? 'on' : ''} title={name(x)} onClick={() => setI(n)}>
+              {IMG.test(x) ? <img src={thumbUrl(office!.id, x, 120)} alt="" loading="lazy" /> : <span className="mono small">{String(n + 1).padStart(2, '0')}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {pc && (
+        <div className="post-links">
+          {file && <span className="small truncate" title={file}>{name(file)}</span>}
+          <div className="row gap-s wrap">
+            {link && <button type="button" className="ghost small" onClick={() => window.open(link, '_blank')}><ExternalLink size={12} /> Peça no Drive</button>}
+            {link && <button type="button" className="ghost small" onClick={() => copy(link)}><Copy size={12} /> Copiar link da peça</button>}
+            {pc.month.link && <button type="button" className="ghost small" onClick={() => window.open(pc.month.link!, '_blank')}><ExternalLink size={12} /> Pasta do mês no Drive</button>}
+            {pc.month.link && <button type="button" className="ghost small" onClick={() => copy(pc.month.link!)}><Copy size={12} /> Copiar link da pasta</button>}
+            {!pc.month.link && pc.month.exists && desktop && <button type="button" className="ghost small" title="O Drive ainda não deu o link desta pasta" onClick={() => desktop!.openPath(pc.month.dir!)}><FolderOpen size={12} /> Abrir pasta do mês</button>}
+            {pc.workDir && desktop && <button type="button" className="ghost small" onClick={() => desktop!.openPath(pc.workDir!)}><FolderOpen size={12} /> Pasta de trabalho</button>}
+          </div>
+          {!pc.month.exists && <span className="muted small">A pasta do mês ainda não existe no Drive.</span>}
+        </div>
+      )}
+    </section>
   );
 }

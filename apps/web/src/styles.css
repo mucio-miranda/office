@@ -1182,3 +1182,32 @@ label.check input { width: auto; height: auto; }
   border: 0; background: rgba(0,0,0,.65); color: #fff; opacity: 0; transition: opacity .15s; cursor: pointer; }
 .piece:hover .thumb .unassign, .piece .thumb .unassign:focus-visible { opacity: 1; }
 @media (hover: none) { .piece .thumb .unassign { opacity: 1; } }
+
+/* post do calendário: a peça grande à esquerda, os campos à direita */
+.modal.post-modal { width: min(1180px, 100%); height: min(860px, 92vh); }
+.modal.post-modal.new { width: min(640px, 100%); height: auto; }
+.post-modal-body { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 420px; }
+.post-modal.new .post-modal-body { grid-template-columns: minmax(0, 1fr); }
+.post-modal-body > .modal-body { overflow: auto; }
+.post-preview { min-height: 0; display: flex; flex-direction: column; gap: 10px; padding: 16px 0 16px 20px; }
+.post-stage { position: relative; flex: 1; min-height: 240px; border-radius: 10px; background: var(--muted); display: grid; place-items: center; overflow: hidden; }
+.post-stage img, .post-stage video { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.post-empty { display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center; padding: 24px; color: var(--muted-foreground); }
+.post-nav { position: absolute; top: 50%; transform: translateY(-50%); background: var(--background); border: 1px solid var(--border); width: 32px; height: 32px; border-radius: 50%; }
+.post-nav.prev { left: 10px; }
+.post-nav.next { right: 10px; }
+.post-nav:disabled { opacity: .35; }
+.post-count { position: absolute; bottom: 8px; right: 10px; font-size: 11px; padding: 2px 6px; border-radius: 6px; background: var(--background); }
+.post-strip { display: flex; gap: 6px; overflow-x: auto; flex: none; padding-bottom: 2px; }
+.post-strip button { flex: none; width: 56px; height: 70px; padding: 0; border: 2px solid transparent; border-radius: 6px; overflow: hidden; background: var(--muted); display: grid; place-items: center; }
+.post-strip button.on { border-color: var(--foreground); }
+.post-strip img { width: 100%; height: 100%; object-fit: cover; }
+.post-links { display: flex; flex-direction: column; gap: 6px; flex: none; }
+.cal-post-thumb { width: 16px; height: 20px; object-fit: cover; border-radius: 2px; flex: none; }
+@media (max-width: 900px) {
+  .modal.post-modal { height: 92vh; }
+  .post-modal-body { grid-template-columns: minmax(0, 1fr); overflow: auto; }
+  .post-modal-body > .modal-body { overflow: visible; }
+  .post-preview { padding: 16px 20px 0; }
+  .post-stage { min-height: 50vh; flex: none; height: 50vh; }
+}
