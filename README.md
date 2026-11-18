@@ -500,7 +500,7 @@ Lista completa em [`docs/ROADMAP.md`](docs/ROADMAP.md).
 
 ## 🤝 Contribua
 
-O Office nasceu numa agência de marketing (a REZZU) para resolver um problema real:
+O Office nasceu numa agência de marketing para resolver um problema real:
 coordenar pessoas e IA no mesmo fluxo. Ele é **open source** para evoluir com quem tem o mesmo problema.
 
 Funcionários novos, móveis, transições, integrações, traduções: tudo é bem-vindo. Comece pelo [`CONTRIBUTING.md`](CONTRIBUTING.md).
