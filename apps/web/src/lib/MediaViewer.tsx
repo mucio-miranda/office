@@ -37,7 +37,7 @@ export function MediaViewer({ files, title, start = 0, onClose }: { files: strin
   };
 
   return (
-    <div className="modal-bg top viewer-bg" onClick={onClose}>
+    <div className="modal-bg top viewer-bg" onClick={(e) => { e.stopPropagation(); onClose(); }}>
       <div className="viewer" onClick={(e) => e.stopPropagation()}>
         <header className="viewer-head">
           <b className="truncate" title={title}>{title}</b>

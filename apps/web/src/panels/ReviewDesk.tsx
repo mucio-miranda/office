@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Check, Clock, CloudUpload, CornerLeftUp, ExternalLink, FileText, FolderOpen, Megaphone, RotateCcw, Send, Trash2, X } from 'lucide-react';
+import { CalendarClock, Check, Clock, CloudUpload, CornerLeftUp, ExternalLink, FileText, FolderOpen, Maximize2, Megaphone, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { NETWORKS, NETWORK_LABEL, STAGE_LABEL, type Demand, type Network, type ReviewMark, type StageLogEntry } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, getToken, mediaUrl } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { desktop } from '../lib/desktop';
 import { PostCards } from './PostCards';
+import { MediaViewer } from '../lib/MediaViewer';
 
 /**
  * Mesa do diretor de arte: as peças de cada etapa e versão lado a lado com o histórico, prévia de imagem, vídeo e
@@ -40,7 +41,7 @@ export function TextPreview({ officeId, file }: { officeId: string; file: string
 }
 
 /** Imagem com as áreas marcadas; quando `onMark` existe, arrastar desenha uma área nova. */
-function MarkableImage({ src, marks, onMark, offset = 0 }: { src: string; marks: ReviewMark[]; onMark?: (r: Omit<ReviewMark, 'file' | 'note'>) => void; offset?: number }) {
+function MarkableImage({ src, marks, onMark, onOpen, offset = 0 }: { src: string; marks: ReviewMark[]; onMark?: (r: Omit<ReviewMark, 'file' | 'note'>) => void; onOpen?: () => void; offset?: number }) {
   const box = useRef<HTMLDivElement>(null);
   const [draft, setDraft] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const at = (e: React.PointerEvent) => {
@@ -49,10 +50,11 @@ function MarkableImage({ src, marks, onMark, offset = 0 }: { src: string; marks:
   };
   const rect = (d: NonNullable<typeof draft>) => ({ x: Math.min(d.x0, d.x1), y: Math.min(d.y0, d.y1), w: Math.abs(d.x1 - d.x0), h: Math.abs(d.y1 - d.y0) });
   return (
-    <div ref={box} className={`review-img ${onMark ? 'markable' : ''}`}
+    <div ref={box} className={`review-img ${onMark ? 'markable' : onOpen ? 'openable' : ''}`}
+      onClick={() => { if (!onMark) onOpen?.(); }}
       onPointerDown={(e) => { if (!onMark || e.button !== 0) return; e.preventDefault(); (e.target as Element).setPointerCapture(e.pointerId); const p = at(e); setDraft({ x0: p.x, y0: p.y, x1: p.x, y1: p.y }); }}
       onPointerMove={(e) => { if (draft) { const p = at(e); setDraft({ ...draft, x1: p.x, y1: p.y }); } }}
-      onPointerUp={() => { if (!draft) return; const r = rect(draft); setDraft(null); if (r.w > 0.02 && r.h > 0.02) onMark?.(r); }}>
+      onPointerUp={() => { if (!draft) return; const r = rect(draft); setDraft(null); if (r.w > 0.02 && r.h > 0.02) onMark?.(r); else if (r.w < 0.005 && r.h < 0.005) onOpen?.(); }}>
       <img src={src} alt="" draggable={false} />
       {marks.map((m, i) => (
         <span key={i} className="review-mark" style={{ left: `${m.x * 100}%`, top: `${m.y * 100}%`, width: `${m.w * 100}%`, height: `${m.h * 100}%` }}><b>{i + 1 + offset}</b></span>
@@ -88,6 +90,8 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
   const [sel, setSel] = useState(Math.max(0, versions.length - 1));
   const [marks, setMarks] = useState<ReviewMark[]>([]);
   const [pending, setPending] = useState<Omit<ReviewMark, 'note'> | null>(null);
+  // arquivo aberto em tela grande; as setas passam pelas outras imagens e vídeos da mesma versão
+  const [viewing, setViewing] = useState<string | null>(null);
   const [note, setNote] = useState('');
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
@@ -161,7 +165,7 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
                 {ordered(v.files!).map((f) => (
                   <figure key={f} className="review-file">
                     {IMG.test(f) ? (
-                      <MarkableImage src={mediaUrl(office!.id, f)} offset={0}
+                      <MarkableImage src={mediaUrl(office!.id, f)} offset={0} onOpen={() => setViewing(f)}
                         marks={[...pastMarks(f), ...marks.filter((m) => m.file === f)]}
                         onMark={canMark ? (r) => { setPending({ ...r, file: f }); setNote(''); } : undefined} />
                     ) : VID.test(f) ? (
@@ -173,6 +177,7 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
                     )}
                     <figcaption>
                       <span className="truncate" title={f}>{info && f.toLowerCase().startsWith(info.folder.toLowerCase()) ? f.slice(info.folder.length + 1) : f}</span>
+                      {(IMG.test(f) || VID.test(f)) && <button type="button" className="icon" title="Ver em tela grande (passa as outras peças com as setas)" onClick={() => setViewing(f)}><Maximize2 size={13} /></button>}
                       <button type="button" className="icon" title="Abrir no app" onClick={() => openFile(f)}><ExternalLink size={13} /></button>
                       {desktop && <button type="button" className="icon" title="Mostrar na pasta" onClick={() => desktop?.showInFolder(f)}><FolderOpen size={13} /></button>}
                     </figcaption>
@@ -259,6 +264,10 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
           </aside>
         </div>
       </div>
+      {viewing && v && (() => {
+        const media = ordered(v.files!).filter((f) => IMG.test(f) || VID.test(f));
+        return <MediaViewer files={media} start={Math.max(0, media.indexOf(viewing))} title={d.title} onClose={() => setViewing(null)} />;
+      })()}
     </div>
   );
 }
