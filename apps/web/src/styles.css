@@ -1211,3 +1211,12 @@ label.check input { width: auto; height: auto; }
   .post-preview { padding: 16px 20px 0; }
   .post-stage { min-height: 50vh; flex: none; height: 50vh; }
 }
+
+/* atualização do app pronta: um clique instala e reabre */
+.update-card { margin: 0 8px 8px; padding: 8px 10px; border: 1px solid var(--border); border-radius: 10px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.update-card.ready { border-color: color-mix(in srgb, var(--done) 50%, var(--border)); background: color-mix(in srgb, var(--done) 8%, transparent); }
+.update-card .update-text { flex: 1; min-width: 120px; display: flex; flex-direction: column; font-size: 12px; line-height: 1.3; }
+.update-card .update-text small { color: var(--muted-foreground); font-size: 11px; }
+.update-card button { flex: none; }
+.nav-collapsed .update-card { justify-content: center; padding: 8px 0; }
+.nav-collapsed .update-card .update-text, .nav-collapsed .update-card span { display: none; }

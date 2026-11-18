@@ -5,7 +5,7 @@ import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
-  Plus, PanelLeftClose, PanelLeftOpen, ListChecks,
+  Plus, PanelLeftClose, PanelLeftOpen, ListChecks, Download,
 } from 'lucide-react';
 import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
@@ -19,7 +19,7 @@ import { DecorUI, enterDecorate } from './office/decor/DecorUI';
 import { canDecorate, useDecor } from './office/decor/state';
 import { THEMES, useTheme } from './lib/theme';
 import { defaultWall, useWallTool } from './office/decor/walls';
-import { desktop } from './lib/desktop';
+import { desktop, type UpdateState } from './lib/desktop';
 
 type NavId = Exclude<PanelId, 'agente'>;
 const NAV: { id: NavId; icon: typeof Box; label: string; key: string }[] = [
@@ -235,6 +235,7 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
           </div>
         )}
       </div>
+      <UpdateCard />
       <div className="sidebar-foot">
         <div className="me">
           <span className="avatar" style={{ background: user?.color }}>{user?.name[0]}</span>
@@ -249,6 +250,41 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
         <ThemeToggle />
       </div>
     </aside>
+  );
+}
+
+/**
+ * Atualização do app sem procurar a bandeja: aparece quando a versão nova termina de baixar. Instala em silêncio e o
+ * Office abre de novo; as tarefas que estavam rodando voltam para a fila sozinhas.
+ */
+function UpdateCard() {
+  const jobs = useStore((s) => s.jobs);
+  const [u, setU] = useState<UpdateState>({ state: 'nenhuma' });
+  const [confirm, setConfirm] = useState(false);
+  const [going, setGoing] = useState(false);
+  useEffect(() => {
+    if (!desktop?.updateState) return;
+    desktop.updateState().then(setU).catch(() => {});
+    return desktop.onUpdate?.(setU);
+  }, []);
+  if (u.state === 'nenhuma') return null;
+  const running = jobs.filter((j) => j.status === 'rodando').length;
+  if (u.state === 'baixando') {
+    return <div className="update-card muted small" title={`Baixando a versão ${u.version}`}><Download size={14} /><span>Baixando a {u.version}… {u.percent ?? 0}%</span></div>;
+  }
+  const go = () => {
+    if (running && !confirm) { setConfirm(true); return; }
+    setGoing(true);
+    desktop?.installUpdate?.();
+  };
+  return (
+    <div className="update-card ready" title={`Office ${u.version} pronto para instalar`}>
+      <div className="update-text">
+        <b>Versão {u.version} pronta</b>
+        <small>{going ? 'Instalando, o Office abre de novo em instantes…' : confirm ? `${running} ${running === 1 ? 'tarefa para' : 'tarefas param'} e ${running === 1 ? 'volta' : 'voltam'} sozinha${running === 1 ? '' : 's'} depois.` : 'Leva alguns segundos e reabre sozinho.'}</small>
+      </div>
+      <button className="primary small" disabled={going} onClick={go} aria-label="Atualizar agora"><Download size={13} /><span>{confirm ? 'Atualizar mesmo assim' : 'Atualizar agora'}</span></button>
+    </div>
   );
 }
 

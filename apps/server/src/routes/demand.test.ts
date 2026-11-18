@@ -170,3 +170,20 @@ test('skills: só mudam pela proposta aprovada, com o trecho conferido e registr
   assert.doesNotMatch(git('log', '-1', '--format=%B'), /Co-Authored-By/i, 'sem coautor');
   assert.equal((await call('POST', `${O}/skills/mudancas/ch1/aplicar`, {})).status, 409, 'não aplica duas vezes');
 });
+
+test('reinício (atualização): a tarefa que rodava volta para a fila sozinha; caiu de novo sem avançar, espera alguém', async () => {
+  const { recoverJobs, RESUMED_TEXT } = await import('../agents/runtime.ts');
+  const job = (await call('GET', `${O}/jobs`)).json[0];
+  const status = () => (db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id) as any).status;
+  db.prepare("UPDATE jobs SET status = 'rodando' WHERE id = ?").run(job.id);
+  recoverJobs();
+  await wait(() => status() === 'concluido');
+  assert.equal(status(), 'concluido', 'retomou e terminou');
+  const texts = (db.prepare("SELECT text FROM job_messages WHERE job_id = ? AND role = 'sistema'").all(job.id) as any[]).map((m) => m.text);
+  assert.ok(texts.includes(RESUMED_TEXT));
+
+  db.prepare("UPDATE jobs SET status = 'rodando' WHERE id = ?").run(job.id);
+  db.prepare("INSERT INTO job_messages (id, job_id, role, text, created_at) VALUES (?, ?, 'sistema', ?, ?)").run('loop-1', job.id, RESUMED_TEXT, new Date(Date.now() + 60_000).toISOString());
+  recoverJobs();
+  assert.equal(status(), 'erro', 'não entra em ciclo');
+});

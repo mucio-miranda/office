@@ -1,3 +1,5 @@
+export interface UpdateState { state: 'nenhuma' | 'baixando' | 'pronta'; version?: string; percent?: number }
+
 /** Recursos nativos quando a UI roda dentro do app de Windows (ver apps/desktop/src/preload.ts). */
 export interface OfficeDesktop {
   isDesktop: true;
@@ -11,6 +13,10 @@ export interface OfficeDesktop {
   toggleFullscreen(): Promise<void>;
   setAutoStart(on: boolean): Promise<void>;
   setTheme(t: 'light' | 'dark'): Promise<void>;
+  /** Versões antigas do app não têm: confira antes de usar. */
+  updateState?(): Promise<UpdateState>;
+  installUpdate?(): Promise<void>;
+  onUpdate?(cb: (u: UpdateState) => void): () => void;
   onNavigate(cb: (to: { panel: string | null; arg: string | null }) => void): () => void;
 }
 

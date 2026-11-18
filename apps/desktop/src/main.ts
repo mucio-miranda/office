@@ -193,6 +193,7 @@ function refreshTray() {
   const urls = lanUrls();
   const auto = app.getLoginItemSettings().openAtLogin;
   tray.setContextMenu(Menu.buildFromTemplate([
+    ...(update.state === 'pronta' ? [{ label: `Atualizar para a ${update.version} e reabrir`, click: () => installUpdate?.() }, { type: 'separator' as const }] : []),
     { label: 'Abrir o Office', click: showWindow },
     { label: 'Tela cheia', click: () => { showWindow(); win?.setFullScreen(!win.isFullScreen()); } },
     { type: 'separator' },
@@ -253,6 +254,8 @@ function registerIpc() {
   ipcMain.handle('office:openPath', (_e, p: string) => (path.isAbsolute(p) && existsSync(p) ? shell.openPath(p) : 'Arquivo não encontrado'));
 
   ipcMain.handle('office:fullscreen', () => win?.setFullScreen(!win.isFullScreen()));
+  ipcMain.handle('office:updateState', () => update);
+  ipcMain.handle('office:installUpdate', () => { if (update.state === 'pronta') installUpdate?.(); });
   ipcMain.handle('office:setAutoStart', (_e, on: boolean) => { app.setLoginItemSettings({ openAtLogin: !!on, args: ['--hidden'] }); refreshTray(); });
 
   // a UI avisa quando troca de tema para os botões da janela acompanharem
@@ -264,15 +267,32 @@ function registerIpc() {
 
 // ---------------- atualização automática ----------------
 
+/** Atualização baixada em segundo plano; o botão "Atualizar agora" instala sem pedir nada e abre o Office de novo. */
+type UpdateState = { state: 'nenhuma' | 'baixando' | 'pronta'; version?: string; percent?: number };
+let update: UpdateState = { state: 'nenhuma' };
+let installUpdate: (() => void) | null = null;
+const pushUpdate = () => { win?.webContents.send('office:update', update); refreshTray(); };
+
 async function checkUpdates() {
   if (isDev) return;
   try {
     const { autoUpdater } = await import('electron-updater');
     autoUpdater.autoDownload = true;
-    autoUpdater.on('update-downloaded', () => {
-      new Notification({ title: 'Atualização do Office pronta', body: 'Ela será instalada quando você sair do Office.' }).show();
+    autoUpdater.autoInstallOnAppQuit = true;
+    autoUpdater.on('update-available', (i) => { update = { state: 'baixando', version: i.version, percent: 0 }; pushUpdate(); });
+    autoUpdater.on('download-progress', (p) => { update = { ...update, state: 'baixando', percent: Math.round(p.percent) }; pushUpdate(); });
+    autoUpdater.on('update-downloaded', (i) => {
+      update = { state: 'pronta', version: i.version };
+      pushUpdate();
+      new Notification({ title: `Office ${i.version} pronto para instalar`, body: 'Clique em "Atualizar agora". Leva alguns segundos, o Office abre de novo sozinho e as tarefas continuam.' }).show();
     });
-    await autoUpdater.checkForUpdates();
+    autoUpdater.on('error', () => { if (update.state === 'baixando') { update = { state: 'nenhuma' }; pushUpdate(); } });
+    // silencioso (sem a tela do instalador) e reabre o Office no fim
+    installUpdate = () => { quitting = true; autoUpdater.quitAndInstall(true, true); };
+    const check = () => { if (update.state === 'nenhuma') autoUpdater.checkForUpdates().catch(() => {}); };
+    check();
+    // o Office fica aberto dias seguidos: procura versão nova a cada 30 minutos
+    setInterval(check, 30 * 60_000);
   } catch {
     // sem internet ou sem release publicado: segue a vida
   }

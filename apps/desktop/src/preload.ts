@@ -16,6 +16,13 @@ contextBridge.exposeInMainWorld('officeDesktop', {
   toggleFullscreen: () => ipcRenderer.invoke('office:fullscreen'),
   setAutoStart: (on: boolean) => ipcRenderer.invoke('office:setAutoStart', on),
   setTheme: (t: 'light' | 'dark') => ipcRenderer.invoke('office:theme', t),
+  updateState: () => ipcRenderer.invoke('office:updateState'),
+  installUpdate: () => ipcRenderer.invoke('office:installUpdate'),
+  onUpdate: (cb: (u: unknown) => void) => {
+    const h = (_: unknown, u: unknown) => cb(u);
+    ipcRenderer.on('office:update', h);
+    return () => ipcRenderer.removeListener('office:update', h);
+  },
   onNavigate: (cb: (to: { panel: string | null; arg: string | null }) => void) => {
     const h = (_: unknown, to: { panel: string | null; arg: string | null }) => cb(to);
     ipcRenderer.on('office:navigate', h);

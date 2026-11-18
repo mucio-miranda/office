@@ -467,11 +467,31 @@ async function start(jobId: string, typed: string, resume: boolean) {
   });
 }
 
-/** Ao iniciar o servidor, tarefas que estavam rodando quando ele caiu ficam marcadas como erro. */
+export const RESUMED_TEXT = 'O Office reiniciou no meio desta tarefa (atualização). Retomei sozinho de onde parou.';
+const RESUME_PROMPT = 'O Office reiniciou no meio deste trabalho (atualização do app). Confira o que já ficou pronto nas pastas e continue de onde parou, sem refazer o que já está feito.';
+
+/**
+ * Ao iniciar o servidor, as tarefas que estavam rodando ou na fila voltam para a fila sozinhas, na mesma conversa: atualizar
+ * o Office não perde trabalho. Mensagens que esperavam a vez entram junto. Se a tarefa já tinha sido retomada assim e
+ * caiu de novo sem avançar, fica parada esperando alguém, para um erro não repetir em ciclo.
+ */
 export function recoverJobs() {
-  for (const j of all<AgentJob>("SELECT * FROM jobs WHERE status IN ('rodando','fila')")) {
-    update('jobs', j.id, { status: 'erro', updatedAt: now() });
-    insert('job_messages', { id: uid(), jobId: j.id, role: 'sistema', text: 'O servidor reiniciou durante esta tarefa. Responda para retomar.', createdAt: now() } as never);
+  for (const j of all<AgentJob>("SELECT * FROM jobs WHERE status IN ('rodando','fila') ORDER BY updated_at")) {
+    const recent = all<JobMessage>('SELECT * FROM job_messages WHERE job_id = ? ORDER BY created_at DESC LIMIT 20', j.id);
+    const last = recent.find((m) => m.role !== 'usuario');
+    if (last?.role === 'sistema' && last.text === RESUMED_TEXT) {
+      update('jobs', j.id, { status: 'erro', updatedAt: now() });
+      insert('job_messages', { id: uid(), jobId: j.id, role: 'sistema', text: 'O Office reiniciou de novo antes de esta tarefa avançar. Responda para retomar.', createdAt: now() } as never);
+      continue;
+    }
+    // o que a pessoa mandou e ainda não foi atendido (as últimas mensagens dela, depois da última resposta)
+    const pending: string[] = [];
+    for (const m of recent) { if (m.role !== 'usuario') break; pending.unshift(m.text); }
+    const typed = j.status === 'fila' && pending.length ? pending.join('\n\n') : RESUME_PROMPT;
+    update('jobs', j.id, { status: 'fila', updatedAt: now() });
+    insert('job_messages', { id: uid(), jobId: j.id, role: 'sistema', text: RESUMED_TEXT, createdAt: now() } as never);
+    queue.push({ jobId: j.id, input: typed, resume: !!j.sessionId });
   }
   for (const a of all<AgentProfile>("SELECT * FROM agents WHERE status = 'trabalhando'")) update('agents', a.id, { status: 'livre' });
+  pump();
 }
