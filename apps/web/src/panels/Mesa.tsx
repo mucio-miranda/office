@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Check, FileText, Film, Workflow, X } from 'lucide-react';
+import { Check, ChevronDown, FileText, Film, Workflow, X } from 'lucide-react';
 import { STAGE_LABEL, processById, type Demand, type Learning, type SkillChange } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import { ReviewDesk, versionsOf } from './ReviewDesk';
+import { usePersisted } from '../lib/persisted';
 
 /**
  * Mesa de trabalho: o que os funcionários terminaram ou querem decidir com você, peça por peça, sem precisar procurar
@@ -13,6 +14,21 @@ import { ReviewDesk, versionsOf } from './ReviewDesk';
 const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const VID = /\.(mp4|mov|webm)$/i;
 const MAX_DONE = 12;
+
+/** Seção da Mesa que abre e fecha pelo título; a escolha fica lembrada neste navegador. */
+function Fold({ id, title, count, children }: { id: string; title: string; count: number; children: React.ReactNode }) {
+  const [closed, setClosed] = usePersisted<boolean>(`office.mesa.${id}.fechada`, false);
+  return (
+    <section className={`fold ${closed ? 'closed' : ''}`}>
+      <button type="button" className="fold-head" aria-expanded={!closed} onClick={() => setClosed(!closed)}>
+        <ChevronDown size={13} className="fold-chevron" />
+        <span>{title}</span>
+        <span className="fold-count">{count}</span>
+      </button>
+      {!closed && <div className="fold-body">{children}</div>}
+    </section>
+  );
+}
 
 function Learnings() {
   const { office, clients, jobs, notify } = useStore();
@@ -27,8 +43,7 @@ function Learnings() {
   };
   if (!items.length) return null;
   return (
-    <section>
-      <div className="section-label" style={{ padding: 0, marginBottom: 8 }}>Aprendizados para aprovar · {items.length}</div>
+    <Fold id="aprendizados" title="Aprendizados para aprovar" count={items.length}>
       <p className="muted small" style={{ marginTop: 0 }}>Aprovado, entra em INSIGHTS-PRODUCAO.md e na lista abaixo, de onde vira mudança na skill.</p>
       <div className="learnings">
         {items.map((l) => (
@@ -39,7 +54,7 @@ function Learnings() {
           </div>
         ))}
       </div>
-    </section>
+    </Fold>
   );
 }
 
@@ -73,8 +88,7 @@ function SkillPath() {
   };
   if (!approved.length && !changes.length) return null;
   return (
-    <section>
-      <div className="section-label" style={{ padding: 0, marginBottom: 8 }}>Para virar skill · {approved.length}</div>
+    <Fold id="skill" title="Para virar skill" count={approved.length}>
       <p className="muted small" style={{ marginTop: 0 }}>O curador lê as skills e propõe a troca exata. Nada muda até o dono aplicar; a mudança fica registrada no git das skills e vale para todos os clientes.</p>
       {approved.length > 0 && (
         <div className="learnings">
@@ -111,7 +125,7 @@ function SkillPath() {
           )}
         </div>
       ))}
-    </section>
+    </Fold>
   );
 }
 
@@ -157,11 +171,10 @@ export function Mesa() {
       </button>
     );
   };
-  const section = (title: string, list: Demand[]) => list.length > 0 && (
-    <section>
-      <div className="section-label" style={{ padding: 0, marginBottom: 8 }}>{title} · {list.length}</div>
+  const section = (id: string, title: string, list: Demand[]) => list.length > 0 && (
+    <Fold id={id} title={title} count={list.length}>
       <div className="mesa-grid">{list.map(card)}</div>
-    </section>
+    </Fold>
   );
   const current = openId ? demands.find((d) => d.id === openId) : null;
 
@@ -178,10 +191,10 @@ export function Mesa() {
       )}
       <Learnings />
       <SkillPath />
-      {section('Esperando você', asking)}
-      {section('Em produção', working)}
-      {section('Paradas', stopped)}
-      {section('Aprovadas', done)}
+      {section('esperando', 'Esperando você', asking)}
+      {section('producao', 'Em produção', working)}
+      {section('paradas', 'Paradas', stopped)}
+      {section('aprovadas', 'Aprovadas', done)}
       {current && <ReviewDesk d={current} onClose={() => setOpenId(null)} />}
     </div>
   );
