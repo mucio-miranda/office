@@ -662,11 +662,12 @@ export function freeSpotNear(p: Vec2): Vec2 {
 }
 
 /** Lugar do funcionário de IA na sala (ou na copa): em volta da mesa da sala, um ao lado do outro, sem cair em obstáculo. */
-const SPOT_OFFSETS: [number, number][] = [[0, 0], [1.5, 0], [-1.5, 0], [0, 1.5], [1.5, 1.5], [-1.5, 1.5], [0, -1.5], [1.5, -1.5], [-1.5, -1.5]];
+// espaçados o bastante para os rótulos (nome e cliente) não se sobreporem
+const SPOT_OFFSETS: [number, number][] = [[0, 0], [2.6, 0], [-2.6, 0], [0, 2.2], [2.6, 2.2], [-2.6, 2.2], [0, -2.2], [2.6, -2.2], [-2.6, -2.2]];
 export function workerSpot(room: string, i: number): Vec2 {
   const r = ROOMS.find((x) => x.id === room);
   const base = DESKS[room] ?? (r ? roomCenter(r) : SPAWN);
   const [dx, dz] = SPOT_OFFSETS[i % SPOT_OFFSETS.length];
-  const ring = Math.floor(i / SPOT_OFFSETS.length) * 3;
+  const ring = Math.floor(i / SPOT_OFFSETS.length) * 5.2;
   return freeSpotNear({ x: base.x + dx + ring, z: base.z + dz });
 }

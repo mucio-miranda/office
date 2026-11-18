@@ -2,7 +2,8 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import { useStore } from '../lib/store';
 import { useWorldStyle } from '../lib/theme';
-import { ROOMS } from './layout';
+import { isWorkerVisible } from '@office/shared';
+import { DESKS, ROOMS } from './layout';
 
 /**
  * Rótulos (nomes, balões de status e nomes das salas) em DOM puro, fora do Canvas.
@@ -59,16 +60,26 @@ export function LabelLayer() {
   for (const r of ROOMS) anchors.set(`room:${r.id}`, () => ({ x: (r.x0 + r.x1) / 2, z: r.z0 + 1.2, y: 0.02 }));
   type Item = {
     id: string; name: string; sub?: string; color: string; status?: string | null; statusClass?: string; emoji?: string;
-    onClick?: () => void; me?: boolean; desk?: boolean; away?: boolean;
+    onClick?: () => void; me?: boolean; desk?: boolean; away?: boolean; copa?: boolean; title?: string;
   };
   const items: Item[] = [];
   if (user) items.push({ id: `user:${user.id}`, name: user.name, color: user.color, emoji: emotes[user.id]?.emoji, me: true });
   for (const p of Object.values(presences))
     items.push({ id: `user:${p.userId}`, name: p.name, color: p.color, emoji: emotes[p.userId]?.emoji, status: PRESENCE_STATUS[p.status], statusClass: 'st-livre' });
   for (const w of workers) {
-    if (w.archivedAt) continue;
-    const st = w.state === 'copa' ? 'livre' : w.state;
+    if (!isWorkerVisible(w) || w.state === 'copa') continue;
+    const st = w.state;
     items.push({ id: `worker:${w.id}`, name: `${w.name} · IA`, sub: clients.find((c) => c.id === w.clientId)?.name, color: w.color, status: AGENT_STATUS[st], statusClass: `st-${st}`, onClick: () => open('clientes', w.clientId) });
+  }
+  // parados na copa: um contador só, em vez de um amontoado de avatares
+  const idle = workers.filter((w) => isWorkerVisible(w) && w.state === 'copa');
+  const copa = DESKS.copa;
+  if (idle.length && copa) {
+    anchors.set('copa:parados', () => ({ x: copa.x, z: copa.z - 1.1, y: 1.3 }));
+    items.push({
+      id: 'copa:parados', name: `☕ ${idle.length} na copa`, sub: 'sem trabalho agora', color: 'transparent', copa: true,
+      title: idle.map((w) => `${w.name} · ${clients.find((c) => c.id === w.clientId)?.name ?? ''}`).join('\n'),
+    });
   }
   // plaquinha das mesas com dono (o mundo esconde quando o dono está sentado nela)
   for (const m of members) {
@@ -87,9 +98,9 @@ export function LabelLayer() {
       ))}
       {items.map((it) => (
         <div key={it.id} ref={(el) => { if (el) elements.set(it.id, el); else elements.delete(it.id); }} style={{ display: 'none' }}>
-          <div className={`nametag ${it.me ? 'me' : ''} ${it.onClick ? 'clickable' : ''} ${it.desk ? 'desk' : ''} ${it.away ? 'away' : ''}`} onClick={it.onClick}>
+          <div className={`nametag ${it.me ? 'me' : ''} ${it.onClick ? 'clickable' : ''} ${it.desk ? 'desk' : ''} ${it.away ? 'away' : ''} ${it.copa ? 'copa' : ''}`} onClick={it.onClick} title={it.title}>
             {it.emoji ? <div className="bubble emoji">{it.emoji}</div> : it.status && <div className={`bubble ${it.statusClass}`}>{it.status}</div>}
-            {!it.me && <span className="dot" style={{ background: it.color }} />}
+            {!it.me && !it.copa && <span className="dot" style={{ background: it.color }} />}
             {it.name}
             {it.sub && <small>{it.sub}</small>}
           </div>

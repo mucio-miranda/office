@@ -1388,3 +1388,6 @@ label.check input { width: auto; height: auto; }
 /* arrastar arquivo até o chat */
 .composer.drop-on { outline: 2px dashed var(--muted-foreground); outline-offset: 2px; border-radius: 10px; }
 .composer.drop-on textarea { background: var(--accent); }
+
+/* contador dos parados na copa */
+.nametag.copa { pointer-events: auto; cursor: help; opacity: 0.85; }

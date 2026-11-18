@@ -343,10 +343,13 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
   return <Avatar anchorId={`user:${pr.userId}`} color={pr.color} look={pr.look} p={p} getState={() => cur.current} />;
 }
 
-/** Os funcionários ativos com o lugar de cada um: na sala do trabalho ou na copa, lado a lado. */
+/**
+ * Funcionários no mapa: só quem está trabalhando ou esperando você, na sala do trabalho. Os parados não andam pela copa
+ * (viravam um amontoado): aparecem num contador só, em cima da mesa da copa, e na Equipe.
+ */
 export function workerSpots(workers: Worker[]) {
   const count: Record<string, number> = {};
-  return workers.filter((w) => isWorkerVisible(w)).map((w) => [w, workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1))] as const);
+  return workers.filter((w) => isWorkerVisible(w) && w.state !== 'copa').map((w) => [w, workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1))] as const);
 }
 const WORKER_RING: Record<Worker['state'], string | null> = { copa: null, trabalhando: '#2563eb', aguardando: '#f59e0b' };
 
