@@ -1358,3 +1358,19 @@ label.check input { width: auto; height: auto; }
 .team-row.archived { opacity: .6; }
 .team-past summary { cursor: pointer; padding: 4px 8px; }
 .nav-collapsed .who-badge, .nav-collapsed .team-count { display: none; }
+
+/* conversa direta entre pessoas */
+.dm-page { display: flex; flex-direction: column; height: 100%; max-width: 900px; margin: 0 auto; }
+.dm-head { display: flex; align-items: center; gap: 12px; padding: 16px 20px; border-bottom: 1px solid var(--border); }
+.dm-head .avatar { width: 36px; height: 36px; font-size: 15px; }
+.dm-who { display: flex; flex-direction: column; min-width: 0; }
+.dm-list { flex: 1; min-height: 0; overflow: auto; padding: 16px 20px; display: flex; flex-direction: column; gap: 6px; }
+.dm-empty { text-align: center; margin-top: 40px; }
+.dm-day { text-align: center; margin: 10px 0 4px; text-transform: capitalize; }
+.dm-msg { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.dm-msg.mine { align-items: flex-end; }
+.dm-bubble { max-width: min(560px, 80%); padding: 8px 12px; border-radius: 14px 14px 14px 4px; background: var(--muted); white-space: pre-wrap; word-break: break-word; font-size: 14px; line-height: 20px; }
+.dm-msg.mine .dm-bubble { border-radius: 14px 14px 4px 14px; background: var(--foreground); color: var(--background); }
+.dm-time { font-size: 10px; padding: 0 4px; }
+.dm-composer { display: flex; gap: 8px; align-items: flex-end; padding: 12px 20px 16px; border-top: 1px solid var(--border); }
+.dm-composer textarea { flex: 1; resize: none; }

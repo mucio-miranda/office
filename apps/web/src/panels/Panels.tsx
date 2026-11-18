@@ -5,6 +5,7 @@ import { Moodboard } from './Moodboard';
 import { Clients } from './Clients';
 import { CalendarPanel } from './CalendarPanel';
 import { PostsPanel } from './PostsPanel';
+import { PersonChat } from './PersonChat';
 import { MonthPanel } from './MonthPanel';
 import { Finance } from './Finance';
 import { AgentPanel } from './AgentPanel';
@@ -20,6 +21,7 @@ export const PAGE_TITLE = {
   demandas: 'Demandas',
   calendario: 'Calendário',
   posts: 'Posts',
+  pessoa: 'Conversa',
   mes: 'Gestão do mês',
   financeiro: 'Financeiro',
   video: 'Estúdio de vídeo',
@@ -32,7 +34,7 @@ export const PAGE_TITLE = {
 /** Páginas que aparecem no lugar do mundo 3D (o mundo continua montado, pausado, por trás). */
 export function Pages() {
   const panel = useStore((s) => s.panel);
-  const flush = panel === 'agente' || panel === 'video' || panel === 'arquivo' || panel === 'moodboard';
+  const flush = panel === 'pessoa' || panel === 'agente' || panel === 'video' || panel === 'arquivo' || panel === 'moodboard';
   return (
     <div className={`page-body ${flush ? 'flush' : ''}`} style={{ position: 'absolute', inset: 0 }}>
       {panel === 'mesa' && <Mesa />}
@@ -41,6 +43,7 @@ export function Pages() {
       {panel === 'demandas' && <Demands />}
       {panel === 'calendario' && <CalendarPanel />}
       {panel === 'posts' && <PostsPanel />}
+      {panel === 'pessoa' && <PersonChat />}
       {panel === 'mes' && <MonthPanel />}
       {panel === 'financeiro' && <Finance />}
       {panel === 'agente' && <AgentPanel />}

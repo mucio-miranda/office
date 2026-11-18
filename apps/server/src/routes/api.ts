@@ -6,14 +6,14 @@ import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import { POST_FORMATS, POST_STATUSES, MONTH_STEPS, CHECK_STATES, MONTH_STEP_LABEL,
   BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, PROCESSES, WALL_TYPES, processById, uid,
-  type AgentJob, type AgentProfile, type Worker, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
+  type AgentJob, type AgentProfile, type Worker, type DirectMessage, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
 import {
   MIN_PIN, externalAccess, viaTunnel, attemptKeys, blocked, checkPin, checkResetCode, clearFails, createResetCode, createSession, hashPin, isLocal, membership, noteFail,
   requireFinance, requireMember, requireWorker, seesFinance, requireOwner, requireUser, revokeSession, revokeSessions, sessionCookie, setPin,
 } from '../auth.ts';
-import { disconnectUser, invalidate, onlineUsers, refreshPresence } from '../realtime.ts';
+import { disconnectUser, invalidate, onlineUsers, refreshPresence, sendToUsers } from '../realtime.ts';
 import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts';
 import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
@@ -402,6 +402,45 @@ export async function api(app: FastifyInstance) {
         members: members(officeId),
         online: onlineUsers(officeId).map((p) => p.userId),
       };
+    });
+
+    // conversa direta entre duas pessoas do escritório: só as duas leem e recebem
+    const dmPeer = (req: FastifyRequest, reply: FastifyReply) => {
+      if (!requireMember(req, reply)) return null;
+      const { officeId, userId } = req.params as { officeId: string; userId: string };
+      if (userId === req.user.id) { reply.code(400).send({ error: 'Essa conversa é com você mesmo.' }); return null; }
+      if (!one('SELECT user_id FROM office_members WHERE office_id = ? AND user_id = ?', officeId, userId)) { reply.code(404).send({ error: 'Essa pessoa não é deste escritório.' }); return null; }
+      return { officeId, userId };
+    };
+    r.get('/api/offices/:officeId/dm/:userId', async (req, reply) => {
+      const p = dmPeer(req, reply);
+      if (!p) return;
+      const rows = all<DirectMessage>(
+        `SELECT * FROM direct_messages WHERE office_id = ? AND ((from_user = ? AND to_user = ?) OR (from_user = ? AND to_user = ?))
+         ORDER BY created_at DESC LIMIT 300`, p.officeId, req.user.id, p.userId, p.userId, req.user.id);
+      return rows.reverse();
+    });
+    r.post('/api/offices/:officeId/dm/:userId', async (req, reply) => {
+      const p = dmPeer(req, reply);
+      if (!p) return;
+      const b = body(z.object({ text: z.string().trim().min(1).max(4000) }), req, reply);
+      if (!b) return;
+      const message: DirectMessage = { id: uid(), officeId: p.officeId, fromUser: req.user.id, toUser: p.userId, text: b.text, createdAt: now(), readAt: null };
+      insert('direct_messages', message as never);
+      sendToUsers(p.officeId, [req.user.id, p.userId], { t: 'dm', message });
+      return message;
+    });
+    r.post('/api/offices/:officeId/dm/:userId/lida', async (req, reply) => {
+      const p = dmPeer(req, reply);
+      if (!p) return;
+      db.prepare('UPDATE direct_messages SET read_at = ? WHERE office_id = ? AND from_user = ? AND to_user = ? AND read_at IS NULL').run(now(), p.officeId, p.userId, req.user.id);
+      return { ok: true };
+    });
+    // não lidas por pessoa, para o contador da lista Equipe
+    r.get('/api/offices/:officeId/dm', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const rows = all<{ fromUser: string; n: number }>('SELECT from_user, COUNT(*) AS n FROM direct_messages WHERE office_id = ? AND to_user = ? AND read_at IS NULL GROUP BY from_user', (req.params as any).officeId, req.user.id);
+      return Object.fromEntries(rows.map((r) => [r.fromUser, r.n]));
     });
 
     r.get('/api/offices/:officeId/members', async (req, reply) => {

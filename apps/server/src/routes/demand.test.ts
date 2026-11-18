@@ -248,3 +248,26 @@ test('funcionário = sessão do cliente: nasce com o primeiro pedido, tem nome d
   assert.notEqual(novo.id, titular.id);
   assert.equal(novo.name, 'Duda', 'o nome arquivado não volta logo');
 });
+
+test('conversa direta: só as duas pessoas leem, a não lida conta para quem recebeu e some ao abrir', async () => {
+  const { createSession } = await import('../auth.ts');
+  const officeId = O.split('/').pop()!;
+  db.prepare("INSERT INTO users (id, name, color, created_at) VALUES ('u-bia', 'Bia Teste', '#123456', ?)").run(new Date().toISOString());
+  db.prepare("INSERT INTO office_members (office_id, user_id, role) VALUES (?, 'u-bia', 'membro')").run(officeId);
+  db.prepare("INSERT INTO users (id, name, color, created_at) VALUES ('u-fora', 'De Fora', '#654321', ?)").run(new Date().toISOString());
+  const bia = createSession('u-bia');
+  const as = async (tk: string, method: string, url: string, payload?: unknown) => {
+    const res = await app.inject({ method: method as 'GET', url, remoteAddress: '127.0.0.1', headers: { host: 'localhost', authorization: `Bearer ${tk}` }, ...(payload ? { payload: payload as object } : {}) });
+    return { status: res.statusCode, json: res.body ? JSON.parse(res.body) : {} };
+  };
+  const me = (await call('GET', '/api/me')).json.user.id;
+  assert.equal((await call('POST', `${O}/dm/u-bia`, { text: 'Oi, Bia! Viu a arte?' })).status, 200);
+  assert.equal((await call('POST', `${O}/dm/u-fora`, { text: 'oi' })).status, 404, 'só gente do escritório');
+  assert.equal((await call('POST', `${O}/dm/${me}`, { text: 'oi' })).status, 400, 'não conversa consigo');
+  assert.deepEqual((await as(bia, 'GET', `${O}/dm`)).json, { [me]: 1 }, 'a Bia tem uma não lida');
+  const conv = (await as(bia, 'GET', `${O}/dm/${me}`)).json;
+  assert.deepEqual(conv.map((m: any) => m.text), ['Oi, Bia! Viu a arte?']);
+  await as(bia, 'POST', `${O}/dm/${me}/lida`, {});
+  assert.deepEqual((await as(bia, 'GET', `${O}/dm`)).json, {}, 'lida ao abrir');
+  assert.deepEqual((await call('GET', `${O}/dm`)).json, {}, 'quem mandou não tem não lida');
+});

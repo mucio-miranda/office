@@ -268,11 +268,11 @@ function UpdateCard() {
 }
 
 /**
- * Equipe: as pessoas e os funcionários de IA numa lista só. Pessoa: selo Humano, onde está (clicar leva até ela; o chat
- * direto entra depois). IA: selo IA e o cliente ou projeto dele; clicar abre a conversa daquele cliente.
+ * Equipe: as pessoas e os funcionários de IA numa lista só. Pessoa: selo Humano e onde está; clicar abre a conversa
+ * direta com ela. IA: selo IA e o cliente ou projeto dele; clicar abre a conversa daquele cliente.
  */
 function TeamList({ onNavigate }: { onNavigate: () => void }) {
-  const { members, workers, clients, presences, user, open, notify, panel, panelArg } = useStore();
+  const { members, workers, clients, presences, user, open, panel, panelArg, dmUnread } = useStore();
   const people = members.filter((m) => m.id !== user?.id);
   const active = workers.filter((w) => !w.archivedAt);
   const rank = { aguardando: 0, trabalhando: 1, copa: 2 } as const;
@@ -284,10 +284,10 @@ function TeamList({ onNavigate }: { onNavigate: () => void }) {
       {people.map((m) => {
         const pr = presences[m.id];
         return (
-          <button key={m.id} className="nav-item agent-row person-row" onClick={() => { if (pr) { goToPerson(pr); onNavigate(); } else notify(`${m.name} está fora do escritório agora.`); }} title={pr ? `Ir até ${m.name}` : `${m.name} está fora`}>
+          <button key={m.id} className={`nav-item agent-row person-row ${panel === 'pessoa' && panelArg === m.id ? 'active' : ''}`} onClick={() => { open('pessoa', m.id); onNavigate(); }} title={`Conversar com ${m.name}`}>
             <span className={`avatar ${pr ? `ps-${pr.status}` : 'ps-ausente'}`} style={{ background: m.color }}>{m.name[0]}<span className="status-dot" /></span>
             <div className="truncate"><span className="truncate">{m.name} <span className="who-badge human">Humano</span></span><small className="truncate">{pr ? ROOMS.find((r) => r.id === pr.room)?.label ?? 'Área externa' : 'fora'}</small></div>
-            {pr && <Navigation size={13} className="go" />}
+            {dmUnread[m.id] ? <span className="count alert" title="Mensagens não lidas">{dmUnread[m.id]}</span> : null}
           </button>
         );
       })}

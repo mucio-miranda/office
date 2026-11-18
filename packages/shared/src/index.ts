@@ -686,6 +686,8 @@ export type ServerMsg =
   | { t: 'presence'; presence: Presence }
   | { t: 'leave'; userId: ID }
   | { t: 'chat'; from: ID; name: string; text: string; room: RoomId | null; at: string }
+  /** Mensagem direta entre duas pessoas: só chega para as duas. */
+  | { t: 'dm'; message: DirectMessage }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
   | { t: 'invalidate'; what: 'workers' | 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
@@ -728,4 +730,15 @@ export interface Worker {
   room: string;
   createdAt: string;
   archivedAt: string | null;
+}
+
+/** Conversa direta entre duas pessoas da equipe (a chamada de vídeo entra depois, no mesmo lugar). */
+export interface DirectMessage {
+  id: ID;
+  officeId: ID;
+  fromUser: ID;
+  toUser: ID;
+  text: string;
+  createdAt: string;
+  readAt: string | null;
 }

@@ -1,4 +1,4 @@
-import { canSeeFinance, type ContentPost, type Worker } from '@office/shared';
+import { canSeeFinance, type ContentPost, type DirectMessage, type Worker } from '@office/shared';
 import { create } from 'zustand';
 import type {
   AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, CustomRoom, DecorItem, Demand, JobMessage, LiveSession, Member, Office, Presence, RoomId, ServerMsg, ToolInfo, Transaction, User, Vec2, WallType,
@@ -7,7 +7,7 @@ import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
 import { setAgentDesks, setCustomRooms, setWallStyles } from '../office/layout';
 
-export type PanelId = 'posts' | 'mes' | 'mesa' | 'moodboard' | 'clientes' | 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | 'arquivo' | null;
+export type PanelId = 'pessoa' | 'posts' | 'mes' | 'mesa' | 'moodboard' | 'clientes' | 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | 'arquivo' | null;
 
 export interface ChatLine { from: string; name: string; text: string; at: string; room: RoomId | null }
 export interface RenderState { progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string }
@@ -53,6 +53,12 @@ interface State {
 
   presences: Record<string, Presence>;
   chat: ChatLine[];
+  /** Conversas diretas por pessoa (carregadas ao abrir) e quantas não lidas cada uma tem. */
+  dms: Record<string, DirectMessage[]>;
+  dmUnread: Record<string, number>;
+  loadDm(userId: string): Promise<void>;
+  sendDm(userId: string, text: string): Promise<boolean>;
+  markDmRead(userId: string): void;
   emotes: Record<string, { emoji: string; at: number }>;
 
   panel: PanelId;
@@ -97,7 +103,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
   demands: [], events: [], transactions: [], posts: [], clients: [], agents: [], workers: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, mapRev: 0, monthsRev: 0,
-  presences: {}, chat: [], emotes: {},
+  presences: {}, chat: [], emotes: {}, dms: {}, dmUnread: {},
   panel: null, panelArg: null, newDemand: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
 
@@ -134,7 +140,8 @@ export const useStore = create<State>((set, get) => ({
     const me = await api('/api/me');
     const office = me.offices.find((o: OfficeWithRole) => o.id === id) ?? info.office;
     try { localStorage.setItem('office.last', id); } catch { /* ok */ }
-    set({ office, offices: me.offices, members: info.members, presences: {}, chat: [], messages: {} });
+    set({ office, offices: me.offices, members: info.members, presences: {}, chat: [], messages: {}, dms: {}, dmUnread: {} });
+    api<Record<string, number>>(`/api/offices/${office.id}/dm`).then((dmUnread) => set({ dmUnread })).catch(() => {});
     await Promise.all((['demands', 'events', 'transactions', 'posts', 'clients', 'agents', 'workers', 'jobs', 'timelines', 'live', 'layout', 'rooms', 'walls'] as const).map((w) => get().reload(w)));
     connect(id);
   },
@@ -144,6 +151,26 @@ export const useStore = create<State>((set, get) => ({
     ws = null;
     try { localStorage.removeItem('office.last'); } catch { /* ok */ }
     set({ office: null, panel: null, tour: null });
+  },
+
+  async loadDm(userId) {
+    const o = get().office;
+    if (!o) return;
+    const list = await api<DirectMessage[]>(`/api/offices/${o.id}/dm/${userId}`);
+    set((st) => ({ dms: { ...st.dms, [userId]: list } }));
+  },
+
+  async sendDm(userId, text) {
+    const o = get().office;
+    if (!o) return false;
+    try { await api(`/api/offices/${o.id}/dm/${userId}`, { body: { text } }); return true; } catch (e) { get().notify((e as Error).message); return false; }
+  },
+
+  markDmRead(userId) {
+    const o = get().office;
+    if (!o || !get().dmUnread[userId]) return;
+    set((st) => { const u = { ...st.dmUnread }; delete u[userId]; return { dmUnread: u }; });
+    api(`/api/offices/${o.id}/dm/${userId}/lida`, { body: {} }).catch(() => {});
   },
 
   async reload(what) {
@@ -286,6 +313,21 @@ function handle(m: ServerMsg) {
     case 'emote':
       showEmote(m.from, m.emoji);
       break;
+    case 'dm': {
+      const me = s.user?.id;
+      const peer = m.message.fromUser === me ? m.message.toUser : m.message.fromUser;
+      useStore.setState((st) => (st.dms[peer] ? { dms: { ...st.dms, [peer]: [...st.dms[peer], m.message] } } : {}));
+      if (m.message.fromUser !== me) {
+        const viewing = s.panel === 'pessoa' && s.panelArg === peer;
+        const name = s.members.find((x) => x.id === peer)?.name ?? 'Alguém';
+        if (!viewing) {
+          useStore.setState((st) => ({ dmUnread: { ...st.dmUnread, [peer]: (st.dmUnread[peer] ?? 0) + 1 } }));
+          s.notify(`${name}: ${m.message.text.slice(0, 80)}`);
+          desktop?.notify({ title: `${name} mandou uma mensagem`, body: m.message.text.slice(0, 140), panel: 'pessoa', arg: peer });
+        }
+      }
+      break;
+    }
     case 'invalidate':
       if (m.what === 'months') useStore.setState((st) => ({ monthsRev: st.monthsRev + 1 }));
       else s.reload(m.what);
@@ -298,15 +340,19 @@ function handle(m: ServerMsg) {
       const prev = s.jobs.find((j) => j.id === m.job.id);
       useStore.setState((st) => ({ jobs: prev ? st.jobs.map((j) => (j.id === m.job.id ? m.job : j)) : [m.job, ...st.jobs] }));
       if (prev && prev.status !== m.job.status) {
+        // o funcionário é a sessão do cliente: o aviso leva para a conversa daquele cliente
+        const w = m.job.workerId ? s.workers.find((x) => x.id === m.job.workerId) : undefined;
         const a = s.agents.find((x) => x.id === m.job.agentId);
-        const name = a?.name ?? 'Um funcionário';
+        const client = m.job.clientId ? s.clients.find((c) => c.id === m.job.clientId) : undefined;
+        const name = w ? `${w.name}${client ? ` (${client.name})` : ''}` : m.job.stage === 'aprovacao' ? 'A revisão da IA' : a?.name ?? 'Um funcionário';
         const task = m.job.prompt.replace(/^## Demanda: /, '').split(/\r?\n/)[0].slice(0, 120);
+        const go = m.job.clientId ? { panel: 'clientes', arg: m.job.clientId } : { panel: 'agente', arg: m.job.agentId };
         if (m.job.status === 'aguardando') {
-          s.notify(`${name} precisa da sua aprovação`, { agentId: m.job.agentId });
-          desktop?.notify({ title: `${name} precisa de você`, body: task, panel: 'agente', arg: m.job.agentId });
+          s.notify(`${name} precisa da sua aprovação`, w ? undefined : { agentId: m.job.agentId });
+          desktop?.notify({ title: `${name} precisa de você`, body: task, ...go });
         } else if (m.job.status === 'concluido') {
-          s.notify(`${name} terminou`, { agentId: m.job.agentId });
-          desktop?.notify({ title: `${name} terminou`, body: task, panel: 'agente', arg: m.job.agentId });
+          s.notify(`${name} terminou`, w ? undefined : { agentId: m.job.agentId });
+          desktop?.notify({ title: `${name} terminou`, body: task, ...go });
         }
       }
       break;

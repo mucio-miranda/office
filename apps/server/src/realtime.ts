@@ -16,6 +16,12 @@ export function broadcast(officeId: string, msg: ServerMsg, except?: Conn) {
   for (const c of conns) if (c.officeId === officeId && c !== except && c.ws.readyState === 1) c.ws.send(data);
 }
 
+/** Só para estas pessoas (mensagem direta), em todas as abas abertas delas neste escritório. */
+export function sendToUsers(officeId: string, userIds: string[], msg: ServerMsg) {
+  const data = JSON.stringify(msg);
+  for (const c of conns) if (c.officeId === officeId && userIds.includes(c.presence.userId) && c.ws.readyState === 1) c.ws.send(data);
+}
+
 export const invalidate = (officeId: string, what: Extract<ServerMsg, { t: 'invalidate' }>['what']) =>
   broadcast(officeId, { t: 'invalidate', what });
 

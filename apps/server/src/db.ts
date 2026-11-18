@@ -159,6 +159,11 @@ const MIGRATIONS: string[] = [
    CREATE INDEX workers_client ON workers(office_id, client_id, archived_at);
    ALTER TABLE jobs ADD COLUMN worker_id TEXT;
    ALTER TABLE clients ADD COLUMN kind TEXT NOT NULL DEFAULT 'cliente';`,
+  // v0.16: conversa direta entre as pessoas da equipe
+  `CREATE TABLE direct_messages (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+     from_user TEXT NOT NULL, to_user TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL, read_at TEXT);
+   CREATE INDEX direct_messages_pair ON direct_messages(office_id, from_user, to_user, created_at);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');
