@@ -148,6 +148,8 @@ const MIGRATIONS: string[] = [
      id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE, client_id TEXT NOT NULL,
      month TEXT NOT NULL, renames TEXT NOT NULL, created_at TEXT NOT NULL, created_by TEXT, undone_at TEXT);
    ALTER TABLE clients ADD COLUMN post_days TEXT NOT NULL DEFAULT '[1,3,5]';`,
+  // v0.15: agenda da social media — dia e hora em que o post foi agendado
+  `ALTER TABLE content_posts ADD COLUMN scheduled_at TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

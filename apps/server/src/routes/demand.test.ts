@@ -187,3 +187,22 @@ test('reinício (atualização): a tarefa que rodava volta para a fila sozinha; 
   recoverJobs();
   assert.equal(status(), 'erro', 'não entra em ciclo');
 });
+
+test('agenda da social media: agendar com hora, marcar postado e desfazer só mudam o registro', async () => {
+  const post = db.prepare("SELECT id, client_id AS clientId, date, theme, format FROM content_posts WHERE status != 'cancelado' LIMIT 1").get() as any;
+  const mes = post.date.slice(0, 7);
+  const base = { clientId: post.clientId, postId: post.id, files: [], theme: post.theme, format: post.format, date: `${mes}-20` };
+  let r = await call('POST', `${O}/agenda`, { ...base, time: '18:30', state: 'agendado', caption: 'Legenda nova' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.status, 'programado');
+  assert.equal(r.json.scheduledAt, `${mes}-20T18:30`);
+  let item = (await call('GET', `${O}/agenda?mes=${mes}&cliente=${post.clientId}`)).json.find((i: any) => i.postId === post.id);
+  assert.deepEqual([item.state, item.time, item.caption], ['agendado', '18:30', 'Legenda nova']);
+  r = await call('POST', `${O}/agenda`, { ...base, state: 'postado' });
+  assert.equal(r.json.status, 'postado');
+  r = await call('POST', `${O}/agenda`, { ...base, state: 'pronto', time: null });
+  assert.equal(r.json.status, 'drive');
+  assert.equal(r.json.scheduledAt, null);
+  assert.equal((await call('POST', `${O}/agenda`, { ...base, files: ['C:/Windows/win.ini'], state: 'agendado' })).status, 403, 'arquivo fora do escritório');
+  assert.equal((await call('POST', `${O}/agenda`, { ...base, time: '25h', state: 'agendado' })).status, 409);
+});

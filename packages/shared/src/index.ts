@@ -374,6 +374,8 @@ export interface ContentPost {
   finals: string[];
   /** Cada arquivo entregue na pasta do mês, com o link do Drive quando o upload termina. */
   deliveries: PostDelivery[];
+  /** Quando a social media agendou (AAAA-MM-DDTHH:MM). */
+  scheduledAt?: string | null;
   updatedAt: string;
   updatedBy: string | null;
 }

@@ -4,6 +4,7 @@ import { Mesa } from './Mesa';
 import { Moodboard } from './Moodboard';
 import { Clients } from './Clients';
 import { CalendarPanel } from './CalendarPanel';
+import { PostsPanel } from './PostsPanel';
 import { MonthPanel } from './MonthPanel';
 import { Finance } from './Finance';
 import { AgentPanel } from './AgentPanel';
@@ -18,6 +19,7 @@ export const PAGE_TITLE = {
   clientes: 'Clientes',
   demandas: 'Demandas',
   calendario: 'Calendário',
+  posts: 'Posts',
   mes: 'Gestão do mês',
   financeiro: 'Financeiro',
   video: 'Estúdio de vídeo',
@@ -38,6 +40,7 @@ export function Pages() {
       {panel === 'clientes' && <Clients />}
       {panel === 'demandas' && <Demands />}
       {panel === 'calendario' && <CalendarPanel />}
+      {panel === 'posts' && <PostsPanel />}
       {panel === 'mes' && <MonthPanel />}
       {panel === 'financeiro' && <Finance />}
       {panel === 'agente' && <AgentPanel />}

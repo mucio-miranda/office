@@ -7,7 +7,7 @@ import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
 import { setAgentDesks, setCustomRooms, setWallStyles } from '../office/layout';
 
-export type PanelId = 'mes' | 'mesa' | 'moodboard' | 'clientes' | 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | 'arquivo' | null;
+export type PanelId = 'posts' | 'mes' | 'mesa' | 'moodboard' | 'clientes' | 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | 'arquivo' | null;
 
 export interface ChatLine { from: string; name: string; text: string; at: string; room: RoomId | null }
 export interface RenderState { progress: number; status: 'rodando' | 'concluido' | 'erro'; output?: string; error?: string }

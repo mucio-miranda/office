@@ -35,6 +35,8 @@ import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '
 import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePlan, saveCheck, undoRenames } from '../clients/month.ts';
 import { thumbOf } from '../clients/thumb.ts';
 import { clientBase, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
+import { agendaOf, schedule, type ScheduleInput } from '../agents/agenda.ts';
+import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
@@ -781,6 +783,36 @@ export async function api(app: FastifyInstance) {
         return typeof res === 'string' ? reply.code(409).send({ error: res }) : res;
       });
     }
+    // agenda da social media: o que está pronto na pasta do mês, em produção, agendado e postado
+    r.get('/api/offices/:officeId/agenda', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as any;
+      const q = req.query as { mes?: string; cliente?: string };
+      if (!q.mes || !/^\d{4}-\d{2}$/.test(q.mes)) return reply.code(400).send({ error: 'Mês inválido (use AAAA-MM).' });
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      return agendaOf(office, q.mes, q.cliente || null);
+    });
+    r.post('/api/offices/:officeId/agenda', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { officeId } = req.params as any;
+      const b = (req.body ?? {}) as ScheduleInput & { clientId?: string };
+      if (!b.clientId || !one('SELECT id FROM clients WHERE id = ? AND office_id = ?', b.clientId, officeId)) return reply.code(400).send({ error: 'Cliente inválido.' });
+      if (!['pronto', 'agendado', 'postado'].includes(b.state)) return reply.code(400).send({ error: 'Estado inválido.' });
+      const files = Array.isArray(b.files) ? b.files.map(String).slice(0, 40) : [];
+      if (files.some((f) => !inside(officeId, f))) return reply.code(403).send({ error: 'Arquivo fora das pastas do escritório.' });
+      try {
+        return schedule(officeId, b.clientId, { ...b, files, theme: String(b.theme ?? '').slice(0, 200) }, `user:${req.user.id}`);
+      } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
+    });
+    // link do Drive de qualquer arquivo ou pasta do escritório (o Drive para computador precisa já ter sincronizado)
+    r.get('/api/offices/:officeId/link', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId } = req.params as any;
+      const file = path.resolve(String((req.query as any).path ?? ''));
+      if (!inside(officeId, file) || !existsSync(file)) return reply.code(404).send({ error: 'Arquivo não encontrado' });
+      return { link: statSync(file).isDirectory() ? driveFolderLink(file) : driveFileLink(file) };
+    });
+
     // as peças do post para ver no calendário, com a pasta do mês e o link do Drive
     r.get('/api/offices/:officeId/posts/:id/pecas', async (req, reply) => {
       if (!requireMember(req, reply)) return;
