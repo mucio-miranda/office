@@ -298,7 +298,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
   const dir = path.join(config.dataDir, 'jobs', jobId);
   mkdirSync(dir, { recursive: true });
   // trabalho de cliente roda só com as skills, como no terminal: sem app aberto na tela nem servidores extras
-  const isProcess = !!job.stage || isHelper;
+  // trabalho de cliente (conversa, ajudante, virada de mês) roda só com as skills: nenhum app abre na tela
+  const isProcess = !!job.stage || isHelper || !!job.clientId;
   // modo ao vivo: o app abre na tela e o servidor MCP vira uma ponte para a janela
   const liveIds = isProcess ? [] : (agent.live ?? []).filter((id) => (agent.mcp ?? []).includes(id));
   let bridges = {};
@@ -319,6 +320,9 @@ async function start(jobId: string, typed: string, resume: boolean) {
   }
   // ferramentas criativas instaladas: um servidor MCP por ferramenta, com as pastas do escritório
   const mcp = mcpConfig(isProcess ? [] : agent.mcp ?? [], office, bridges);
+  // funcionário que assumiu na virada do mês: a primeira conversa começa pela passagem do anterior
+  const handoff = !isHelper && !session && job.workerId ? one<{ handoff: string | null }>('SELECT handoff FROM workers WHERE id = ?', job.workerId)?.handoff : null;
+  if (handoff && existsSync(handoff)) mcp.hints.push(`- **Passagem de bastão**: antes de começar, leia \`${handoff}\`, escrita pelo funcionário que cuidou deste cliente antes de você.`);
   const usesChrome = !reviewer && agent.allowedTools.includes('mcp__claude-in-chrome');
   const token = (job.clientId && !reviewer) || usesChrome ? issueJobToken(jobId) : null;
   // calendário de conteúdo: toda tarefa de cliente pode ler e atualizar o dele

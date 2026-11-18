@@ -28,12 +28,17 @@ export function Finance() {
   const base = `/api/offices/${office!.id}`;
   useEffect(() => { api(`${base}/metrics`).then(setM); }, [transactions, clients, base]);
 
+  // a análise vai para a conversa do projeto da agência (o projeto com o nome do escritório, ou o primeiro projeto)
+  const projects = useStore((s) => s.clients).filter((c) => c.kind === 'projeto' && c.status !== 'encerrado');
+  const home = projects.find((c) => office && c.name.toLowerCase().includes(office.name.toLowerCase().split(/\s+/)[0])) ?? projects[0];
   const askManager = async () => {
     const rafa = agents.find((a) => a.slug === 'gerente');
     if (!rafa) return;
-    await api(`${base}/jobs`, { body: { agentId: rafa.id, prompt: 'Faça a análise financeira e operacional do mês: margem por cliente, inadimplência, demandas paradas ou atrasadas, e 3 ações prioritárias para esta semana.' } });
-    notify(`${rafa.name} está analisando os números`);
-    open('agente', rafa.id);
+    try {
+      await api(`${base}/jobs`, { body: { agentId: rafa.id, clientId: home?.id ?? null, prompt: 'Faça a análise financeira e operacional do mês: margem por cliente, inadimplência, demandas paradas ou atrasadas, e 3 ações prioritárias para esta semana.' } });
+    } catch (e) { notify((e as Error).message); return; }
+    if (home) { notify(`Análise pedida na conversa de ${home.name}`); open('clientes', home.id); }
+    else { notify(`${rafa.name} está analisando os números. Marque a agência como Projeto (ajustes do cliente) para a análise ficar na conversa dela.`); open('agente', rafa.id); }
   };
 
   return (
@@ -44,7 +49,7 @@ export function Finance() {
             <button key={t} className={tab === t ? 'active' : ''} onClick={() => setTab(t)}>{{ resumo: 'Resumo', clientes: 'Clientes', lancamentos: 'Lançamentos' }[t]}</button>
           ))}
         </div>
-        <button onClick={askManager}><Sparkles size={14} /> Pedir análise ao gerente</button>
+        <button onClick={askManager}><Sparkles size={14} /> Pedir análise</button>
       </div>
 
       {tab === 'resumo' && m && (

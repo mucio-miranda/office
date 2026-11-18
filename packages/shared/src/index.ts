@@ -730,6 +730,8 @@ export interface Worker {
   room: string;
   createdAt: string;
   archivedAt: string | null;
+  /** Passagem de bastão do funcionário anterior (virada de mês), lida antes de começar. */
+  handoff?: string | null;
 }
 
 /** Conversa direta entre duas pessoas da equipe (a chamada de vídeo entra depois, no mesmo lugar). */

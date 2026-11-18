@@ -155,7 +155,7 @@ const MIGRATIONS: string[] = [
      id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
      client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE, name TEXT NOT NULL, color TEXT NOT NULL,
      role TEXT NOT NULL DEFAULT 'titular', parent_id TEXT, state TEXT NOT NULL DEFAULT 'copa', room TEXT NOT NULL DEFAULT 'copa',
-     created_at TEXT NOT NULL, created_by TEXT, archived_at TEXT);
+     created_at TEXT NOT NULL, created_by TEXT, archived_at TEXT, handoff TEXT);
    CREATE INDEX workers_client ON workers(office_id, client_id, archived_at);
    ALTER TABLE jobs ADD COLUMN worker_id TEXT;
    ALTER TABLE clients ADD COLUMN kind TEXT NOT NULL DEFAULT 'cliente';`,

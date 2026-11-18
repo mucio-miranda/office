@@ -302,3 +302,22 @@ test('ajudante: o funcionário pede, uma pessoa aprova, ele trabalha em sessão 
   await wait(() => !(db.prepare("SELECT 1 FROM jobs WHERE status IN ('fila','rodando')").get()));
   assert.equal((db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id) as any).status, 'concluido', 'o titular seguiu com o resultado');
 });
+
+test('virada de mês: o titular escreve a passagem, é arquivado e outro assume; quem começou neste mês não vira sozinho', async () => {
+  const { monthlyTurnover } = await import('../agents/pipeline.ts');
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  const officeId = O.split('/').pop()!;
+  db.prepare("UPDATE clients SET session_id = 'sessao-de-teste' WHERE id = ?").run(c.id);
+  assert.equal(monthlyTurnover(), 0, 'titular criado neste mês fica');
+  const before = db.prepare("SELECT id, name FROM workers WHERE client_id = ? AND role = 'titular' AND archived_at IS NULL").get(c.id) as any;
+  const r = await call('POST', `${O}/clients/${c.id}/virada`, {});
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const turn = db.prepare("SELECT * FROM jobs WHERE prompt LIKE '## Virada de mês%' AND client_id = ?").get(c.id) as any;
+  assert.ok(turn.prompt.includes('PASSAGEM '), 'pede o arquivo da passagem');
+  await wait(() => !!(db.prepare('SELECT archived_at FROM workers WHERE id = ?').get(before.id) as any).archived_at);
+  const after = db.prepare("SELECT id, name FROM workers WHERE client_id = ? AND role = 'titular' AND archived_at IS NULL").get(c.id) as any;
+  assert.ok(after && after.id !== before.id, `outro assumiu (${before.name} → ${after?.name})`);
+  assert.equal((db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id) as any).session_id, null, 'conversa nova');
+  void officeId;
+});
+

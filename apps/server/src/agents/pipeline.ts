@@ -1,5 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { archiveWorker, titularOf } from './workers.ts';
+import { archiveWorker, createWorker, titularOf } from './workers.ts';
 import { handoffHelper } from './helpers.ts';
 import path from 'node:path';
 import {
@@ -471,6 +471,8 @@ export function onJobCheckpoint(job: AgentJob, finalText: string) {
 export function onJobFinished(job: AgentJob, finalText: string, ok: boolean) {
   // ajudante: o resultado volta para quem pediu e ele é arquivado
   if (handoffHelper(job, finalText, ok)) return;
+  // virada de mês: com a passagem escrita, o titular é arquivado e outro assume lendo ela
+  if (job.prompt.startsWith(TURNOVER)) { finishTurnover(job, ok); return; }
   if (!job.demandId) return;
   const d = getDemand(job.demandId);
   if (!d) return;
@@ -689,4 +691,73 @@ export function publishReminders() {
     patchDemand(d, { publish: { ...p, reminded: true } });
     notice(d.officeId, `Hora de publicar "${d.title}" (${p.networks.map((n) => NETWORK_LABEL[n]).join(', ')}). O pacote está na pasta do cliente.`, { demandId: d.id });
   }
+}
+
+// ---------- virada de mês: um funcionário novo assume com a passagem de bastão ----------
+
+const TURNOVER = '## Virada de mês';
+const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+/** Onde fica a passagem: nos documentos do cliente, `PASSAGEM AAAA-MM.md` (o mês que terminou). */
+export function handoffFile(office: Office, client: Client, month: string) {
+  const dir = jobCwd(office, client);
+  const docs = dir === office.rootPath ? path.join(dir, 'PASSAGENS', folderName(client.name)) : clientPaths(dir).abs('documentos');
+  return path.join(docs, `PASSAGEM ${month}.md`);
+}
+
+/**
+ * O titular escreve a passagem e, quando termina, é arquivado; o próximo pedido chama outro, que lê a passagem antes de
+ * começar. Só com a conversa parada. `month` é o mês que está terminando.
+ */
+export function startTurnover(officeId: string, clientId: string, by: string, month = ym(new Date(Date.now() - 86_400_000))) {
+  const client = getClient(clientId);
+  if (!client) return 'Cliente não encontrado.';
+  const titular = titularOf(officeId, clientId);
+  if (!titular) return 'Este cliente ainda não tem funcionário.';
+  if (!client.sessionId) return `${titular.name} ainda não tem conversa para passar adiante.`;
+  if (one("SELECT id FROM jobs WHERE client_id = ? AND status IN ('fila','rodando','aguardando')", clientId)) return `${titular.name} está trabalhando. A virada acontece quando ele terminar.`;
+  const office = getOffice(officeId);
+  const file = handoffFile(office, client, month);
+  const last = one<AgentJob>('SELECT agent_id FROM jobs WHERE worker_id = ? ORDER BY updated_at DESC LIMIT 1', titular.id);
+  const agentId = last?.agentId ?? one<{ id: string }>("SELECT id FROM agents WHERE office_id = ? ORDER BY slug = 'gerente' DESC LIMIT 1", officeId)!.id;
+  enqueueJob({
+    officeId, agentId, demandId: null, clientId, workerId: titular.id, cwd: jobCwd(office, client), createdBy: by,
+    display: `Virada de mês: ${titular.name} escreve a passagem de bastão`,
+    prompt: [
+      `${TURNOVER} (${month})`,
+      '',
+      `O mês virou e outro funcionário vai assumir ${client.name}. Escreva a passagem de bastão em \`${file}\` (crie a pasta se faltar), em até uma página:`,
+      '- o que foi combinado com o cliente e com a equipe;',
+      '- preferências e correções que viraram regra;',
+      '- o que ficou pendente, com os caminhos dos arquivos;',
+      '- onde estão os materiais mais usados.',
+      '',
+      'Não comece trabalho novo. No fim, responda só com o caminho do arquivo.',
+    ].join('\n'),
+  });
+  return null;
+}
+
+function finishTurnover(job: AgentJob, ok: boolean) {
+  const client = getClient(job.clientId ?? null);
+  if (!client || !ok) return;
+  const file = handoffFile(getOffice(job.officeId), client, job.prompt.match(/\((\d{4}-\d{2})\)/)?.[1] ?? ym(new Date()));
+  const err = resetConversation(client.id);
+  if (err) return;
+  const next = createWorker(job.officeId, client.id, 'titular', `agent:${job.workerId}`);
+  if (existsSync(file)) update('workers', next.id, { handoff: file });
+  notice(job.officeId, `${client.name}: ${next.name} assumiu com a passagem de bastão do mês.`, {});
+}
+
+/** Uma vez por hora: titulares que começaram antes deste mês e estão parados viram o mês (no máximo 5 por vez). */
+export function monthlyTurnover() {
+  const start = new Date(); start.setDate(1); start.setHours(0, 0, 0, 0);
+  const due = all<{ officeId: string; clientId: string }>(
+    `SELECT w.office_id, w.client_id FROM workers w JOIN clients c ON c.id = w.client_id
+     WHERE w.role = 'titular' AND w.archived_at IS NULL AND w.created_at < ? AND c.session_id IS NOT NULL AND c.status != 'encerrado'
+       AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.client_id = w.client_id AND j.status IN ('fila','rodando','aguardando'))
+       AND NOT EXISTS (SELECT 1 FROM jobs j WHERE j.client_id = w.client_id AND j.prompt LIKE '## Virada de mês%' AND j.created_at >= ?)
+     LIMIT 5`, start.toISOString(), start.toISOString());
+  for (const d of due) startTurnover(d.officeId, d.clientId, 'sistema');
+  return due.length;
 }

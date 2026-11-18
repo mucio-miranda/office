@@ -9,6 +9,7 @@ import { api, syncAgentTools } from './routes/api.ts';
 import { handleSocket } from './realtime.ts';
 import { recoverJobs } from './agents/runtime.ts';
 import { migrateWorkers } from './agents/workers.ts';
+import { monthlyTurnover } from './agents/pipeline.ts';
 import { publishReminders } from './agents/pipeline.ts';
 import { closeAllLive } from './agents/live.ts';
 import { guardHost, purgeSessions } from './auth.ts';
@@ -34,6 +35,9 @@ if (existsSync(config.webDist)) {
 // funcionário = sessão: as conversas que já existiam ganham o titular delas (uma vez)
 migrateWorkers();
 recoverJobs();
+// virada de mês: a cada hora, titulares parados que começaram antes deste mês passam o bastão
+setTimeout(monthlyTurnover, 120_000).unref();
+setInterval(monthlyTurnover, 3_600_000).unref();
 // lembrete de "hora de publicar" das publicações agendadas
 setInterval(publishReminders, 60_000).unref();
 purgeSessions();
