@@ -8,6 +8,7 @@ import './db.ts';
 import { api, syncAgentTools } from './routes/api.ts';
 import { handleSocket } from './realtime.ts';
 import { recoverJobs } from './agents/runtime.ts';
+import { migrateWorkers } from './agents/workers.ts';
 import { publishReminders } from './agents/pipeline.ts';
 import { closeAllLive } from './agents/live.ts';
 import { guardHost, purgeSessions } from './auth.ts';
@@ -30,6 +31,8 @@ if (existsSync(config.webDist)) {
   );
 }
 
+// funcionário = sessão: as conversas que já existiam ganham o titular delas (uma vez)
+migrateWorkers();
 recoverJobs();
 // lembrete de "hora de publicar" das publicações agendadas
 setInterval(publishReminders, 60_000).unref();

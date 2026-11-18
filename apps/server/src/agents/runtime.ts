@@ -14,6 +14,7 @@ import { openLiveForJob, releaseLiveForJob } from './live.ts';
 import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
 import { availableDirs, deniedTools } from './permissions.ts';
 import { pickRunnable, queueRank, turnCost, waitReason, type QueueEntry } from './queue.ts';
+import { ensureTitular, syncWorker } from './workers.ts';
 
 /**
  * Cada funcionário de IA é uma sessão do Claude Code em modo headless (`claude -p`). Ela roda dentro da pasta do
@@ -113,6 +114,8 @@ function setJob(jobId: string, patch: Partial<AgentJob>) {
   update('jobs', jobId, { ...patch, updatedAt: now() });
   const job = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId)!;
   broadcast(job.officeId, { t: 'job', job });
+  // o funcionário vai para a sala do trabalho, espera ali ou volta para a copa
+  if (patch.status) syncWorker(job);
   return job;
 }
 
@@ -138,9 +141,12 @@ function describeTool(name: string, input: Record<string, unknown>) {
   return name;
 }
 
-export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string; stage?: Stage; cwd?: string | null; clientId?: string | null; display?: string }) {
+export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string; stage?: Stage; cwd?: string | null; clientId?: string | null; display?: string; workerId?: string | null }) {
+  // a conversa do cliente é a do titular dele; a revisão pela IA é função do sistema, sem funcionário
+  const workerId = params.workerId !== undefined ? params.workerId
+    : params.clientId && params.stage !== 'aprovacao' ? ensureTitular(params.officeId, params.clientId, params.createdBy).id : null;
   const job: AgentJob & { createdBy: string } = {
-    id: uid(), officeId: params.officeId, agentId: params.agentId, demandId: params.demandId, stage: params.stage ?? null, clientId: params.clientId ?? null,
+    id: uid(), officeId: params.officeId, agentId: params.agentId, demandId: params.demandId, stage: params.stage ?? null, clientId: params.clientId ?? null, workerId,
     prompt: params.prompt, status: 'fila', sessionId: null, costUsd: 0, cwd: params.cwd ?? null,
     createdBy: params.createdBy, createdAt: now(), updatedAt: now(),
   };

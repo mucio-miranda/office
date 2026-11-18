@@ -228,3 +228,23 @@ test('postado pela página Posts: os arquivos vão para POSTADOS e desfazer devo
   assert.ok(has(f1) && has(f2) && !has(moved), 'desfazer devolve para a pasta do mês');
   assert.equal(back.json.status, 'drive');
 });
+
+test('funcionário = sessão do cliente: nasce com o primeiro pedido, tem nome da lista e conversa nova chama outro', async () => {
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  let workers = (await call('GET', `${O}/workers`)).json;
+  const titular = workers.find((w: any) => w.clientId === c.id && w.role === 'titular' && !w.archivedAt);
+  assert.ok(titular, 'o cliente que já pediu algo tem titular');
+  assert.equal(titular.name, 'Vic', 'primeiro nome da lista');
+  const jobs = (await call('GET', `${O}/jobs`)).json.filter((j: any) => j.clientId === c.id && j.stage !== 'aprovacao');
+  assert.ok(jobs.length && jobs.every((j: any) => j.workerId === titular.id), 'as tarefas do cliente são dele');
+  assert.equal(titular.state, 'copa', 'sem trabalho, fica na copa');
+  const r = await call('POST', `${O}/workers/${titular.id}/arquivar`, {});
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  workers = (await call('GET', `${O}/workers`)).json;
+  assert.ok(workers.find((w: any) => w.id === titular.id).archivedAt, 'arquivado fica no histórico');
+  assert.equal((db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id) as any).session_id, null, 'a conversa recomeça');
+  const { ensureTitular } = await import('../agents/workers.ts');
+  const novo = ensureTitular(titular.officeId, c.id, null);
+  assert.notEqual(novo.id, titular.id);
+  assert.equal(novo.name, 'Duda', 'o nome arquivado não volta logo');
+});

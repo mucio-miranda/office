@@ -150,6 +150,15 @@ const MIGRATIONS: string[] = [
    ALTER TABLE clients ADD COLUMN post_days TEXT NOT NULL DEFAULT '[1,3,5]';`,
   // v0.15: agenda da social media — dia e hora em que o post foi agendado
   `ALTER TABLE content_posts ADD COLUMN scheduled_at TEXT;`,
+  // v0.16: funcionário de IA = uma sessão, sempre de um cliente ou projeto
+  `CREATE TABLE workers (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+     client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE, name TEXT NOT NULL, color TEXT NOT NULL,
+     role TEXT NOT NULL DEFAULT 'titular', parent_id TEXT, state TEXT NOT NULL DEFAULT 'copa', room TEXT NOT NULL DEFAULT 'copa',
+     created_at TEXT NOT NULL, created_by TEXT, archived_at TEXT);
+   CREATE INDEX workers_client ON workers(office_id, client_id, archived_at);
+   ALTER TABLE jobs ADD COLUMN worker_id TEXT;
+   ALTER TABLE clients ADD COLUMN kind TEXT NOT NULL DEFAULT 'cliente';`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

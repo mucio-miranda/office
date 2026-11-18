@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { archiveWorker, titularOf } from './workers.ts';
 import path from 'node:path';
 import {
   APPROVAL_MARKER, BRIEFING_FIELDS, NETWORK_LABEL, STAGE_AGENT, STAGE_LABEL, processById, uid,
@@ -350,6 +351,10 @@ export function resumeSession(clientId: string, sessionId: string): string | nul
 export function resetConversation(clientId: string): string | null {
   if (all('SELECT id FROM jobs WHERE client_id = ? AND status IN (\'fila\', \'rodando\', \'aguardando\')', clientId).length) return 'Um funcionário ainda está nesta conversa. Espere ele terminar ou pare a tarefa.';
   update('clients', clientId, { sessionId: null, sessionDirs: [], sessionCost: 0 });
+  // conversa nova é funcionário novo: o atual é arquivado com o histórico dele, e o próximo pedido chama outro
+  const client = getClient(clientId);
+  const titular = client && titularOf(client.officeId, clientId);
+  if (titular) archiveWorker(titular.id);
   return null;
 }
 

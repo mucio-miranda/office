@@ -6,7 +6,7 @@ import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import { POST_FORMATS, POST_STATUSES, MONTH_STEPS, CHECK_STATES, MONTH_STEP_LABEL,
   BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, PROCESSES, WALL_TYPES, processById, uid,
-  type AgentJob, type AgentProfile, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
+  type AgentJob, type AgentProfile, type Worker, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
 import {
@@ -36,6 +36,7 @@ import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePl
 import { thumbOf } from '../clients/thumb.ts';
 import { clientBase, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
 import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../agents/agenda.ts';
+import { archiveWorker } from '../agents/workers.ts';
 import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
@@ -663,6 +664,7 @@ export async function api(app: FastifyInstance) {
       postDays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
       approvalMode: z.enum(['humano', 'ia']).default('humano'), briefing: briefingSchema.optional(),
       niche: z.string().regex(/^[a-z0-9-]{1,60}$/).nullable().optional(),
+      kind: z.enum(['cliente', 'projeto']).optional(),
     });
     collection<Client>('clients', 'clients', clientSchema, 'name', 'clients', undefined, false);
 
@@ -1360,6 +1362,23 @@ export async function api(app: FastifyInstance) {
 
     // ---------------- funcionários de IA ----------------
     const seatSchema = z.object({ x: z.number().min(-200).max(200), z: z.number().min(-200).max(200) });
+    // funcionários de IA: os ativos e os arquivados dos últimos 90 dias (histórico da equipe de cada cliente)
+    r.get('/api/offices/:officeId/workers', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const since = new Date(Date.now() - 90 * 86_400_000).toISOString();
+      return all<Worker>('SELECT * FROM workers WHERE office_id = ? AND (archived_at IS NULL OR archived_at > ?) ORDER BY created_at', (req.params as any).officeId, since);
+    });
+    r.post('/api/offices/:officeId/workers/:id/arquivar', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const w = one<Worker>('SELECT * FROM workers WHERE id = ? AND office_id = ?', id, officeId);
+      if (!w) return reply.code(404).send({ error: 'Funcionário não encontrado' });
+      if (one("SELECT id FROM jobs WHERE worker_id = ? AND status IN ('fila','rodando','aguardando')", id)) return reply.code(409).send({ error: `${w.name} ainda está trabalhando. Pare a tarefa antes.` });
+      // titular arquivado = conversa encerrada: o próximo pedido do cliente chama outro funcionário
+      if (w.role === 'titular') { const e = resetConversation(w.clientId); if (e) return reply.code(409).send({ error: e }); }
+      return archiveWorker(id);
+    });
+
     r.get('/api/offices/:officeId/agents', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       return all<AgentProfile>('SELECT * FROM agents WHERE office_id = ? ORDER BY name', (req.params as any).officeId);

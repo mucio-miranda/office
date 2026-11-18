@@ -86,6 +86,8 @@ export interface Client {
   id: ID;
   officeId: ID;
   name: string;
+  /** Cliente de conteúdo ou projeto da casa (o site, o perfil da agência). Os dois têm equipe e pasta. */
+  kind?: 'cliente' | 'projeto';
   /** Pasta do cliente, relativa ao rootPath do escritório ou absoluta. */
   folder: string | null;
   /** Pasta do cliente no Drive (relativa a driveRoot), lembrada do último envio. */
@@ -590,6 +592,8 @@ export interface AgentJob {
   stage: Stage | null;
   /** Cliente cuja conversa esta tarefa continua (null = tarefa avulsa, com sessão própria). */
   clientId?: ID | null;
+  /** Funcionário de IA (a sessão) que faz esta tarefa. Revisão pela IA e tarefas antigas ficam sem. */
+  workerId?: ID | null;
   prompt: string;
   status: JobStatus;
   sessionId: string | null;
@@ -684,7 +688,7 @@ export type ServerMsg =
   | { t: 'chat'; from: ID; name: string; text: string; room: RoomId | null; at: string }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
+  | { t: 'invalidate'; what: 'workers' | 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
   /** Aviso para todo mundo do escritório (ex.: peça esperando aprovação). */
   | { t: 'notice'; text: string; demandId?: ID; agentId?: ID }
   | { t: 'job'; job: AgentJob }
@@ -694,3 +698,34 @@ export type ServerMsg =
 
 export const uid = () =>
   globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+// ---------- funcionários de IA: uma sessão = um funcionário, sempre de um cliente ou projeto ----------
+
+/** Nomes dos funcionários, na ordem em que entram. Um nome não se repete entre os ativos. */
+export const WORKER_NAMES = [
+  'Vic', 'Duda', 'Theo', 'Rafa', 'Luna', 'Nico', 'Iris', 'Otto', 'Maya', 'Bento',
+  'Lis', 'Davi', 'Nina', 'Enzo', 'Clara', 'Joca', 'Bela', 'Leo', 'Malu', 'Tito',
+  'Cora', 'Ravi', 'Zoe', 'Ian', 'Lara', 'Gael', 'Mel', 'Kiko', 'Aurora', 'Dante',
+  'Teca', 'Noah', 'Jade', 'Rui', 'Flora', 'Lino', 'Tai', 'Hugo', 'Vera', 'Benji',
+  'Sol', 'Tom', 'Isa', 'Zeca', 'Nara', 'Igor', 'Pipa', 'Yuri', 'Cacá', 'Dora',
+] as const;
+/** Quantos funcionários podem estar ativos ao mesmo tempo (as sessões abertas). */
+export const MAX_WORKERS = 50;
+
+export type WorkerState = 'trabalhando' | 'aguardando' | 'copa';
+export interface Worker {
+  id: ID;
+  officeId: ID;
+  /** O cliente ou projeto dele: nasce, trabalha e é arquivado ali. */
+  clientId: ID;
+  name: string;
+  color: string;
+  /** Titular é a conversa contínua do cliente; ajudante faz uma tarefa em paralelo e devolve ao titular. */
+  role: 'titular' | 'ajudante';
+  parentId: ID | null;
+  state: WorkerState;
+  /** Sala onde está agora (a do tipo de trabalho, ou a copa). */
+  room: string;
+  createdAt: string;
+  archivedAt: string | null;
+}
