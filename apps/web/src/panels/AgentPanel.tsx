@@ -7,6 +7,7 @@ import { renderMarkdown } from '../lib/markdown';
 import { desktop } from '../lib/desktop';
 import { goToAgent } from '../office/World';
 import { AgentTools, LiveMirror } from './Tools';
+import { useAttach, withPaths } from '../lib/attach';
 
 const STATUS_LABEL: Record<AgentJob['status'], string> = {
   fila: 'na fila', rodando: 'trabalhando', aguardando: 'esperando você', concluido: 'concluído', erro: 'erro', cancelado: 'cancelado',
@@ -14,6 +15,7 @@ const STATUS_LABEL: Record<AgentJob['status'], string> = {
 
 export function AgentPanel() {
   const { agents, jobs, messages, panelArg, office, demands, loadMessages, user, live } = useStore();
+  const attach = useAttach(office!.id, (paths) => setText((t) => withPaths(t, paths)), (m) => useStore.getState().notify(m));
   const agent = agents.find((a) => a.id === panelArg) ?? agents[0];
   const myJobs = jobs.filter((j) => j.agentId === agent?.id);
   const [jobId, setJobId] = useState<string | null>(null);
@@ -147,13 +149,13 @@ export function AgentPanel() {
           </div>
         )}
 
-        <form className="composer" onSubmit={submit}>
+        <form className={`composer ${attach.dragging ? 'drop-on' : ''}`} onSubmit={submit} {...attach.bind}>
           <textarea rows={2} value={text} disabled={busy}
             placeholder={busy ? 'Trabalhando…' : job ? `Responder a ${agent.name}…` : 'Descreva a tarefa…'}
-            onChange={(e) => setText(e.target.value)}
+            onChange={(e) => setText(e.target.value)} onPaste={attach.onPaste}
             onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }} />
           <div className="row">
-            <span className="muted small">{user?.name} · Enter envia, Shift+Enter quebra linha</span>
+            <span className="muted small">{attach.sending ? `Anexando ${attach.sending} arquivo${attach.sending > 1 ? 's' : ''}…` : `${user?.name} · Enter envia, Shift+Enter quebra linha · arraste ou cole arquivos`}</span>
             <div className="row gap">
               {busy && job && <button type="button" className="small" onClick={() => api(`${base}/jobs/${job.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
               <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> {job ? 'Enviar' : 'Começar'}</button>

@@ -37,6 +37,8 @@ import { thumbOf } from '../clients/thumb.ts';
 import { clientBase, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
 import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../agents/agenda.ts';
 import { archiveWorker } from '../agents/workers.ts';
+import { localPaths, saveAttachment } from '../agents/attachments.ts';
+import type { Readable } from 'node:stream';
 import { decideHelper, requestHelper } from '../agents/helpers.ts';
 import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
@@ -1424,6 +1426,20 @@ export async function api(app: FastifyInstance) {
     });
 
     // funcionários de IA: os ativos e os arquivados dos últimos 90 dias (histórico da equipe de cada cliente)
+    // anexos do chat: arquivo arrastado ou colado. Caminho que existe neste PC (e é do dono) vai como texto; o resto sobe
+    r.post('/api/offices/:officeId/anexos/caminhos', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { paths } = z.object({ paths: z.array(z.string().max(1000)).max(200) }).parse(req.body);
+      return { local: localPaths((req.params as any).officeId, `user:${req.user.id}`, paths) };
+    });
+    r.addContentTypeParser('application/octet-stream', (_req, payload, done) => done(null, payload));
+    r.post('/api/offices/:officeId/anexos', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const name = String((req.query as any).nome ?? '').slice(0, 300);
+      try {
+        return await saveAttachment(req.body as Readable, name);
+      } catch (e) { return reply.code(413).send({ error: (e as Error).message }); }
+    });
     r.get('/api/offices/:officeId/workers', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const since = new Date(Date.now() - 90 * 86_400_000).toISOString();

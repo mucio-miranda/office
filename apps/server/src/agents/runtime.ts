@@ -12,7 +12,8 @@ import { houseRules } from './templates.ts';
 import { mcpConfig } from './tools.ts';
 import { openLiveForJob, releaseLiveForJob } from './live.ts';
 import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
-import { availableDirs, deniedTools } from './permissions.ts';
+import { availableDirs, deniedTools, mentionedDirs } from './permissions.ts';
+import { anexosDir, isOwner } from './attachments.ts';
 import { pickRunnable, queueRank, turnCost, waitReason, type QueueEntry } from './queue.ts';
 import { ensureTitular, syncWorker } from './workers.ts';
 
@@ -355,6 +356,9 @@ async function start(jobId: string, typed: string, resume: boolean) {
   const dirs = availableDirs([...new Set([...office.extraDirs, ...(office.driveRoot && !reviewer ? [office.driveRoot] : []), ...(conversation?.sessionDirs ?? [])])]);
   for (const d of dirs.ok) args.push('--add-dir', d);
   if (dirs.missing.length) addMessage(jobId, office.id, 'sistema', `Pasta indisponível: ${dirs.missing.join(', ')}. Se o trabalho depende dela, conecte o disco antes de continuar.`);
+  // anexos do chat (prints colados, arquivos de outro PC) e pastas que o dono citou ou arrastou nesta mensagem
+  args.push('--add-dir', anexosDir());
+  if (isOwner(office.id, (job as AgentJob & { createdBy?: string }).createdBy)) for (const d of mentionedDirs(typed)) if (!dirs.ok.includes(d)) args.push('--add-dir', d);
   // a sessão retomada precisa da mesma pasta; se ela sumiu, volta para a raiz
   const cwd = job.cwd && existsSync(job.cwd) ? job.cwd : office.rootPath;
   // as skills ficam na raiz, fora da pasta do cliente

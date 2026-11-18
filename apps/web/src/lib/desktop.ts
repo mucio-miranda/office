@@ -18,6 +18,8 @@ export interface OfficeDesktop {
   installUpdate?(): Promise<void>;
   onUpdate?(cb: (u: UpdateState) => void): () => void;
   onNavigate(cb: (to: { panel: string | null; arg: string | null }) => void): () => void;
+  /** Caminho no disco de um arquivo arrastado ou colado (vazio para um print). Versões antigas do app não têm. */
+  pathForFile?(f: File): string;
 }
 
 export const desktop: OfficeDesktop | null = (globalThis as { officeDesktop?: OfficeDesktop }).officeDesktop ?? null;

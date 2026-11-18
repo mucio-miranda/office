@@ -1384,3 +1384,7 @@ label.check input { width: auto; height: auto; }
 .helper-text button.link { font-size: 13px; }
 
 .team-idle { padding: 4px 10px 0; font-size: 11px; }
+
+/* arrastar arquivo até o chat */
+.composer.drop-on { outline: 2px dashed var(--muted-foreground); outline-offset: 2px; border-radius: 10px; }
+.composer.drop-on textarea { background: var(--accent); }

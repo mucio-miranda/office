@@ -5,6 +5,7 @@ import { canWork, type AgentJob, type Client, type ClientSession, type Demand, t
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
+import { useAttach, withPaths } from '../lib/attach';
 import { ReviewDesk, versionsOf } from './ReviewDesk';
 
 const ACTIVE: AgentJob['status'][] = ['fila', 'rodando', 'aguardando'];
@@ -89,6 +90,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   const [tail, setTail] = useState<Line[] | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  const attach = useAttach(office!.id, (paths) => { setText((t) => withPaths(t, paths)); input.current?.focus(); }, notify);
 
   // a conversa é a do titular: o trabalho dos ajudantes (sessão própria) não entra aqui; o resumo deles chega como aviso
   const helperIds = useStore((s) => s.workers).filter((w) => w.role === 'ajudante').map((w) => w.id).join(',');
@@ -225,7 +227,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
               {SHORTCUTS.map((s) => <button key={s.label} type="button" className="chip" onClick={() => shortcut(s.text)}>{s.label}</button>)}
             </div>
           )}
-          <form className="composer" onSubmit={send}>
+          <form className={`composer ${attach.dragging ? 'drop-on' : ''}`} onSubmit={send} {...attach.bind}>
             {matches.length > 0 && (
               <div className="slash-menu" role="listbox" aria-label="Comandos">
                 {matches.map((s) => (
@@ -237,10 +239,10 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
             )}
             <textarea ref={input} rows={2} value={text} aria-label={`Mensagem para a conversa de ${c.name}`}
               placeholder={running ? 'Pode mandar: as mensagens se juntam e entram quando ele terminar esta parte' : active ? 'Responda à decisão pedida…' : `O que fazer para ${c.name}?`}
-              onChange={(e) => setText(e.target.value)}
+              onChange={(e) => setText(e.target.value)} onPaste={attach.onPaste}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
             <div className="row gap conversa-actions">
-              <span className="muted small">{newRequest ? 'Vai como pedido novo, em outro cartão' : 'Enter envia · / mostra os comandos'}</span>
+              <span className="muted small">{attach.sending ? `Anexando ${attach.sending} arquivo${attach.sending > 1 ? 's' : ''}…` : newRequest ? 'Vai como pedido novo, em outro cartão' : 'Enter envia · / mostra os comandos · arraste ou cole arquivos'}</span>
               <span className="spacer" />
               {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
               <div className="send-group">

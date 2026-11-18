@@ -1,11 +1,13 @@
 // Ponte mínima e segura entre a UI e o Windows. A UI checa `window.officeDesktop`:
 // se existir, usa os recursos nativos; se não (navegador), cai no comportamento web.
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 type Filter = { name: string; extensions: string[] };
 
 contextBridge.exposeInMainWorld('officeDesktop', {
   isDesktop: true,
+  // caminho do arquivo arrastado ou colado no chat (o Electron não expõe mais File.path)
+  pathForFile: (f: File) => { try { return webUtils.getPathForFile(f); } catch { return ''; } },
   info: () => ipcRenderer.invoke('office:info'),
   pickFolder: (o?: { title?: string; defaultPath?: string }) => ipcRenderer.invoke('office:pickFolder', o),
   pickFiles: (o?: { title?: string; defaultPath?: string; filters?: Filter[]; multiple?: boolean }) => ipcRenderer.invoke('office:pickFiles', o),
