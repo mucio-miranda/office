@@ -732,6 +732,19 @@ export interface Worker {
   archivedAt: string | null;
   /** Passagem de bastão do funcionário anterior (virada de mês), lida antes de começar. */
   handoff?: string | null;
+  /** Última vez que um trabalho dele andou (calculado pelo servidor). */
+  lastJobAt?: string | null;
+}
+
+/** Horas sem trabalho depois das quais um funcionário parado some da Equipe e do mapa (continua na aba Equipe do cliente). */
+export const WORKER_IDLE_HOURS = 24;
+
+/** Funcionário que aparece na Equipe e no mapa: ativo e trabalhando, esperando você ou com trabalho nas últimas 24 h. */
+export function isWorkerVisible(w: Worker, now = Date.now()) {
+  if (w.archivedAt) return false;
+  if (w.state !== 'copa') return true;
+  const last = Date.parse(w.lastJobAt ?? w.createdAt);
+  return !(now - last > WORKER_IDLE_HOURS * 3_600_000);
 }
 
 /** Conversa direta entre duas pessoas da equipe (a chamada de vídeo entra depois, no mesmo lugar). */

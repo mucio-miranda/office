@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrthographicCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import type { AgentProfile, Presence, Vec2, Worker } from '@office/shared';
+import { isWorkerVisible, type AgentProfile, type Presence, type Vec2, type Worker } from '@office/shared';
 import { useStore, showEmote } from '../lib/store';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/theme';
 import { PixelRoom } from './pixel/Room';
@@ -346,7 +346,7 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
 /** Os funcionários ativos com o lugar de cada um: na sala do trabalho ou na copa, lado a lado. */
 export function workerSpots(workers: Worker[]) {
   const count: Record<string, number> = {};
-  return workers.filter((w) => !w.archivedAt).map((w) => [w, workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1))] as const);
+  return workers.filter((w) => isWorkerVisible(w)).map((w) => [w, workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1))] as const);
 }
 const WORKER_RING: Record<Worker['state'], string | null> = { copa: null, trabalhando: '#2563eb', aguardando: '#f59e0b' };
 

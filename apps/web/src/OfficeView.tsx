@@ -1,5 +1,5 @@
 import { NewDemand } from './panels/NewDemand';
-import { MAX_WORKERS, canSeeFinance } from '@office/shared';
+import { MAX_WORKERS, WORKER_IDLE_HOURS, canSeeFinance, isWorkerVisible } from '@office/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
@@ -275,8 +275,10 @@ function TeamList({ onNavigate }: { onNavigate: () => void }) {
   const { members, workers, clients, presences, user, open, panel, panelArg, dmUnread } = useStore();
   const people = members.filter((m) => m.id !== user?.id);
   const active = workers.filter((w) => !w.archivedAt);
+  const shown = active.filter((w) => isWorkerVisible(w));
+  const idle = active.length - shown.length;
   const rank = { aguardando: 0, trabalhando: 1, copa: 2 } as const;
-  const ai = [...active].sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
+  const ai = [...shown].sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
   const LABEL = { trabalhando: 'trabalhando', aguardando: 'precisa de você', copa: '' } as const;
   return (
     <div className="nav">
@@ -302,6 +304,7 @@ function TeamList({ onNavigate }: { onNavigate: () => void }) {
           </button>
         );
       })}
+      {idle > 0 && <p className="muted small team-idle" title="Continuam com a memória do cliente e voltam quando ele tiver trabalho; a lista completa fica na aba Equipe de cada cliente">+{idle} sem trabalho há mais de {WORKER_IDLE_HOURS} h</p>}
       {people.length + ai.length === 0 && <p className="muted small" style={{ padding: '0 8px' }}>Os funcionários de IA aparecem quando um cliente começa uma conversa.</p>}
     </div>
   );
@@ -478,7 +481,7 @@ function Palette({ onClose }: { onClose: () => void }) {
         return { icon: Armchair, label: `Ir até a mesa de ${m.name}`, hint: 'fora', run: () => goTo({ x: d.x + 1.6, z: d.z + 1.1 }, d) };
       }),
       ...ROOMS.map((r) => ({ icon: Box, label: `Ir para ${r.label}`, hint: r.key, run: () => goTo(roomCenter(r)) })),
-      ...workers.filter((w) => !w.archivedAt).map((w) => ({ icon: Bot, label: `${w.name} · IA · ${clients.find((c) => c.id === w.clientId)?.name ?? ''}`, hint: 'funcionário de IA', run: () => open('clientes', w.clientId) })),
+      ...workers.filter((w) => isWorkerVisible(w)).map((w) => ({ icon: Bot, label: `${w.name} · IA · ${clients.find((c) => c.id === w.clientId)?.name ?? ''}`, hint: 'funcionário de IA', run: () => open('clientes', w.clientId) })),
       ...Object.values(presences).map((p) => ({ icon: Navigation, label: `Ir até ${p.name}`, hint: 'online', run: () => goToPerson(p) })),
       ...demands.filter((d) => d.status !== 'entregue').map((d) => ({ icon: KanbanSquare, label: d.title, hint: 'demanda', run: () => open('demandas', d.id) })),
       ...clients.map((c) => ({ icon: Users, label: c.name, hint: 'cliente', run: () => open('clientes', c.id) })),

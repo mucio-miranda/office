@@ -1382,3 +1382,5 @@ label.check input { width: auto; height: auto; }
 .helper-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; font-size: 13px; }
 .helper-text span { white-space: pre-wrap; }
 .helper-text button.link { font-size: 13px; }
+
+.team-idle { padding: 4px 10px 0; font-size: 11px; }

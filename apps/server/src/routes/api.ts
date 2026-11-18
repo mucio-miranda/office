@@ -1427,7 +1427,10 @@ export async function api(app: FastifyInstance) {
     r.get('/api/offices/:officeId/workers', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const since = new Date(Date.now() - 90 * 86_400_000).toISOString();
-      return all<Worker>('SELECT * FROM workers WHERE office_id = ? AND (archived_at IS NULL OR archived_at > ?) ORDER BY created_at', (req.params as any).officeId, since);
+      return all<Worker>(
+        `SELECT w.*, (SELECT MAX(j.updated_at) FROM jobs j WHERE j.worker_id = w.id) AS last_job_at
+         FROM workers w WHERE w.office_id = ? AND (w.archived_at IS NULL OR w.archived_at > ?) ORDER BY w.created_at`,
+        (req.params as any).officeId, since);
     });
     // virar agora: o titular escreve a passagem de bastão e outro funcionário assume
     r.post('/api/offices/:officeId/clients/:id/virada', async (req, reply) => {
