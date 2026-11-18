@@ -164,6 +164,12 @@ const MIGRATIONS: string[] = [
      id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
      from_user TEXT NOT NULL, to_user TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL, read_at TEXT);
    CREATE INDEX direct_messages_pair ON direct_messages(office_id, from_user, to_user, created_at);`,
+  // v0.16: pedidos de ajudante (outra sessão para uma tarefa em paralelo, só com aprovação)
+  `CREATE TABLE helper_requests (
+     id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+     client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE, worker_id TEXT NOT NULL, job_id TEXT NOT NULL,
+     task TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', helper_id TEXT,
+     created_at TEXT NOT NULL, decided_by TEXT);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

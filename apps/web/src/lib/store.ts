@@ -1,4 +1,4 @@
-import { canSeeFinance, type ContentPost, type DirectMessage, type Worker } from '@office/shared';
+import { canSeeFinance, type ContentPost, type DirectMessage, type HelperRequest, type Worker } from '@office/shared';
 import { create } from 'zustand';
 import type {
   AgentJob, AgentProfile, CalendarEvent, Client, ClientMsg, CustomRoom, DecorItem, Demand, JobMessage, LiveSession, Member, Office, Presence, RoomId, ServerMsg, ToolInfo, Transaction, User, Vec2, WallType,
@@ -30,6 +30,8 @@ interface State {
   agents: AgentProfile[];
   /** Funcionários de IA (uma sessão cada, sempre de um cliente ou projeto): os ativos e os arquivados recentes. */
   workers: Worker[];
+  /** Pedidos de ajudante (os que esperam aprovação e os decididos há pouco). */
+  helpers: HelperRequest[];
   jobs: AgentJob[];
   messages: Record<string, JobMessage[]>;
   timelines: any[];
@@ -83,7 +85,7 @@ interface State {
   logout(): void;
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
-  reload(what: 'workers' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls'): Promise<void>;
+  reload(what: 'helpers' | 'workers' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls'): Promise<void>;
   loadTools(): Promise<void>;
   /** Liga ou desliga uma ferramenta de um funcionário. */
   toggleAgentTool(agentId: string, toolId: string, on: boolean): Promise<void>;
@@ -102,7 +104,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
-  demands: [], events: [], transactions: [], posts: [], clients: [], agents: [], workers: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, mapRev: 0, monthsRev: 0,
+  demands: [], events: [], transactions: [], posts: [], clients: [], agents: [], workers: [], helpers: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, mapRev: 0, monthsRev: 0,
   presences: {}, chat: [], emotes: {}, dms: {}, dmUnread: {},
   panel: null, panelArg: null, newDemand: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
@@ -142,7 +144,7 @@ export const useStore = create<State>((set, get) => ({
     try { localStorage.setItem('office.last', id); } catch { /* ok */ }
     set({ office, offices: me.offices, members: info.members, presences: {}, chat: [], messages: {}, dms: {}, dmUnread: {} });
     api<Record<string, number>>(`/api/offices/${office.id}/dm`).then((dmUnread) => set({ dmUnread })).catch(() => {});
-    await Promise.all((['demands', 'events', 'transactions', 'posts', 'clients', 'agents', 'workers', 'jobs', 'timelines', 'live', 'layout', 'rooms', 'walls'] as const).map((w) => get().reload(w)));
+    await Promise.all((['demands', 'events', 'transactions', 'posts', 'clients', 'agents', 'workers', 'helpers', 'jobs', 'timelines', 'live', 'layout', 'rooms', 'walls'] as const).map((w) => get().reload(w)));
     connect(id);
   },
 

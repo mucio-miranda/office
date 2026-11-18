@@ -47,6 +47,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { mes: { type: 'string', description: 'AAAA-MM das peças' }, itens: { type: 'array', maxItems: 60, items: { type: 'object', properties: { chave: { type: 'string' }, data: { type: 'string', description: 'AAAA-MM-DD em que foi ao ar' } }, required: ['chave', 'data'] } } }, required: ['itens'] },
   },
   {
+    name: 'pedir_ajudante',
+    description: 'Pede outra sessão (um ajudante) para fazer uma parte do trabalho em paralelo, no mesmo cliente. Uma pessoa precisa aprovar antes de começar; siga com o resto enquanto isso. Quando o ajudante terminar, o resumo dele chega nesta conversa. Use só quando agiliza de verdade.',
+    inputSchema: { type: 'object', properties: { tarefa: { type: 'string', description: 'o que o ajudante deve fazer, com as pastas e arquivos de entrada e onde salvar' }, motivo: { type: 'string', description: 'por que vale a pena em paralelo' } }, required: ['tarefa', 'motivo'] },
+  },
+  {
     name: 'navegador_liberar',
     description: 'Devolve a vez do navegador (Chrome e pasta Downloads, que servem a todos os clientes). Chame quando terminar o tunning e os arquivos baixados já estiverem na pasta do trabalho. Se usar o Chrome de novo, a vez é pedida sozinha.',
     inputSchema: { type: 'object', properties: {} },

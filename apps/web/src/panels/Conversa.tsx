@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
+import { HelperRequests } from './HelperRequests';
 import { ArrowUp, ChevronDown, History, Square, Wrench } from 'lucide-react';
 import { canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage } from '@office/shared';
 import { useStore } from '../lib/store';
@@ -89,7 +90,9 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
 
-  const clientJobs = useMemo(() => jobs.filter((j) => j.clientId === c.id && j.stage !== 'aprovacao'), [jobs, c.id]);
+  // a conversa é a do titular: o trabalho dos ajudantes (sessão própria) não entra aqui; o resumo deles chega como aviso
+  const helperIds = useStore((s) => s.workers).filter((w) => w.role === 'ajudante').map((w) => w.id).join(',');
+  const clientJobs = useMemo(() => jobs.filter((j) => j.clientId === c.id && j.stage !== 'aprovacao' && !(j.workerId && helperIds.includes(j.workerId))), [jobs, c.id, helperIds]);
   const active = clientJobs.find((j) => ACTIVE.includes(j.status));
   const viewed = view ? sessions.find((s) => s.id === view) : undefined;
   const mine = useMemo(() => clientJobs.filter((j) => (view ? j.sessionId === view : !j.sessionId || j.sessionId === c.sessionId)).slice(0, MAX_JOBS), [clientJobs, view, c.sessionId]);
@@ -195,6 +198,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
           <button className="ghost small" onClick={() => setView(null)}>Voltar para a atual</button>
         </div>
       )}
+      <HelperRequests clientId={c.id} />
       <div className="messages" ref={list} aria-live="polite">
         {tail && tail.map((l, i) => l.role === 'usuario'
           ? <div key={i} className="msg usuario"><div className="msg-text">{l.text}</div></div>

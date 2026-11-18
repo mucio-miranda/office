@@ -32,6 +32,9 @@ const queue: { jobId: string; input: string; resume: boolean }[] = [];
 const interrupts = new Map<string, string>();
 /** Mensagens que chegaram com o funcionário trabalhando: ele termina o que está fazendo e recebe todas juntas. */
 const followups = new Map<string, string>();
+/** Novidade que chegou com o funcionário esperando você (ex.: o ajudante terminou): entra junto com a sua resposta. */
+const notes = new Map<string, string>();
+
 /** Token de cada tarefa rodando: o servidor MCP `office` só alcança o cliente dela. Vive na memória e some ao fim. */
 const jobTokens = new Map<string, string>();
 export function issueJobToken(jobId: string) {
@@ -164,6 +167,26 @@ export function replyToJob(jobId: string, text: string, display?: string, by?: s
   if (!job) throw new Error('Tarefa não encontrada');
   if (running.has(jobId)) throw new Error('O funcionário ainda está trabalhando nesta tarefa.');
   addMessage(jobId, job.officeId, 'usuario', display ?? text, authorName(by));
+  const note = notes.get(jobId);
+  notes.delete(jobId);
+  setJob(jobId, { status: 'fila' });
+  queue.push({ jobId, input: note ? `${note}\n\n${text}` : text, resume: !!job.sessionId });
+  pump();
+}
+
+/**
+ * Uma novidade para a conversa de um funcionário (o ajudante terminou, o pedido foi recusado), sem ser mensagem de
+ * pessoa: na fila, junta com o que espera; trabalhando, entra quando ele terminar a parte atual; esperando você, vai junto
+ * com a sua resposta; parado, a conversa continua com ela.
+ */
+export function deliverToJob(jobId: string, text: string, display: string, _by?: string) {
+  const job = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', jobId);
+  if (!job) return;
+  addMessage(jobId, job.officeId, 'sistema', display);
+  const waiting = queue.find((q) => q.jobId === jobId);
+  if (waiting) { waiting.input += `\n\n${text}`; return; }
+  if (running.has(jobId)) { followups.set(jobId, followups.has(jobId) ? `${followups.get(jobId)}\n\n${text}` : text); return; }
+  if (job.status === 'aguardando') { notes.set(jobId, notes.has(jobId) ? `${notes.get(jobId)}\n\n${text}` : text); return; }
   setJob(jobId, { status: 'fila' });
   queue.push({ jobId, input: text, resume: !!job.sessionId });
   pump();
@@ -261,7 +284,10 @@ async function start(jobId: string, typed: string, resume: boolean) {
   running.set(jobId, null);
   const client = job.clientId ? one<Client>('SELECT * FROM clients WHERE id = ?', job.clientId) : undefined;
   const reviewer = job.stage === 'aprovacao';
-  const conversation = client && !reviewer ? client : undefined;
+  // o ajudante trabalha em sessão própria, fora da conversa do cliente (que é a do titular)
+  const helper = job.workerId ? one<{ role: string; name: string }>('SELECT role, name FROM workers WHERE id = ?', job.workerId) : undefined;
+  const isHelper = helper?.role === 'ajudante';
+  const conversation = client && !reviewer && !isHelper ? client : undefined;
   const session = conversation?.sessionId ?? (resume ? job.sessionId : null);
   // sem sessão para retomar, a mensagem precisa levar o pedido inteiro junto
   const input = !session && typed !== job.prompt ? `${job.prompt}\n\n${typed}` : typed;
@@ -272,7 +298,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   const dir = path.join(config.dataDir, 'jobs', jobId);
   mkdirSync(dir, { recursive: true });
   // trabalho de cliente roda só com as skills, como no terminal: sem app aberto na tela nem servidores extras
-  const isProcess = !!job.stage;
+  const isProcess = !!job.stage || isHelper;
   // modo ao vivo: o app abre na tela e o servidor MCP vira uma ponte para a janela
   const liveIds = isProcess ? [] : (agent.live ?? []).filter((id) => (agent.mcp ?? []).includes(id));
   let bridges = {};
@@ -302,6 +328,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
       env: { ELECTRON_RUN_AS_NODE: '1', OFFICE_API: `http://127.0.0.1:${config.port}`, OFFICE_JOB_TOKEN: token },
     };
     mcp.hints.push('- **Office** (servidor MCP `office`): o calendário de conteúdo do cliente. Use `calendario_listar` antes de planejar ou produzir. Quando o calendário do mês for definido, registre cada post com `calendario_salvar` (data, formato, tema, número). Durante a produção, mova cada peça de etapa: referencia > composicao > tunning > conferencia > aprovado > drive > postado, com os caminhos das peças finais em `files`. O tunning é parte do design: arte só passa de conferência com `tunning: "feito"`. Só uma pessoa dispensa o tunning, pela tela: se alguém pedir sem tunning, avise que precisa ser marcado no calendário.');
+    if (!isHelper) mcp.hints.push('- **Ajudante** (`pedir_ajudante`): quando uma parte do trabalho pode andar em paralelo (ex.: tratar as fotos enquanto você monta os carrosséis), peça um ajudante com a tarefa e o motivo. Uma pessoa precisa aprovar; siga com o resto enquanto isso. O resultado dele chega nesta conversa.');
     if (usesChrome) mcp.hints.push('- **Navegador dividido**: o Chrome e a pasta Downloads servem a todos os clientes. Ao usar o Chrome você pega a vez dele sozinho (às vezes espera outro cliente terminar). Adiante antes o que não precisa do Chrome (base, composição, scripts); junte o uso do navegador (tunning, downloads) num trecho só e, quando os arquivos baixados já estiverem na pasta do trabalho, chame `navegador_liberar` para outro cliente usar.');
   }
   const mcpIds = Object.keys(mcp.servers);

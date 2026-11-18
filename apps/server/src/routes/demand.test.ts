@@ -108,7 +108,7 @@ test('calendário: a pessoa e o funcionário preenchem; arte não passa de confe
   rpc(4, 'tools/call', { name: 'calendario_listar', arguments: { mes: '2026-11' } });
   await wait(() => replies.length >= 4);
   mcp.kill();
-  assert.deepEqual(replies.find((x) => x.id === 2).result.tools.map((t: any) => t.name), ['calendario_listar', 'calendario_salvar', 'posts_do_mes', 'posts_marcar_postado', 'navegador_liberar']);
+  assert.deepEqual(replies.find((x) => x.id === 2).result.tools.map((t: any) => t.name), ['calendario_listar', 'calendario_salvar', 'posts_do_mes', 'posts_marcar_postado', 'pedir_ajudante', 'navegador_liberar']);
   assert.ok(!replies.find((x) => x.id === 3).result.isError, JSON.stringify(replies.find((x) => x.id === 3)));
   const listed = JSON.parse(replies.find((x) => x.id === 4).result.content[0].text);
   assert.equal(listed.posts.find((p: any) => p.id === mitos.id).status, 'aprovado');
@@ -270,4 +270,35 @@ test('conversa direta: só as duas pessoas leem, a não lida conta para quem rec
   await as(bia, 'POST', `${O}/dm/${me}/lida`, {});
   assert.deepEqual((await as(bia, 'GET', `${O}/dm`)).json, {}, 'lida ao abrir');
   assert.deepEqual((await call('GET', `${O}/dm`)).json, {}, 'quem mandou não tem não lida');
+});
+
+test('ajudante: o funcionário pede, uma pessoa aprova, ele trabalha em sessão própria, devolve o resumo e é arquivado', async () => {
+  const { issueJobToken } = await import('../agents/runtime.ts');
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  // o cliente precisa de um titular ativo com uma tarefa (o anterior foi arquivado no teste da equipe)
+  const { ensureTitular } = await import('../agents/workers.ts');
+  const officeId = O.split('/').pop()!;
+  const titular = ensureTitular(officeId, c.id, null);
+  const job = (await call('GET', `${O}/jobs`)).json.find((j: any) => j.clientId === c.id && j.stage !== 'aprovacao');
+  db.prepare('UPDATE jobs SET worker_id = ? WHERE id = ?').run(titular.id, job.id);
+  const token = issueJobToken(job.id);
+  const ask = await app.inject({ method: 'POST', url: '/api/agente/pedir_ajudante', remoteAddress: '127.0.0.1', headers: { host: 'localhost', authorization: `Bearer ${token}` }, payload: { tarefa: 'Tratar as 30 fotos do ensaio', motivo: 'enquanto monto os carrosséis' } });
+  assert.equal(ask.statusCode, 200, ask.body);
+  const pedido = (await call('GET', `${O}/helpers`)).json.find((h: any) => h.status === 'pendente');
+  assert.equal(pedido.task, 'Tratar as 30 fotos do ensaio');
+  const ok = await call('POST', `${O}/helpers/${pedido.id}`, { approve: true });
+  assert.equal(ok.status, 200, JSON.stringify(ok.json));
+  const helperId = ok.json.helper.id;
+  const status = (id: string) => (db.prepare('SELECT archived_at FROM workers WHERE id = ?').get(id) as any).archived_at;
+  await wait(() => !!status(helperId));
+  assert.ok(status(helperId), 'terminou e foi arquivado');
+  const helperJob = db.prepare('SELECT * FROM jobs WHERE worker_id = ?').get(helperId) as any;
+  assert.equal(helperJob.status, 'concluido');
+  assert.notEqual(helperJob.session_id, (db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id) as any).session_id ?? 'x', 'sessão própria, fora da conversa do cliente');
+  const msgs = (db.prepare("SELECT text FROM job_messages WHERE job_id = ? AND role = 'sistema'").all(job.id) as any[]).map((m) => m.text);
+  assert.ok(msgs.some((t) => t.includes('(ajudante) terminou')), msgs.join(' | '));
+  assert.equal((await call('POST', `${O}/helpers/${pedido.id}`, { approve: true })).status, 409, 'não decide duas vezes');
+  // a conversa do titular continua com o resumo do ajudante: espera ela terminar antes de limpar a pasta do teste
+  await wait(() => !(db.prepare("SELECT 1 FROM jobs WHERE status IN ('fila','rodando')").get()));
+  assert.equal((db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id) as any).status, 'concluido', 'o titular seguiu com o resultado');
 });

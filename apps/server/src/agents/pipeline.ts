@@ -1,5 +1,6 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { archiveWorker, titularOf } from './workers.ts';
+import { handoffHelper } from './helpers.ts';
 import path from 'node:path';
 import {
   APPROVAL_MARKER, BRIEFING_FIELDS, NETWORK_LABEL, STAGE_AGENT, STAGE_LABEL, processById, uid,
@@ -295,7 +296,8 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
   const office = getOffice(officeId);
   const text = expandCommand(raw, listSkills(office.rootPath).map((s) => s.name));
   grantDirs(officeId, clientId, by, raw);
-  const jobs = all<AgentJob>("SELECT * FROM jobs WHERE client_id = ? AND (stage IS NULL OR stage != 'aprovacao') ORDER BY created_at DESC", clientId);
+  // a conversa é a do titular: tarefas de ajudante (sessão própria) ficam de fora
+  const jobs = all<AgentJob>("SELECT * FROM jobs WHERE client_id = ? AND (stage IS NULL OR stage != 'aprovacao') AND (worker_id IS NULL OR worker_id NOT IN (SELECT id FROM workers WHERE role = 'ajudante')) ORDER BY created_at DESC", clientId);
   try {
     if (!newRequest) {
       const active = jobs.find((j) => ['fila', 'rodando', 'aguardando'].includes(j.status));
@@ -467,6 +469,8 @@ export function onJobCheckpoint(job: AgentJob, finalText: string) {
 
 /** Chamado pelo runtime quando a tarefa de um funcionário termina (sem pedir aprovação no meio). */
 export function onJobFinished(job: AgentJob, finalText: string, ok: boolean) {
+  // ajudante: o resultado volta para quem pediu e ele é arquivado
+  if (handoffHelper(job, finalText, ok)) return;
   if (!job.demandId) return;
   const d = getDemand(job.demandId);
   if (!d) return;

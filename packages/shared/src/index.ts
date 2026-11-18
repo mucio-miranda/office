@@ -690,7 +690,7 @@ export type ServerMsg =
   | { t: 'dm'; message: DirectMessage }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'workers' | 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
+  | { t: 'invalidate'; what: 'helpers' | 'workers' | 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
   /** Aviso para todo mundo do escritório (ex.: peça esperando aprovação). */
   | { t: 'notice'; text: string; demandId?: ID; agentId?: ID }
   | { t: 'job'; job: AgentJob }
@@ -741,4 +741,21 @@ export interface DirectMessage {
   text: string;
   createdAt: string;
   readAt: string | null;
+}
+
+/** Pedido de ajudante: um funcionário quer outra sessão para uma tarefa em paralelo; uma pessoa aprova. */
+export interface HelperRequest {
+  id: ID;
+  officeId: ID;
+  clientId: ID;
+  /** Quem pediu. */
+  workerId: ID;
+  /** A tarefa de onde saiu o pedido: o resultado do ajudante volta para ela. */
+  jobId: ID;
+  task: string;
+  reason: string;
+  status: 'pendente' | 'aprovado' | 'recusado';
+  helperId: ID | null;
+  createdAt: string;
+  decidedBy: string | null;
 }

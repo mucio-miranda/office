@@ -6,7 +6,7 @@ import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import { POST_FORMATS, POST_STATUSES, MONTH_STEPS, CHECK_STATES, MONTH_STEP_LABEL,
   BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, PROCESSES, WALL_TYPES, processById, uid,
-  type AgentJob, type AgentProfile, type Worker, type DirectMessage, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
+  type AgentJob, type AgentProfile, type Worker, type DirectMessage, type HelperRequest, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
 import {
@@ -37,6 +37,7 @@ import { thumbOf } from '../clients/thumb.ts';
 import { clientBase, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
 import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../agents/agenda.ts';
 import { archiveWorker } from '../agents/workers.ts';
+import { decideHelper, requestHelper } from '../agents/helpers.ts';
 import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
@@ -151,6 +152,13 @@ export async function api(app: FastifyInstance) {
     if (job && tool === 'navegador_pegar') return { ok: takeBrowser(job) };
     if (job && tool === 'navegador_liberar') { releaseBrowser(job.id); return { ok: true, texto: 'Navegador liberado para os outros clientes.' }; }
     if (!job?.clientId) return reply.code(401).send({ error: 'Tarefa encerrada ou sem cliente.' });
+    if (tool === 'pedir_ajudante') {
+      const q = (req.body ?? {}) as { tarefa?: string; motivo?: string };
+      try {
+        const r = requestHelper(job, String(q.tarefa ?? ''), String(q.motivo ?? ''));
+        return { ok: true, pedido: r.id, texto: 'Pedido enviado. Uma pessoa precisa aprovar; siga com o resto enquanto isso. O resultado do ajudante chega nesta conversa.' };
+      } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
+    }
     // conferência de postados: as peças do mês deste cliente e a marcação do que já foi ao ar
     if (tool === 'posts_do_mes' || tool === 'posts_marcar_postado') {
       const office = one<Office>('SELECT * FROM offices WHERE id = ?', job.officeId)!;
@@ -1401,6 +1409,20 @@ export async function api(app: FastifyInstance) {
 
     // ---------------- funcionários de IA ----------------
     const seatSchema = z.object({ x: z.number().min(-200).max(200), z: z.number().min(-200).max(200) });
+    // pedidos de ajudante: os que esperam e os decididos nos últimos 7 dias; qualquer pessoa da equipe decide
+    r.get('/api/offices/:officeId/helpers', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const since = new Date(Date.now() - 7 * 86_400_000).toISOString();
+      return all<HelperRequest>("SELECT * FROM helper_requests WHERE office_id = ? AND (status = 'pendente' OR created_at > ?) ORDER BY created_at DESC", (req.params as any).officeId, since);
+    });
+    r.post('/api/offices/:officeId/helpers/:id', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ approve: z.boolean() }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      try { return { helper: decideHelper(officeId, id, b.approve, `user:${req.user.id}`) }; } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
+    });
+
     // funcionários de IA: os ativos e os arquivados dos últimos 90 dias (histórico da equipe de cada cliente)
     r.get('/api/offices/:officeId/workers', async (req, reply) => {
       if (!requireMember(req, reply)) return;

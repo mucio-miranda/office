@@ -5,6 +5,7 @@ import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import { ReviewDesk, versionsOf } from './ReviewDesk';
 import { usePersisted } from '../lib/persisted';
+import { HelperRequests } from './HelperRequests';
 
 /**
  * Mesa de trabalho: o que os funcionários terminaram ou querem decidir com você, peça por peça, sem precisar procurar
@@ -189,6 +190,7 @@ export function Mesa() {
       {!asking.length && !working.length && !stopped.length && !done.length && (
         <div className="empty"><Workflow size={22} /><p>Nada na mesa ainda. Peça algo na conversa do cliente, em Clientes, e as peças aparecem aqui.</p></div>
       )}
+      <HelperRequests />
       <Learnings />
       <SkillPath />
       {section('esperando', 'Esperando você', asking)}
