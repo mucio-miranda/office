@@ -4,6 +4,7 @@ import { POST_FORMAT_LABEL, POST_STATUS_LABEL, needsTunning, type ContentPost, t
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import { desktop } from '../lib/desktop';
+import { MediaViewer } from '../lib/MediaViewer';
 
 /**
  * As peças do calendário desta demanda na Mesa: cada uma com a trilha de etapas e o "Aprovar e entregar", que copia os
@@ -25,6 +26,14 @@ function PostCard({ p, onAdjust }: { p: ContentPost; onAdjust?: (prefix: string)
   const { office, notify } = useStore();
   const [busy, setBusy] = useState(false);
   const [thumbOk, setThumbOk] = useState(true);
+  const [viewing, setViewing] = useState<string[] | null>(null);
+  // a peça inteira (todas as lâminas): as entregues no Drive, senão os finais da pasta de trabalho
+  const view = async () => {
+    try {
+      const r = await api<{ files: string[] }>(`/api/offices/${office!.id}/posts/${p.id}/pecas`);
+      setViewing(r.files.length ? r.files : thumb ? [thumb] : []);
+    } catch { setViewing(thumb ? [thumb] : []); }
+  };
   const delivered = latest(p);
   const missingLink = delivered.some((d) => !d.link);
   const step = ORDER.indexOf(p.status);
@@ -62,11 +71,12 @@ function PostCard({ p, onAdjust }: { p: ContentPost; onAdjust?: (prefix: string)
 
   return (
     <li className={`post-card st-${p.status}`}>
-      <div className="post-thumb">
+      <button type="button" className="post-thumb" onClick={view} title="Ver a peça em tamanho grande">
         {thumb && thumbOk ? <img src={mediaUrl(office!.id, thumb)} alt="" onError={() => setThumbOk(false)} /> : <ImageIcon size={18} />}
-      </div>
+      </button>
+      {viewing && <MediaViewer files={viewing} title={label} onClose={() => setViewing(null)} />}
       <div className="post-main">
-        <b className="truncate" title={p.theme}>{label}</b>
+        <button type="button" className="link post-title-link truncate" title="Ver a peça em tamanho grande" onClick={view}>{label}</button>
         <span className="muted small">{p.date.split('-').reverse().slice(0, 2).join('/')} · {POST_FORMAT_LABEL[p.format]}{untuned ? ' · falta o tunning' : ''}</span>
         <ol className="post-trail" aria-label={`Etapa: ${POST_STATUS_LABEL[p.status]}`}>
           {TRAIL.map((s) => <li key={s} className={ORDER.indexOf(s) <= step ? 'done' : ''} title={TRAIL_LABEL[s]} />)}

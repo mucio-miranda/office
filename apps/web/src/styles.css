@@ -1288,3 +1288,16 @@ label.check input { width: auto; height: auto; }
 .schedule-box { border: 1px solid var(--border); border-radius: 10px; padding: 10px 12px 12px; margin: 0; display: flex; flex-direction: column; gap: 10px; }
 .schedule-box legend { padding: 0 4px; }
 @media (max-width: 640px) { .posts-grid { grid-template-columns: minmax(0, 1fr); } .post-item { grid-template-columns: 84px minmax(0, 1fr); } .post-item-thumb { width: 84px; height: 105px; } }
+
+/* visualizador de peça em tamanho grande (por cima de qualquer modal) */
+.modal-bg.viewer-bg { z-index: 220; background: rgba(0, 0, 0, .72); }
+.viewer { width: min(1400px, 100%); height: min(940px, 94vh); background: var(--background); border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); display: flex; flex-direction: column; overflow: hidden; }
+.viewer-head { display: flex; align-items: center; gap: 8px; padding: 10px 12px 10px 16px; border-bottom: 1px solid var(--border); min-width: 0; }
+.viewer-head .spacer { flex: 1; }
+.viewer-stage { position: relative; flex: 1; min-height: 0; display: grid; place-items: center; background: var(--muted-2, var(--muted)); }
+.viewer-stage img, .viewer-stage video { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+.viewer-strip { padding: 8px 12px 0; }
+.viewer-file { padding: 6px 16px 10px; }
+.post-thumb { padding: 0; border: 0; cursor: zoom-in; }
+.post-title-link { font-size: 13px; font-weight: 600; text-decoration: none; text-align: left; max-width: 100%; }
+.post-title-link:hover { text-decoration: underline; }
