@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Instagram, Layers, Play, RotateCcw, X } from 'lucide-react';
+import { CalendarClock, CalendarDays, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Instagram, Layers, Play, RotateCcw, X } from 'lucide-react';
 import { POST_FORMAT_LABEL, canWork, type PostFormat } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
@@ -30,6 +30,11 @@ const STATE_LABEL: Record<State, string> = { producao: 'em produção', pronto: 
 const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const VID = /\.(mp4|mov|webm|m4v)$/i;
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const ymd = (d: Date) => `${ym(d)}-${String(d.getDate()).padStart(2, '0')}`;
+const WEEK = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+/** Domingo da semana do dia. */
+const weekOf = (d: Date) => { const x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() - x.getDay()); return x; };
+const addDays = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const thumbUrl = (officeId: string, file: string, w = 320) => `/api/offices/${officeId}/thumb?w=${w}&path=${encodeURIComponent(file)}`;
 const when = (it: Pick<Item, 'date' | 'time'>) => {
   if (!it.date) return 'Sem data';
@@ -51,22 +56,35 @@ export function PostsPanel() {
   const [sq, setSq] = useState<SquadInfo>({ squads: [], byClient: {} });
   const [open, setOpen] = useState<Item | null>(null);
   const [confirmCheck, setConfirmCheck] = useState(false);
+  // aba Calendário: semana ou mês (clicar num dia do mês abre a semana dele)
+  const [calView, setCalView] = usePersisted<string>('office.posts.calview', 'semana');
+  const [weekStart, setWeekStart] = useState(() => weekOf(new Date()));
   const worker = canWork(office?.role);
+  const onCalendar = tab === 'calendario';
+  const weekly = onCalendar && calView === 'semana';
 
+  // a semana pode cruzar dois meses: lê os dois
+  const months = weekly ? [...new Set([ym(weekStart), ym(addDays(weekStart, 6))])] : [month];
   const load = () => {
-    const q = new URLSearchParams({ mes: month });
-    if (only && !only.startsWith('squad:')) q.set('cliente', only);
-    api<Item[]>(`/api/offices/${office!.id}/agenda?${q}`).then((r) => { setItems(r); setErr(''); }).catch((e) => setErr((e as Error).message));
+    Promise.all(months.map((m) => {
+      const q = new URLSearchParams({ mes: m });
+      if (only && !only.startsWith('squad:')) q.set('cliente', only);
+      return api<Item[]>(`/api/offices/${office!.id}/agenda?${q}`);
+    })).then((rs) => {
+      const seen = new Set<string>();
+      setItems(rs.flat().filter((i) => (seen.has(i.key) ? false : (seen.add(i.key), true))));
+      setErr('');
+    }).catch((e) => setErr((e as Error).message));
   };
   // recarrega quando um post muda (agendado aqui, ou o funcionário entregou uma peça)
   const version = posts.map((p) => p.updatedAt).sort().at(-1);
-  useEffect(() => { load(); }, [month, only, version]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { load(); }, [months.join(','), only, version]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api<SquadInfo>(`/api/offices/${office!.id}/squads`).then(setSq).catch(() => {}); }, [office]);
   useEffect(() => { if (open && items) setOpen(items.find((i) => i.key === open.key) ?? null); }, [items]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const inScope = (items ?? []).filter((i) => !only.startsWith('squad:') || sq.byClient[i.clientId] === only.slice(6));
   const counts = Object.fromEntries(TABS.map((t) => [t.id, t.id === 'todos' ? inScope.length : inScope.filter((i) => i.state === t.id).length]));
-  const shown = inScope.filter((i) => tab === 'todos' || i.state === tab);
+  const shown = onCalendar ? [] : inScope.filter((i) => tab === 'todos' || i.state === tab);
   const groups = useMemo(() => {
     const by = new Map<string, Item[]>();
     for (const i of shown) by.set(i.clientId, [...(by.get(i.clientId) ?? []), i]);
@@ -84,8 +102,17 @@ export function PostsPanel() {
     } catch (e) { notify((e as Error).message); }
   };
 
-  const shift = (n: number) => { const [y, m] = month.split('-').map(Number); setMonth(ym(new Date(y, m - 1 + n, 1))); };
+  const shiftMonth = (n: number) => { const [y, m] = month.split('-').map(Number); setMonth(ym(new Date(y, m - 1 + n, 1))); };
+  const shift = (n: number) => {
+    if (!weekly) { shiftMonth(n); return; }
+    const next = addDays(weekStart, n * 7);
+    setWeekStart(next);
+    setMonth(ym(addDays(next, 3)));
+  };
   const monthLabel = new Date(`${month}-15`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  const short = (d: Date) => d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+  const title = weekly ? `${short(weekStart)} – ${short(addDays(weekStart, 6))}` : monthLabel;
+  const openWeek = (day: Date) => { setWeekStart(weekOf(day)); setCalView('semana'); };
 
   const save = async (it: Item, patch: { state: 'pronto' | 'agendado' | 'postado'; date?: string; time?: string | null; caption?: string }, ok?: string) => {
     const date = patch.date ?? it.date;
@@ -105,9 +132,10 @@ export function PostsPanel() {
     <div className="posts-page">
       <header className="posts-head">
         <div className="row gap">
-          <button className="icon" onClick={() => shift(-1)} aria-label="Mês anterior"><ChevronLeft size={16} /></button>
-          <h3 className="cap">{monthLabel}</h3>
-          <button className="icon" onClick={() => shift(1)} aria-label="Próximo mês"><ChevronRight size={16} /></button>
+          <button className="icon" onClick={() => shift(-1)} aria-label={weekly ? 'Semana anterior' : 'Mês anterior'}><ChevronLeft size={16} /></button>
+          <h3 className="cap">{title}</h3>
+          <button className="icon" onClick={() => shift(1)} aria-label={weekly ? 'Próxima semana' : 'Próximo mês'}><ChevronRight size={16} /></button>
+          {weekly && <button className="ghost small" onClick={() => { setWeekStart(weekOf(new Date())); setMonth(ym(new Date())); }}>Hoje</button>}
         </div>
         <div className="row gap wrap">
         {worker && <button className="small" disabled={!toCheck.length} title="Um funcionário abre o Instagram de cada cliente no Chrome, compara com as peças e marca o que já foi ao ar (movendo para POSTADOS)" onClick={() => setConfirmCheck(true)}><Instagram size={13} /> Conferir postados</button>}
@@ -132,10 +160,25 @@ export function PostsPanel() {
             {t.label} <span className="count">{counts[t.id] ?? 0}</span>
           </button>
         ))}
+        <button role="tab" aria-selected={onCalendar} className={`posts-tab-cal ${onCalendar ? 'on' : ''}`} onClick={() => setTab('calendario')}>
+          <CalendarDays size={13} /> Calendário
+        </button>
+        {onCalendar && (
+          <div className="seg posts-calview" role="group" aria-label="Ver por">
+            <button className={calView === 'semana' ? 'on' : ''} onClick={() => { setCalView('semana'); setWeekStart(weekOf(ym(new Date()) === month ? new Date() : new Date(`${month}-01T12:00`))); }}>Semana</button>
+            <button className={calView === 'mes' ? 'on' : ''} onClick={() => { setCalView('mes'); setMonth(ym(addDays(weekStart, 3))); }}>Mês</button>
+          </div>
+        )}
       </nav>
       {err && <div className="error">{err}</div>}
       {!items && !err && <p className="muted small">Lendo as pastas do mês…</p>}
-      {items && shown.length === 0 && (
+      {items && onCalendar && (calView === 'mes'
+        ? <MonthGrid month={month} items={inScope} clients={clients} onDay={openWeek} />
+        : <WeekGrid start={weekStart} items={inScope} clients={clients} onOpen={setOpen} />)}
+      {items && onCalendar && inScope.some((i) => !i.date) && (
+        <p className="muted small">{inScope.filter((i) => !i.date).length} peça(s) sem data não aparecem no calendário: agende pela aba Para agendar.</p>
+      )}
+      {items && !onCalendar && shown.length === 0 && (
         <div className="empty"><CalendarClock size={22} /><p>{tab === 'pronto' ? 'Nada esperando agendamento neste mês. As peças aparecem aqui quando chegam na pasta do mês no Drive.' : 'Nada aqui neste mês.'}</p></div>
       )}
       {groups.map(({ client, list }) => (
@@ -310,6 +353,87 @@ function PostDetail({ it, client, worker, save, onClose }: { it: Item; client: s
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+type ClientLite = { id: string; name: string; color?: string };
+const STATE_ORDER: State[] = ['postado', 'agendado', 'pronto', 'producao'];
+
+/** Mês inteiro: cada dia com as miniaturas dos posts. Clicar no dia abre a semana dele. */
+function MonthGrid({ month, items, clients, onDay }: { month: string; items: Item[]; clients: ClientLite[]; onDay: (d: Date) => void }) {
+  const { office } = useStore();
+  const first = new Date(`${month}-01T12:00`);
+  const start = addDays(first, -first.getDay());
+  const days = Array.from({ length: 42 }, (_, i) => addDays(start, i));
+  const today = ymd(new Date());
+  const byDay = new Map<string, Item[]>();
+  for (const it of items) if (it.date) byDay.set(it.date, [...(byDay.get(it.date) ?? []), it]);
+  return (
+    <div className="pcal-month">
+      {WEEK.map((w) => <div key={w} className="pcal-head">{w}</div>)}
+      {days.map((d) => {
+        const key = ymd(d);
+        const list = (byDay.get(key) ?? []).sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99'));
+        return (
+          <button key={key} className={`pcal-day ${ym(d) !== month ? 'out' : ''} ${key === today ? 'today' : ''}`} onClick={() => onDay(d)} title="Ver a semana">
+            <span className="num">{d.getDate()}</span>
+            <span className="pcal-thumbs">
+              {list.slice(0, 6).map((it) => {
+                const cover = coverOf(it.files);
+                const c = clients.find((x) => x.id === it.clientId);
+                return (
+                  <span key={it.key} className={`pcal-thumb st-${it.state}`} style={{ ['--cl' as string]: c?.color ?? 'var(--border)' }} title={`${c?.name ?? ''} · ${it.theme} · ${STATE_LABEL[it.state]}`}>
+                    {cover ? <img src={thumbUrl(office!.id, cover, 120)} alt="" loading="lazy" /> : null}
+                  </span>
+                );
+              })}
+              {list.length > 6 && <span className="pcal-more">+{list.length - 6}</span>}
+            </span>
+          </button>
+        );
+      })}
+      <div className="pcal-legend">{STATE_ORDER.map((s) => <span key={s} className={`state-pill st-${s}`}>{STATE_LABEL[s]}</span>)}<span className="muted small">a borda tem a cor do cliente</span></div>
+    </div>
+  );
+}
+
+/** Semana: uma coluna por dia com os posts em ordem de horário. */
+function WeekGrid({ start, items, clients, onOpen }: { start: Date; items: Item[]; clients: ClientLite[]; onOpen: (it: Item) => void }) {
+  const { office } = useStore();
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+  const today = ymd(new Date());
+  return (
+    <div className="pcal-week">
+      {days.map((d) => {
+        const key = ymd(d);
+        const list = items.filter((i) => i.date === key).sort((a, b) => (a.time ?? '99').localeCompare(b.time ?? '99') || (a.number ?? 999) - (b.number ?? 999));
+        return (
+          <section key={key} className={`pcal-col ${key === today ? 'today' : ''}`}>
+            <header><span className="muted small">{WEEK[d.getDay()]}</span><b>{d.getDate()}</b>{list.length > 0 && <span className="muted small">{list.length}</span>}</header>
+            <div className="pcal-col-body">
+              {list.length === 0 && <span className="muted small pcal-empty">—</span>}
+              {list.map((it) => {
+                const cover = coverOf(it.files);
+                const c = clients.find((x) => x.id === it.clientId);
+                const slides = it.files.filter((f) => IMG.test(f)).length;
+                return (
+                  <button key={it.key} className={`pcal-card st-${it.state}`} style={{ ['--cl' as string]: c?.color ?? 'var(--border)' }} onClick={() => onOpen(it)} title={it.theme}>
+                    <span className="pcal-card-thumb">
+                      {cover ? <img src={thumbUrl(office!.id, cover, 240)} alt="" loading="lazy" /> : <ImageIcon size={16} />}
+                      {slides > 1 && <span className="badge-corner"><Layers size={10} /> {slides}</span>}
+                      {it.files.some((f) => VID.test(f)) && <span className="badge-corner"><Play size={10} /></span>}
+                    </span>
+                    <span className="pcal-card-client truncate"><span className="dot" style={{ background: c?.color }} />{c?.name}</span>
+                    <span className="pcal-card-title">{it.theme}</span>
+                    <span className="pcal-card-meta"><span className={`state-pill st-${it.state}`}>{STATE_LABEL[it.state]}</span>{it.time && <span className="mono small">{it.time}</span>}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </section>
+        );
+      })}
     </div>
   );
 }
