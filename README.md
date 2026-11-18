@@ -63,15 +63,18 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 <td width="50%" valign="top">
 
 ### 🤖 Funcionários de IA
-- **Vic** · editor(a) de vídeo · **Duda** · designer · **Theo** · copy e estratégia · **Rafa** · gerente e contador
-- Cada um é uma sessão do **Claude Code headless**, rodando na pasta do escritório e respeitando o seu `CLAUDE.md` e as suas skills
-- O avatar digita ⌨️ enquanto trabalha e **levanta a mão ✋** quando precisa de aprovação
-- Você responde pelo chat e ele **continua a mesma sessão**
+- **Um funcionário = uma sessão do Claude Code headless, sempre de um cliente ou projeto.** Ele ganha um nome de uma lista de 50 (Vic, Duda, Theo, Luna, Nico…), o selo **IA** e trabalha só naquele cliente, na pasta dele, com o seu `CLAUDE.md` e todas as skills da casa. Não há mais funcionário por função
+- **Titular**: a conversa contínua do cliente, com memória de um dia para o outro. **Trocar de funcionário** arquiva o titular com o histórico dele e o próximo pedido chama outro
+- **Ajudante com permissão**: quando uma parte pode andar em paralelo, o funcionário pede um ajudante (tarefa e motivo); qualquer pessoa da equipe aprova na conversa ou na Mesa. Ele trabalha em sessão própria, devolve o resumo para quem pediu e é arquivado ao terminar. No máximo 50 funcionários ativos e 2 ajudantes por cliente
+- **Virada de mês**: no começo do mês o titular escreve a passagem de bastão (`PASSAGEM AAAA-MM.md` nos documentos do cliente) e outro funcionário assume lendo ela. Dá para virar na hora pela aba Equipe do cliente
+- **No mapa**, o funcionário trabalha na sala do tipo de trabalho, digita ⌨️ e ganha anel amarelo quando precisa de você; parado, espera na copa
+- **Equipe** na barra lateral: pessoas (selo Humano, com conversa direta entre elas) e funcionários de IA (selo IA e o cliente), com o contador `IA n/50`. Na tela de cada cliente, a aba Equipe mostra titular, ajudantes e quem já trabalhou ali
+- A **revisão pela IA** (aprovação configurável por cliente) é uma função do sistema, sem nome: lê as peças sem o histórico de quem fez
+- Você responde pelo chat e ele **continua a mesma sessão**; mensagens enviadas com ele trabalhando entram juntas quando ele termina a parte atual
 - **Vários clientes ao mesmo tempo**: cada cliente tem a própria conversa, e até `OFFICE_MAX_JOBS` tarefas (padrão 4) rodam juntas. Só o que disputa a máquina espera a vez: vídeo renderiza um por vez e o **Chrome** (tunning, downloads) é de um cliente por vez. O resto do design dos outros clientes segue em paralelo, e quem está esperando vê o motivo no chat
-- **Página do funcionário**: cabeçalho compacto, skills e ferramentas recolhidas num botão e a lista de conversas com a maior parte da coluna
 - Comandos destrutivos ficam **sempre bloqueados**, e o custo de cada tarefa aparece em US$
 - **Skills por um caminho só**: o funcionário sugere aprendizados, você aprova na Mesa, um curador (que só lê) propõe a troca exata na skill e você vê o antes e o depois. Só ao apertar **Aplicar** o Office grava e registra no git das skills
-- **Ferramentas criativas por MCP**: a Duda usa o PhotoCraft e o VectorCraft, a Vic usa o FilmCraft e o Theo e a Rafa usam o OfficeCLI, sempre presos às pastas do escritório
+- **Ferramentas criativas por MCP**: PhotoCraft, VectorCraft, FilmCraft e OfficeCLI, conforme o jeito de trabalhar (design, vídeo, copy, gestão), sempre presos às pastas do escritório
 
 </td>
 </tr>
@@ -492,6 +495,8 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Aprovar e entregar na Mesa (pasta do mês com nome padrão e link do Drive) e gestão do mês do squad
 - [x] Calendário com a peça à vista e os links do Drive; mensagens que se juntam em vez de interromper
 - [x] Vários clientes em paralelo, com o Chrome dado a um cliente por vez
+- [x] Funcionário = sessão de um cliente ou projeto (nomes, titular, ajudante com permissão, virada de mês), Equipe com humanos e IA e conversa direta entre pessoas
+- [x] Página Posts para a social media (semana, mês, agendar, postado em POSTADOS e conferência no Instagram)
 - [ ] Ponte do terminal para o Office (o trabalho feito no Claude Code aparece no calendário)
 - [ ] Cards de opções, conferência automática e PDF de legendas por demanda
 - [ ] Office como SaaS: servidor na nuvem, banco central, Drive pela API e o PC da agência como trabalhador

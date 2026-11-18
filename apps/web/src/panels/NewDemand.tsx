@@ -59,10 +59,10 @@ export function NewDemand({ agentId, clientId, onClose }: { agentId?: string | n
                 {active.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </label>
-            <label>Quem faz
-              <select value={f.agentId} onChange={(e) => setF({ ...f, agentId: e.target.value })}>
-                <option value="">Quem estiver livre</option>
-                {agents.filter((a) => a.slug !== 'gerente' || a.id === f.agentId).map((a) => <option key={a.id} value={a.id}>{a.name} · {a.role}</option>)}
+            <label>Tipo de trabalho
+              <select value={f.agentId} onChange={(e) => setF({ ...f, agentId: e.target.value })} title="O funcionário de IA do cliente faz o pedido; isto só escolhe o jeito de trabalhar">
+                <option value="">Pelo pedido</option>
+                {agents.filter((a) => a.slug !== 'gerente' || a.id === f.agentId).map((a) => <option key={a.id} value={a.id}>{a.role}</option>)}
               </select>
             </label>
           </div>

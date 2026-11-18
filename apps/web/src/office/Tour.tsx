@@ -25,16 +25,15 @@ export function startTour() {
 function useSteps(): Step[] {
   const { agents, user, office, members } = useStore();
   const rafa = agents.find((a) => a.slug === 'gerente') ?? agents[0];
-  const team = agents.filter((a) => a !== rafa);
   const mine = myDesk();
   const taken = new Set(members.map((m) => m.desk));
   const free = HUMAN_DESKS.find((d) => !taken.has(d.id));
   const desk = mine ?? free;
   return [
     {
-      title: `Oi, ${user?.name.split(' ')[0]}! Eu sou ${rafa ? `a ${rafa.name}` : 'a gerente'}.`,
-      body: <>Cuido da gerência e das contas do <b>{office?.name}</b>. Em um minuto te mostro onde fica cada coisa.</>,
-      focus: rafa ? agentSeat(rafa) : { x: 0, z: -9 }, zoom: 46, spot: true,
+      title: `Oi, ${user?.name.split(' ')[0]}! Bem-vindo ao ${office?.name ?? 'escritório'}.`,
+      body: <>Em um minuto te mostro onde fica cada coisa: as salas, a equipe de IA e a sua mesa.</>,
+      focus: rafa ? agentSeat(rafa) : { x: 0, z: -9 }, zoom: 30,
     },
     {
       title: 'O escritório tem 7 salas',
@@ -45,8 +44,9 @@ function useSteps(): Step[] {
       title: 'A equipe de IA',
       body: (
         <>
-          {team.map((a, i) => <span key={a.id}>{i > 0 && (i === team.length - 1 ? ' e ' : ', ')}<b style={{ color: a.color }}>{a.name}</b> ({a.role.toLowerCase()})</span>)}.
-          {' '}O anel no chão mostra o status: azul é trabalhando, amarelo é <b>precisa de você</b>. Chegue perto e aperte <kbd>E</kbd> para conversar.
+          Cada cliente tem o seu funcionário de IA, com nome e o selo <b>IA</b>: ele aparece na sala do trabalho em andamento e
+          espera na copa. O anel no chão mostra o status: azul é trabalhando, amarelo é <b>precisa de você</b>. Chegue perto e
+          aperte <kbd>E</kbd> para abrir a conversa do cliente. Na barra lateral, a <b>Equipe</b> junta pessoas e IA.
         </>
       ),
       focus: { x: 4.5, z: 1.5 }, zoom: 16,
