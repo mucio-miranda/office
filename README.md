@@ -67,6 +67,8 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - Cada um é uma sessão do **Claude Code headless**, rodando na pasta do escritório e respeitando o seu `CLAUDE.md` e as suas skills
 - O avatar digita ⌨️ enquanto trabalha e **levanta a mão ✋** quando precisa de aprovação
 - Você responde pelo chat e ele **continua a mesma sessão**
+- **Vários clientes ao mesmo tempo**: cada cliente tem a própria conversa, e até `OFFICE_MAX_JOBS` tarefas (padrão 4) rodam juntas. Só o que disputa a máquina espera a vez: vídeo renderiza um por vez e o **Chrome** (tunning, downloads) é de um cliente por vez. O resto do design dos outros clientes segue em paralelo, e quem está esperando vê o motivo no chat
+- **Página do funcionário**: cabeçalho compacto, skills e ferramentas recolhidas num botão e a lista de conversas com a maior parte da coluna
 - Comandos destrutivos ficam **sempre bloqueados**, e o custo de cada tarefa aparece em US$
 - **Skills por um caminho só**: o funcionário sugere aprendizados, você aprova na Mesa, um curador (que só lê) propõe a troca exata na skill e você vê o antes e o depois. Só ao apertar **Aplicar** o Office grava e registra no git das skills
 - **Ferramentas criativas por MCP**: a Duda usa o PhotoCraft e o VectorCraft, a Vic usa o FilmCraft e o Theo e a Rafa usam o OfficeCLI, sempre presos às pastas do escritório
@@ -103,6 +105,9 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - **Mesa de trabalho**: o que está esperando você, peça por peça, com os caminhos reais de cada arquivo. Você responde,
   marca áreas na imagem, comenta um tempo do vídeo e aprova, sem procurar nas pastas. Se você editar uma peça à mão, a mesa
   nota e oferece usar como versão atual.
+- **Aprovar e entregar**: na Mesa, cada peça do calendário tem a trilha de etapas e um botão que copia os finais para a
+  pasta do mês do cliente no Drive, com o nome padrão `AAAA-MM-DD Formato – Tema – NN`, confere o SHA-256 e devolve o
+  link do Drive para mandar à social media. Reentregar guarda a versão anterior em `_versoes`, fora da pasta que o cliente vê.
 - **Envio ao Drive**: um botão na demanda aprovada copia as peças para a pasta do cliente no Google Drive para
   computador. Na estrutura nova, a arte e o vídeo aprovados vão para a pasta do mês (o que o cliente vê) e o PSD para
   `ARQUIVOS – CLIENTE\PROJETOS`; na antiga, a mesma estrutura da pasta local. Você escolhe a pasta e os arquivos; nada é apagado nem sobrescrito lá.
@@ -111,16 +116,22 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   documentos, projetos, referências, brutos por captação, banco e músicas), que só a equipe vê. A antiga (DOCUMENTOS,
   FOTOS e VIDEOS) continua funcionando. Os nomes vêm de `.claude/skills/_global/pastas.json`, o mesmo mapa que as skills usam.
 - **Squads**: com `.claude/skills/_global/squads.json` (cada squad com nome, social media, design/produção e a lista de
-  clientes com a pasta de cada um), a lista de Clientes vem agrupada por squad e cada cliente mostra o dele. Sem o arquivo,
-  a lista fica como sempre.
+  clientes com a pasta de cada um), a lista de Clientes vem agrupada por squad, com filtro, e cada cliente mostra o dele.
+  Sem o arquivo, a lista fica como sempre.
+- **Gestão do mês**: um checklist por cliente e mês com as etapas que o squad acompanha, e um organizador que liga as
+  peças da pasta do mês às datas do calendário. Arraste uma peça de um dia para outro ou de volta para fora do calendário;
+  o Office propõe os nomes no padrão e a renomeação pode ser desfeita.
 - **Arquivo dos clientes**: um armário por cliente na redação; clicar abre a pasta dele por grupo, com busca e
   prévia de imagem, vídeo, áudio, PDF e texto. Editar um PDF vira uma tarefa para o funcionário com o PdfCraft
 
 ### 🧾 Clientes
-- **Uma conversa contínua por cliente**: pedidos, correções e aprovações na mesma conversa, com memória de um dia para o outro. Digite `/` para os comandos, que são as skills do escritório (`/start-conteudo`), e escreva enquanto o agente trabalha para corrigir na hora. **Nova conversa** começa do zero. Cada mensagem mostra quem pediu.
+- **Tela do cliente** com topo enxuto e abas (Conversa, Sessões, Briefing, Demandas, Arquivos). A barra lateral recolhe para só ícones (<kbd>Ctrl</kbd>+<kbd>B</kbd>) e a lista de clientes vira uma coluna estreita.
+- **Uma conversa contínua por cliente**: pedidos, correções e aprovações na mesma conversa, com memória de um dia para o outro. Digite `/` para os comandos, que são as skills do escritório (`/start-conteudo`). **Nova conversa** começa do zero. Cada mensagem mostra quem pediu.
+- **Mensagens com o funcionário trabalhando entram na fila**: várias seguidas se juntam e ele recebe todas quando termina a parte em que está, sem perder o que fez. Para cortar na hora, o menu de envio tem **Parar e corrigir agora**.
+- **Abrir a pasta** do cliente vai direto à pasta dele no Drive (ou à local, se não houver).
 - **Sessões do cliente**: o botão **Sessões** lista as conversas do Office e as que você abriu no terminal (Claude Code) na pasta do cliente. Leia qualquer uma e continue de onde parou, no Office.
 - **Demanda pelo mapa**: chegue perto de um funcionário e aperte <kbd>E</kbd>, ou use **Nova demanda** no topo. Escolha cliente, pedido, processo, prazo e quem faz, e a sessão do cliente já começa.
-- **Importar da pasta** lista o que já existe em `CLIENTES\` e ainda não é cliente no Office, sem criar, mover nem renomear nada lá. Opcionalmente, o gerente lê cada pasta e preenche um rascunho do briefing para a equipe conferir.
+- **Importar da pasta** lista o que já existe em `CLIENTES\` e ainda não é cliente no Office, sem criar, mover nem renomear nada lá. Atalhos para o Drive e pastas antigas com o mesmo nome da pasta do Drive não viram cliente repetido. Opcionalmente, o gerente lê cada pasta e preenche um rascunho do briefing para a equipe conferir.
 - **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com REDES SOCIAIS e ARQUIVOS – NOME); só cria
   as pastas que faltam, nada é movido nem apagado
 - **Entrevista de briefing**: o gerente de IA lê a pasta, pergunta o que falta pelo chat, grava o `BRIEFING.md`
@@ -147,6 +158,7 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 - Cada peça mostra a etapa (referência > composição > tunning > conferência > aprovado > Drive > postado), e o funcionário atualiza sozinho enquanto produz, pelo servidor MCP do Office
 - **O tunning faz parte do design**: arte sem tunning não é aprovada, a não ser que uma pessoa decida que fica sem
 - "3 de 8 prontas · 1 no tunning" no quadro e no calendário
+- O dia mostra a miniatura de cada peça. Clicar abre o post num **modal grande**: a peça à esquerda (lâmina por lâmina no carrossel, vídeo com player) e os campos à direita, com **Peça no Drive**, **Pasta do mês no Drive** e copiar os links
 - Mês inteiro com reuniões, gravações e entregas
 - Os prazos das demandas aparecem no dia com ⏰
 - A lista de próximos eventos fica sempre à vista
@@ -355,7 +367,8 @@ Para desenvolver: `npm run dev` (UI com hot reload em `:5173`).
 | `PORT` | `4747` | porta do servidor |
 | `HOST` | `0.0.0.0` | use `127.0.0.1` para só esta máquina |
 | `OFFICE_DATA` | `./data` | onde fica o banco |
-| `OFFICE_MAX_JOBS` | `2` | quantos funcionários de IA trabalham ao mesmo tempo |
+| `OFFICE_MAX_JOBS` | `4` | quantas tarefas dos funcionários de IA rodam ao mesmo tempo |
+| `OFFICE_LIVE_MAX` | `2` | quantos apps criativos ficam abertos ao vivo ao mesmo tempo |
 | `CLAUDE_BIN` | autodetectado | caminho do executável do Claude Code |
 | `FFMPEG_BIN` / `FFPROBE_BIN` | `ffmpeg` / `ffprobe` | caminhos do ffmpeg |
 
@@ -427,7 +440,9 @@ em `%APPDATA%\Office\data`), copie o backup escolhido para essa pasta com o nome
 
 ```
 apps/server            Fastify + WebSocket + SQLite (node:sqlite) + runtime dos agentes
+                       (fila, servidor MCP `office` e gancho que dá a vez do Chrome)
 apps/web               React 19 + three.js (react-three-fiber) + zustand
+apps/desktop           app de Windows (Electron) com o servidor dentro
 packages/shared        tipos e protocolo em tempo real
 packages/video-engine  timeline JSON → ffmpeg (biblioteca + CLI)
 agents/                funcionários de IA em Markdown
@@ -473,6 +488,12 @@ AI Town, OpenCut...) está em [`docs/RESEARCH.md`](docs/RESEARCH.md).
 - [x] Temas da interface: claro, escuro, ultradark (preto puro) e vidro (glassmorphism); o mundo fica só em pixel art, à espera de novas skins
 - [x] Moodboards editáveis: buscar, adicionar (arquivo, link ou arrastando), remover para `_apagados` (fora do alcance das skills) e pedir novas ao agente; tipografia própria por nicho
 - [x] Skills de cada escritório no setup inicial (importação, histórico local e repositório próprio) e entrada sem ficar preso
+- [x] Escritório aberto, squads, tela do cliente com abas e barras recolhíveis
+- [x] Aprovar e entregar na Mesa (pasta do mês com nome padrão e link do Drive) e gestão do mês do squad
+- [x] Calendário com a peça à vista e os links do Drive; mensagens que se juntam em vez de interromper
+- [x] Vários clientes em paralelo, com o Chrome dado a um cliente por vez
+- [ ] Ponte do terminal para o Office (o trabalho feito no Claude Code aparece no calendário)
+- [ ] Cards de opções, conferência automática e PDF de legendas por demanda
 - [ ] Office como SaaS: servidor na nuvem, banco central, Drive pela API e o PC da agência como trabalhador
 
 Lista completa em [`docs/ROADMAP.md`](docs/ROADMAP.md).
