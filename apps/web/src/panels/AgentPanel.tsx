@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Check, ChevronDown, Navigation, Plus, Square, Wrench } from 'lucide-react';
 import type { AgentJob } from '@office/shared';
 import { useStore } from '../lib/store';
+import { useDraft } from '../lib/draft';
 import { api } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { desktop } from '../lib/desktop';
@@ -20,7 +21,7 @@ export function AgentPanel() {
   const myJobs = jobs.filter((j) => j.agentId === agent?.id);
   const [jobId, setJobId] = useState<string | null>(null);
   const job = myJobs.find((j) => j.id === jobId) ?? null;
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`agente:${panelArg ?? ''}`);
   const [demandId, setDemandId] = useState('');
   const [err, setErr] = useState('');
   const list = useRef<HTMLDivElement>(null);

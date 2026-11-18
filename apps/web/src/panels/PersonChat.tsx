@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUp, Navigation, Video } from 'lucide-react';
 import { useStore } from '../lib/store';
+import { useDraft } from '../lib/draft';
 import { goToPerson } from '../office/World';
 import { ROOMS } from '../office/layout';
 
@@ -12,7 +13,7 @@ export function PersonChat() {
   const { panelArg, members, presences, user, dms, loadDm, sendDm, markDmRead } = useStore();
   const person = members.find((m) => m.id === panelArg);
   const list = dms[panelArg ?? ''];
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`pessoa:${panelArg ?? ''}`);
   const [sending, setSending] = useState(false);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => { if (panelArg) loadDm(panelArg); }, [panelArg]); // eslint-disable-line react-hooks/exhaustive-deps

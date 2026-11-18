@@ -3,6 +3,7 @@ import { HelperRequests } from './HelperRequests';
 import { ArrowUp, ChevronDown, History, Square, Wrench } from 'lucide-react';
 import { canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage } from '@office/shared';
 import { useStore } from '../lib/store';
+import { useDraft } from '../lib/draft';
 import { api, mediaUrl } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { useAttach, withPaths } from '../lib/attach';
@@ -81,7 +82,7 @@ interface Props {
 export function Conversa({ c, view, setView, sessions, resume, onSessions, onInterview, onBriefing }: Props) {
   const { jobs, messages, loadMessages, agents, office, demands, notify } = useStore();
   const base = `/api/offices/${office!.id}`;
-  const [text, setText] = useState('');
+  const [text, setText] = useDraft(`conversa:${c.id}`);
   const [newRequest, setNewRequest] = useState(false);
   const [sendMenu, setSendMenu] = useState(false);
   const [busy, setBusy] = useState(false);
