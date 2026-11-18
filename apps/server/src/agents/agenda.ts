@@ -3,7 +3,7 @@ import type { Client, ContentPost, Office, PostFormat } from '@office/shared';
 import { all, now, one, update } from '../db.ts';
 import { invalidate } from '../realtime.ts';
 import { finalsOf } from '../clients/deliver.ts';
-import { assignPiece, piecesOf } from '../clients/month.ts';
+import { assignPiece, movePosted, piecesOf, undoPosted } from '../clients/month.ts';
 import { postsOf } from './calendar.ts';
 
 /**
@@ -82,7 +82,10 @@ export interface ScheduleInput {
   caption?: string;
 }
 
-/** Agenda, desmarca ou marca como postado. Peça da pasta sem post no Office ganha um post ligado aos arquivos dela. */
+/**
+ * Agenda, desmarca ou marca como postado. Peça da pasta sem post no Office ganha um post ligado aos arquivos dela.
+ * Postado move os arquivos para POSTADOS (com o nome de postado); desfazer devolve os que o Office moveu.
+ */
 export function schedule(officeId: string, clientId: string, input: ScheduleInput, by: string) {
   if (!DATE.test(input.date)) throw new Error('Data inválida (use AAAA-MM-DD).');
   if (input.time && !TIME.test(input.time)) throw new Error('Horário inválido (use HH:MM).');
@@ -95,6 +98,15 @@ export function schedule(officeId: string, clientId: string, input: ScheduleInpu
     if (!r) throw new Error('Não consegui registrar a peça.');
     post = r;
   }
+  let moved: { renamed: unknown[]; skipped: string[] } = { renamed: [], skipped: [] };
+  if (input.state === 'postado') {
+    moved = movePosted(officeId, clientId, post.files.length ? post.files : input.files, input.date, by);
+    post = one<ContentPost>('SELECT * FROM content_posts WHERE id = ?', post.id)!;
+  } else if (post.status === 'postado') {
+    const r = undoPosted(officeId, clientId, post.files);
+    if (typeof r === 'string') throw new Error(r);
+    post = one<ContentPost>('SELECT * FROM content_posts WHERE id = ?', post.id)!;
+  }
   const status = input.state === 'postado' ? 'postado' : input.state === 'agendado' ? 'programado'
     : ['programado', 'postado'].includes(post.status) ? 'drive' : post.status;
   const patch: Partial<ContentPost> = {
@@ -105,5 +117,20 @@ export function schedule(officeId: string, clientId: string, input: ScheduleInpu
   if (input.caption !== undefined) patch.caption = String(input.caption).slice(0, 2200);
   update('content_posts', post.id, patch);
   invalidate(officeId, 'posts');
-  return one<ContentPost>('SELECT * FROM content_posts WHERE id = ?', post.id)!;
+  return { ...one<ContentPost>('SELECT * FROM content_posts WHERE id = ?', post.id)!, moved: moved.renamed.length, skipped: moved.skipped };
+}
+
+/** O pedido da conferência no Instagram: o funcionário compara o perfil com as peças do mês e marca as que já foram ao ar. */
+export function conferencePrompt(client: Client, month: string) {
+  const label = new Date(`${month}-15T12:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+  return [
+    `## Conferir no Instagram o que já foi postado (${label})`,
+    '',
+    `1. Use \`posts_do_mes\` (mês ${month}) para ver as peças de ${client.name} que estão prontas ou agendadas, com os arquivos de cada uma.`,
+    '2. Ache o @ do Instagram do cliente (no briefing, na IDV ou no CLAUDE.md da pasta). Se não achar, pare e pergunte.',
+    '3. Abra o perfil no Chrome, numa aba nova, e veja os posts do mês (feed e reels). Só leitura: não curta, não comente, não siga, não mande mensagem.',
+    '4. Compare cada post do perfil com as peças (olhe as imagens das peças com Read; compare arte, texto da capa e legenda). Só conta como postado se for claramente a mesma peça.',
+    '5. Para as que bateram, chame `posts_marcar_postado` com a chave da peça e o dia em que foi ao ar. O Office move os arquivos para POSTADOS sozinho.',
+    '6. No fim, responda com uma lista curta: o que marcou como postado (com o dia), o que está no perfil e não achei nas peças, e o que segue sem postar.',
+  ].join('\n');
 }

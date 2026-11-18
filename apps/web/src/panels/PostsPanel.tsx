@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Layers, Play, RotateCcw, X } from 'lucide-react';
+import { CalendarClock, Check, ChevronDown, ChevronLeft, ChevronRight, Copy, ExternalLink, Image as ImageIcon, Instagram, Layers, Play, RotateCcw, X } from 'lucide-react';
 import { POST_FORMAT_LABEL, canWork, type PostFormat } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
@@ -50,6 +50,7 @@ export function PostsPanel() {
   const [err, setErr] = useState('');
   const [sq, setSq] = useState<SquadInfo>({ squads: [], byClient: {} });
   const [open, setOpen] = useState<Item | null>(null);
+  const [confirmCheck, setConfirmCheck] = useState(false);
   const worker = canWork(office?.role);
 
   const load = () => {
@@ -72,6 +73,16 @@ export function PostsPanel() {
     return [...by.entries()].map(([id, list]) => ({ client: clients.find((c) => c.id === id), list }))
       .sort((a, b) => (a.client?.name ?? '').localeCompare(b.client?.name ?? ''));
   }, [shown, clients]);
+
+  // conferência no Instagram: os clientes em vista que têm peça pronta ou agendada
+  const toCheck = [...new Set(inScope.filter((i) => i.state === 'pronto' || i.state === 'agendado').map((i) => i.clientId))];
+  const runCheck = async () => {
+    setConfirmCheck(false);
+    try {
+      const r = await api<{ jobs: string[]; agent: string }>(`/api/offices/${office!.id}/agenda/conferir`, { body: { mes: month, clientIds: toCheck } });
+      notify(`${r.agent} vai conferir ${r.jobs.length} ${r.jobs.length === 1 ? 'cliente' : 'clientes'} no Instagram. Acompanhe na conversa de cada cliente.`);
+    } catch (e) { notify((e as Error).message); }
+  };
 
   const shift = (n: number) => { const [y, m] = month.split('-').map(Number); setMonth(ym(new Date(y, m - 1 + n, 1))); };
   const monthLabel = new Date(`${month}-15`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
@@ -98,12 +109,23 @@ export function PostsPanel() {
           <h3 className="cap">{monthLabel}</h3>
           <button className="icon" onClick={() => shift(1)} aria-label="Próximo mês"><ChevronRight size={16} /></button>
         </div>
+        <div className="row gap wrap">
+        {worker && <button className="small" disabled={!toCheck.length} title="Um funcionário abre o Instagram de cada cliente no Chrome, compara com as peças e marca o que já foi ao ar (movendo para POSTADOS)" onClick={() => setConfirmCheck(true)}><Instagram size={13} /> Conferir postados</button>}
         <select className="small" value={only} onChange={(e) => setOnly(e.target.value)} aria-label="Clientes">
           <option value="">Todos os clientes</option>
           {sq.squads.map((s) => <option key={s.id} value={`squad:${s.id}`}>Squad {s.nome}</option>)}
           {clients.filter((c) => c.status !== 'encerrado').map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
         </select>
+        </div>
       </header>
+      {confirmCheck && (
+        <div className="approval">
+          <span>Conferir no Instagram {toCheck.length === 1 ? `o perfil de ${clients.find((c) => c.id === toCheck[0])?.name ?? 'um cliente'}` : `${toCheck.length} clientes`}? O funcionário abre cada perfil no Chrome (só leitura), compara com as peças de {monthLabel} e marca as que já foram ao ar, movendo os arquivos para POSTADOS.</span>
+          <span className="spacer" />
+          <button className="ghost small" onClick={() => setConfirmCheck(false)}>Cancelar</button>
+          <button className="primary small" onClick={runCheck}>Conferir</button>
+        </div>
+      )}
       <nav className="posts-tabs" role="tablist">
         {TABS.map((t) => (
           <button key={t.id} role="tab" aria-selected={tab === t.id} className={tab === t.id ? 'on' : ''} onClick={() => setTab(t.id)}>
@@ -173,7 +195,8 @@ function PostItem({ it, worker, onOpen, save }: { it: Item; worker: boolean; onO
           <div className="row gap-s wrap">
             {it.caption && <button className="ghost small" onClick={() => copy(it.caption, notify)}><Copy size={12} /> Legenda</button>}
             {worker && it.state === 'pronto' && <button className="primary small" onClick={() => setScheduling(true)}><CalendarClock size={12} /> Agendar</button>}
-            {worker && it.state === 'agendado' && <button className="small" onClick={() => save(it, { state: 'postado' }, 'Marcado como postado')}><Check size={12} /> Postado</button>}
+            {worker && (it.state === 'pronto' || it.state === 'agendado') && <button className="small" title="Marca como postado e move os arquivos para POSTADOS" onClick={() => save(it, { state: 'postado', date: it.date ?? new Date().toISOString().slice(0, 10) }, 'Postado: arquivos em POSTADOS')}><Check size={12} /> Postado</button>}
+            {worker && it.state === 'postado' && <button className="ghost small" title="Volta para Para agendar e devolve os arquivos que o Office moveu para POSTADOS" onClick={() => save(it, { state: 'pronto', date: it.date ?? undefined, time: null }, 'Voltou para Para agendar')}><RotateCcw size={12} /> Desfazer</button>}
             {worker && it.state === 'agendado' && <button className="ghost small" onClick={() => setScheduling(true)}>Mudar</button>}
             {it.state === 'producao' && <span className="muted small">Ainda não chegou à pasta do mês</span>}
           </div>
@@ -198,6 +221,7 @@ function ScheduleForm({ it, onSave, onCancel }: { it: Item; onSave: (date: strin
 
 function PostDetail({ it, client, worker, save, onClose }: { it: Item; client: string; worker: boolean; save: Save; onClose: () => void }) {
   const { office, notify } = useStore();
+  const today = new Date().toISOString().slice(0, 10);
   const [i, setI] = useState(0);
   const [caption, setCaption] = useState(it.caption);
   const [date, setDate] = useState(it.date ?? '');
@@ -277,10 +301,10 @@ function PostDetail({ it, client, worker, save, onClose }: { it: Item; client: s
                 </div>
                 <div className="row gap-s wrap">
                   {it.state !== 'postado' && <button className="primary small" disabled={!date} onClick={() => save(it, { state: 'agendado', date, time: time || null, caption: captionChanged ? caption : undefined }, 'Agendado')}><CalendarClock size={12} /> {it.state === 'agendado' ? 'Salvar agendamento' : 'Agendar'}</button>}
-                  {it.state !== 'postado' && <button className="small" disabled={!date} onClick={() => save(it, { state: 'postado', date, time: time || null, caption: captionChanged ? caption : undefined }, 'Marcado como postado')}><Check size={12} /> Já foi postado</button>}
+                  {it.state !== 'postado' && <button className="small" onClick={() => save(it, { state: 'postado', date: date || today, time: time || null, caption: captionChanged ? caption : undefined }, 'Postado: arquivos em POSTADOS')}><Check size={12} /> Já foi postado</button>}
                   {(it.state === 'agendado' || it.state === 'postado') && <button className="ghost small" onClick={() => save(it, { state: 'pronto', date: date || undefined, time: null }, 'Voltou para Para agendar')}><RotateCcw size={12} /> Desfazer</button>}
                 </div>
-                <span className="muted small">Agendar só registra no Office; os arquivos ficam onde estão.</span>
+                <span className="muted small">Agendar só registra no Office. Postado move os arquivos para POSTADOS, com o nome de postado; desfazer devolve.</span>
               </fieldset>
             )}
           </div>

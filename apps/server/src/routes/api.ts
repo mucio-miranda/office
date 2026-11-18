@@ -35,7 +35,7 @@ import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '
 import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePlan, saveCheck, undoRenames } from '../clients/month.ts';
 import { thumbOf } from '../clients/thumb.ts';
 import { clientBase, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
-import { agendaOf, schedule, type ScheduleInput } from '../agents/agenda.ts';
+import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../agents/agenda.ts';
 import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
@@ -150,6 +150,29 @@ export async function api(app: FastifyInstance) {
     if (job && tool === 'navegador_pegar') return { ok: takeBrowser(job) };
     if (job && tool === 'navegador_liberar') { releaseBrowser(job.id); return { ok: true, texto: 'Navegador liberado para os outros clientes.' }; }
     if (!job?.clientId) return reply.code(401).send({ error: 'Tarefa encerrada ou sem cliente.' });
+    // conferência de postados: as peças do mês deste cliente e a marcação do que já foi ao ar
+    if (tool === 'posts_do_mes' || tool === 'posts_marcar_postado') {
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', job.officeId)!;
+      const q = (req.body ?? {}) as { mes?: string; itens?: { chave?: string; data?: string }[] };
+      const mes = typeof q.mes === 'string' && /^\d{4}-\d{2}$/.test(q.mes) ? q.mes : now().slice(0, 7);
+      if (tool === 'posts_do_mes') {
+        return { mes, pecas: agendaOf(office, mes, job.clientId).filter((i) => i.state !== 'producao')
+          .map((i) => ({ chave: i.key, numero: i.number, tema: i.theme, formato: i.format, dia: i.date, situacao: i.state, arquivos: i.files })) };
+      }
+      if (!Array.isArray(q.itens) || !q.itens.length) return reply.code(400).send({ error: 'Mande `itens`: [{ chave, data }].' });
+      const results = [];
+      for (const it of q.itens.slice(0, 60)) {
+        const mesItem = typeof it.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.data) ? it.data.slice(0, 7) : mes;
+        const item = agendaOf(office, mesItem, job.clientId).find((x) => x.key === it.chave) ?? agendaOf(office, mes, job.clientId).find((x) => x.key === it.chave);
+        if (!item) { results.push({ chave: it.chave, ok: false, erro: 'Peça não encontrada (use a chave de posts_do_mes).' }); continue; }
+        if (item.state === 'postado') { results.push({ chave: it.chave, ok: true, ja: true }); continue; }
+        try {
+          const r = schedule(job.officeId, job.clientId, { postId: item.postId, files: item.files, theme: item.theme, format: item.format, date: it.data ?? item.date ?? now().slice(0, 10), time: item.time, state: 'postado' }, `agent:${job.agentId}`);
+          results.push({ chave: it.chave, ok: true, movidos: r.moved, avisos: r.skipped });
+        } catch (e) { results.push({ chave: it.chave, ok: false, erro: (e as Error).message }); }
+      }
+      return { resultados: results };
+    }
     const b = (req.body ?? {}) as { mes?: string; posts?: PostInput[] };
     try {
       if (tool === 'calendario_listar') {
@@ -803,6 +826,27 @@ export async function api(app: FastifyInstance) {
       try {
         return schedule(officeId, b.clientId, { ...b, files, theme: String(b.theme ?? '').slice(0, 200) }, `user:${req.user.id}`);
       } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
+    });
+    // conferência no Instagram: um funcionário com o Chrome compara o perfil de cada cliente com as peças do mês
+    r.post('/api/offices/:officeId/agenda/conferir', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { officeId } = req.params as any;
+      const b = (req.body ?? {}) as { mes?: string; clientIds?: string[] };
+      if (!b.mes || !/^\d{4}-\d{2}$/.test(b.mes)) return reply.code(400).send({ error: 'Mês inválido (use AAAA-MM).' });
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const agent = all<AgentProfile>('SELECT * FROM agents WHERE office_id = ?', officeId)
+        .filter((a) => a.allowedTools.includes('mcp__claude-in-chrome'))
+        .sort((a, c) => Number(c.slug === 'designer') - Number(a.slug === 'designer'))[0];
+      if (!agent) return reply.code(409).send({ error: 'Nenhum funcionário tem o Chrome liberado para conferir o Instagram.' });
+      const ids = (b.clientIds ?? []).filter((id) => one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)).slice(0, 40);
+      if (!ids.length) return reply.code(400).send({ error: 'Escolha os clientes.' });
+      const jobs = ids.map((id) => {
+        const client = one<Client>('SELECT * FROM clients WHERE id = ?', id)!;
+        return enqueueJob({ officeId, agentId: agent.id, demandId: null, clientId: id, stage: 'agendado', cwd: jobCwd(office, client),
+          prompt: conferencePrompt(client, b.mes!), display: `Conferir no Instagram o que já foi postado (${b.mes})`, createdBy: `user:${req.user.id}` }).id;
+      });
+      logActivity(officeId, `user:${req.user.id}`, 'pediu a conferência de postados', `${ids.length} cliente(s), ${b.mes}`);
+      return { jobs, agent: agent.name };
     });
     // link do Drive de qualquer arquivo ou pasta do escritório (o Drive para computador precisa já ter sincronizado)
     r.get('/api/offices/:officeId/link', async (req, reply) => {

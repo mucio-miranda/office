@@ -108,7 +108,7 @@ test('calendário: a pessoa e o funcionário preenchem; arte não passa de confe
   rpc(4, 'tools/call', { name: 'calendario_listar', arguments: { mes: '2026-11' } });
   await wait(() => replies.length >= 4);
   mcp.kill();
-  assert.deepEqual(replies.find((x) => x.id === 2).result.tools.map((t: any) => t.name), ['calendario_listar', 'calendario_salvar', 'navegador_liberar']);
+  assert.deepEqual(replies.find((x) => x.id === 2).result.tools.map((t: any) => t.name), ['calendario_listar', 'calendario_salvar', 'posts_do_mes', 'posts_marcar_postado', 'navegador_liberar']);
   assert.ok(!replies.find((x) => x.id === 3).result.isError, JSON.stringify(replies.find((x) => x.id === 3)));
   const listed = JSON.parse(replies.find((x) => x.id === 4).result.content[0].text);
   assert.equal(listed.posts.find((p: any) => p.id === mitos.id).status, 'aprovado');
@@ -205,4 +205,26 @@ test('agenda da social media: agendar com hora, marcar postado e desfazer só mu
   assert.equal(r.json.scheduledAt, null);
   assert.equal((await call('POST', `${O}/agenda`, { ...base, files: ['C:/Windows/win.ini'], state: 'agendado' })).status, 403, 'arquivo fora do escritório');
   assert.equal((await call('POST', `${O}/agenda`, { ...base, time: '25h', state: 'agendado' })).status, 409);
+});
+
+test('postado pela página Posts: os arquivos vão para POSTADOS e desfazer devolve', async () => {
+  const { existsSync: has } = await import('node:fs');
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  const office = (await call('GET', O)).json.office;
+  const mesDir = path.join(office.rootPath, 'CLIENTES', 'MARIA TESTE', 'MES-TESTE');
+  mkdirSync(mesDir, { recursive: true });
+  const f1 = path.join(mesDir, '07 Carrossel – Postar hoje – 01.png');
+  const f2 = path.join(mesDir, '07 Carrossel – Postar hoje – 02.png');
+  writeFileSync(f1, 'a'); writeFileSync(f2, 'b');
+  const base = { clientId: c.id, postId: null, files: [f1, f2], theme: 'Postar hoje', format: 'carrossel', date: '2026-11-21' };
+  const r = await call('POST', `${O}/agenda`, { ...base, state: 'postado' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal(r.json.moved, 2);
+  const moved = path.join(mesDir, 'POSTADOS', '07_postado 2026-11-21 Carrossel – Postar hoje – 01.png');
+  assert.ok(has(moved) && !has(f1), 'foi para POSTADOS com o nome de postado');
+  assert.ok(r.json.files.some((f: string) => f === moved), 'o post aponta para o arquivo novo');
+  const back = await call('POST', `${O}/agenda`, { ...base, postId: r.json.id, files: r.json.files, state: 'pronto' });
+  assert.equal(back.status, 200, JSON.stringify(back.json));
+  assert.ok(has(f1) && has(f2) && !has(moved), 'desfazer devolve para a pasta do mês');
+  assert.equal(back.json.status, 'drive');
 });

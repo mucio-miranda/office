@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { existsSync, readdirSync, renameSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { CheckState, Client, ClientMonth, ContentPost, MonthAuto, MonthCheck, MonthPiece, MonthStep, Office, PostFormat, RenamePlan } from '@office/shared';
 import { CHECK_STATES, MONTH_STEPS } from '@office/shared';
@@ -329,3 +329,54 @@ export function autoOf(office: Office, client: Client, month: string): MonthAuto
 
 export const isMonth = (m: unknown): m is string => typeof m === 'string' && MONTH.test(m);
 export const fileSize = (f: string) => { try { return statSync(f).size; } catch { return 0; } };
+
+// ---------- postado: arquivos vão para POSTADOS ----------
+
+/**
+ * O nome do arquivo depois de postado, dentro de `POSTADOS/` da mesma pasta (raiz do mês ou pasta de vídeos):
+ * `NN AAAA-MM-DD …` vira `NN_postado AAAA-MM-DD …` (a data entra se faltava), `Reels – Tema` vira
+ * `Reels – postado AAAA-MM-DD – Tema`, e o resto mantém o nome.
+ */
+export function postedName(file: string, date: string) {
+  const ext = path.extname(file);
+  const stem = path.basename(file, ext);
+  const p = parseName(file);
+  if (p?.posted) return path.basename(file);
+  let m = stem.match(/^(\d{1,3})\s+(?:sem data\s+)?(.*)$/i);
+  if (m && p?.number != null) return `${m[1]}_postado ${p.date ? '' : `${date} `}${m[2]}${ext}`;
+  m = stem.match(/^(Reels\s+[–-]\s+)(.*)$/i);
+  if (m) return `${m[1]}postado ${date} – ${m[2]}${ext}`;
+  return path.basename(file);
+}
+
+export function postedPlan(files: string[], date: string) {
+  const plan: RenamePlan[] = [];
+  const skipped: string[] = [];
+  for (const f of files) {
+    if (inPosted(f) || !existsSync(f)) continue;
+    const to = path.join(path.dirname(f), 'POSTADOS', postedName(f, date));
+    if (existsSync(to) || plan.some((r) => r.to.toLowerCase() === to.toLowerCase())) { skipped.push(`${path.basename(f)}: já existe ${path.basename(to)} em POSTADOS`); continue; }
+    plan.push({ from: f, to });
+  }
+  return { plan, skipped };
+}
+
+/** Move os arquivos da peça para POSTADOS. Nunca sobrescreve; fica registrado para desfazer. */
+export function movePosted(officeId: string, clientId: string, files: string[], date: string, by: string) {
+  const { plan, skipped } = postedPlan(files, date);
+  if (!plan.length) return { id: null as string | null, renamed: [] as RenamePlan[], skipped };
+  for (const d of new Set(plan.map((r) => path.dirname(r.to)))) mkdirSync(d, { recursive: true });
+  const renamed = runRenames(plan);
+  const id = uid();
+  insert('folder_renames', { id, officeId, clientId, month: date.slice(0, 7), renames: renamed, createdAt: now(), createdBy: by, undoneAt: null } as never);
+  retargetPosts(officeId, clientId, renamed);
+  return { id, renamed, skipped };
+}
+
+/** Volta para a pasta do mês os arquivos que o Office moveu para POSTADOS (quem moveu à mão fica como está). */
+export function undoPosted(officeId: string, clientId: string, files: string[]) {
+  const want = new Set(files.map((f) => f.toLowerCase()));
+  const rows = all<{ id: string; renames: RenamePlan[]; undoneAt: string | null }>('SELECT * FROM folder_renames WHERE office_id = ? AND client_id = ? AND undone_at IS NULL ORDER BY created_at DESC', officeId, clientId);
+  const row = rows.find((r) => r.renames.some((x) => want.has(x.to.toLowerCase()) && /[\\/]POSTADOS[\\/]/i.test(x.to)));
+  return row ? undoRenames(officeId, row.id) : null;
+}

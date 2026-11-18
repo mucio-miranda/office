@@ -37,6 +37,16 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { posts: { type: 'array', items: POST, maxItems: 60 } }, required: ['posts'] },
   },
   {
+    name: 'posts_do_mes',
+    description: 'Lista as peças do mês do cliente desta tarefa que estão prontas, agendadas ou postadas (da pasta do mês no Drive e do calendário do Office), com a chave, o número, o tema, o dia e os arquivos de cada uma. Use para conferir o que já foi ao ar.',
+    inputSchema: { type: 'object', properties: { mes: { type: 'string', description: 'AAAA-MM (padrão: o mês atual)' } } },
+  },
+  {
+    name: 'posts_marcar_postado',
+    description: 'Marca peças como postadas, pela chave de posts_do_mes e o dia em que foram ao ar. O Office move os arquivos para POSTADOS com o nome de postado (nunca sobrescreve; dá para desfazer pela página Posts). Só marque o que você conferiu no perfil.',
+    inputSchema: { type: 'object', properties: { mes: { type: 'string', description: 'AAAA-MM das peças' }, itens: { type: 'array', maxItems: 60, items: { type: 'object', properties: { chave: { type: 'string' }, data: { type: 'string', description: 'AAAA-MM-DD em que foi ao ar' } }, required: ['chave', 'data'] } } }, required: ['itens'] },
+  },
+  {
     name: 'navegador_liberar',
     description: 'Devolve a vez do navegador (Chrome e pasta Downloads, que servem a todos os clientes). Chame quando terminar o tunning e os arquivos baixados já estiverem na pasta do trabalho. Se usar o Chrome de novo, a vez é pedida sozinha.',
     inputSchema: { type: 'object', properties: {} },
