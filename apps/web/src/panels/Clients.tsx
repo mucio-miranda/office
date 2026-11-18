@@ -217,7 +217,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
                 <small className="muted">Quem aprova as peças</small>
                 <div className="seg">
                   <button className={c.approvalMode !== 'ia' ? 'on' : ''} onClick={() => patch({ approvalMode: 'humano' })}>Uma pessoa</button>
-                  <button className={c.approvalMode === 'ia' ? 'on' : ''} onClick={() => patch({ approvalMode: 'ia' })}><Bot size={12} /> {rafa?.name ?? 'Gerente'} (IA)</button>
+                  <button className={c.approvalMode === 'ia' ? 'on' : ''} onClick={() => patch({ approvalMode: 'ia' })}><Bot size={12} /> Revisão da IA</button>
                 </div>
               </div>
               <div>
@@ -452,7 +452,7 @@ function NewClient({ onClose }: { onClose: (id?: string) => void }) {
             <small className="muted">Quem aprova as peças</small>
             <div className="seg">
               <button type="button" className={f.approvalMode === 'humano' ? 'on' : ''} onClick={() => setF({ ...f, approvalMode: 'humano' })}>Uma pessoa</button>
-              <button type="button" className={f.approvalMode === 'ia' ? 'on' : ''} onClick={() => setF({ ...f, approvalMode: 'ia' })}><Bot size={12} /> {rafa?.name ?? 'Gerente'} (IA)</button>
+              <button type="button" className={f.approvalMode === 'ia' ? 'on' : ''} onClick={() => setF({ ...f, approvalMode: 'ia' })}><Bot size={12} /> Revisão da IA</button>
             </div>
           </div>
           <label className="check"><input type="checkbox" checked={f.interview} onChange={(e) => setF({ ...f, interview: e.target.checked })} /> Começar a entrevista de briefing com {rafa?.name ?? 'o gerente'} agora</label>
