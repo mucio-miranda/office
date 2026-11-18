@@ -1,5 +1,5 @@
 import { NewDemand } from './panels/NewDemand';
-import { canSeeFinance } from '@office/shared';
+import { MAX_WORKERS, canSeeFinance } from '@office/shared';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
@@ -9,10 +9,10 @@ import {
 } from 'lucide-react';
 import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
-import { World, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
+import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { Tour, startTour, tourSeen } from './office/Tour';
-import { HUMAN_DESKS, ROOMS, BOUNDS, agentSeat, roomCenter } from './office/layout';
+import { HUMAN_DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
 import { ThemeToggle } from './lib/ui';
 import { DecorUI, enterDecorate } from './office/decor/DecorUI';
@@ -182,8 +182,7 @@ function PageTitle() {
 }
 
 function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: () => void }) {
-  const { panel, panelArg, open, agents, demands, jobs, user, office, leaveOffice, send, presences } = useStore();
-  const online = Object.values(presences);
+  const { panel, open, demands, jobs, user, office, leaveOffice, send } = useStore();
   const [status, setStatus] = useState<'disponivel' | 'ocupado' | 'foco' | 'ausente'>('disponivel');
   const openCount = demands.filter((d) => d.status !== 'entregue').length;
   // o que está parado esperando uma pessoa: decisão pedida no meio ou aprovação
@@ -212,29 +211,8 @@ function Sidebar({ onNavigate, onSearch }: { onNavigate: () => void; onSearch: (
             </button>
           ))}
         </nav>
-        <div className="nav">
-          <div className="section-label">Funcionários de IA</div>
-          {agents.map((a) => (
-            <button key={a.id} className={`nav-item agent-row st-${a.status} ${panel === 'agente' && panelArg === a.id ? 'active' : ''}`} onClick={() => go('agente', a.id)} title={`${a.name} · ${a.role}`}>
-              <span className="avatar" style={{ background: a.color }}>{a.name[0]}<span className="status-dot" /></span>
-              <div className="truncate"><span className="truncate">{a.name}</span><small className="truncate">{a.role}</small></div>
-              {a.status !== 'livre' && <span className={`count ${a.status === 'aguardando' ? 'alert' : ''}`}>{AGENT_LABEL[a.status]}</span>}
-            </button>
-          ))}
-          {waiting > 0 && <div className="section-label" style={{ color: 'var(--waiting)' }}>{waiting} {waiting === 1 ? 'tarefa espera' : 'tarefas esperam'} aprovação</div>}
-        </div>
-        {online.length > 0 && (
-          <div className="nav">
-            <div className="section-label">Online · {online.length}</div>
-            {online.map((p) => (
-              <button key={p.userId} className="nav-item agent-row person-row" onClick={() => { goToPerson(p); onNavigate(); }} title={`Ir até ${p.name}`}>
-                <span className={`avatar ps-${p.status}`} style={{ background: p.color }}>{p.name[0]}<span className="status-dot" /></span>
-                <div className="truncate"><span className="truncate">{p.name}</span><small className="truncate">{ROOMS.find((r) => r.id === p.room)?.label ?? 'Área externa'}</small></div>
-                <Navigation size={13} className="go" />
-              </button>
-            ))}
-          </div>
-        )}
+        <TeamList onNavigate={onNavigate} />
+        {waiting > 0 && <div className="section-label" style={{ color: 'var(--waiting)' }}>{waiting} {waiting === 1 ? 'tarefa espera' : 'tarefas esperam'} aprovação</div>}
       </div>
       <UpdateCard />
       <div className="sidebar-foot">
@@ -289,6 +267,46 @@ function UpdateCard() {
   );
 }
 
+/**
+ * Equipe: as pessoas e os funcionários de IA numa lista só. Pessoa: selo Humano, onde está (clicar leva até ela; o chat
+ * direto entra depois). IA: selo IA e o cliente ou projeto dele; clicar abre a conversa daquele cliente.
+ */
+function TeamList({ onNavigate }: { onNavigate: () => void }) {
+  const { members, workers, clients, presences, user, open, notify, panel, panelArg } = useStore();
+  const people = members.filter((m) => m.id !== user?.id);
+  const active = workers.filter((w) => !w.archivedAt);
+  const rank = { aguardando: 0, trabalhando: 1, copa: 2 } as const;
+  const ai = [...active].sort((a, b) => rank[a.state] - rank[b.state] || a.name.localeCompare(b.name));
+  const LABEL = { trabalhando: 'trabalhando', aguardando: 'precisa de você', copa: '' } as const;
+  return (
+    <div className="nav">
+      <div className="section-label">Equipe <span className="team-count" title="Funcionários de IA ativos (sessões abertas)">IA {active.length}/{MAX_WORKERS}</span></div>
+      {people.map((m) => {
+        const pr = presences[m.id];
+        return (
+          <button key={m.id} className="nav-item agent-row person-row" onClick={() => { if (pr) { goToPerson(pr); onNavigate(); } else notify(`${m.name} está fora do escritório agora.`); }} title={pr ? `Ir até ${m.name}` : `${m.name} está fora`}>
+            <span className={`avatar ${pr ? `ps-${pr.status}` : 'ps-ausente'}`} style={{ background: m.color }}>{m.name[0]}<span className="status-dot" /></span>
+            <div className="truncate"><span className="truncate">{m.name} <span className="who-badge human">Humano</span></span><small className="truncate">{pr ? ROOMS.find((r) => r.id === pr.room)?.label ?? 'Área externa' : 'fora'}</small></div>
+            {pr && <Navigation size={13} className="go" />}
+          </button>
+        );
+      })}
+      {ai.map((w) => {
+        const c = clients.find((x) => x.id === w.clientId);
+        const st = w.state === 'copa' ? 'livre' : w.state;
+        return (
+          <button key={w.id} className={`nav-item agent-row st-${st} ${panel === 'clientes' && panelArg === w.clientId ? 'active' : ''}`} onClick={() => { open('clientes', w.clientId); onNavigate(); }} title={`${w.name} · IA · ${c?.name ?? ''}${w.role === 'ajudante' ? ' (ajudante)' : ''}`}>
+            <span className="avatar" style={{ background: w.color }}>{w.name[0]}<span className="status-dot" /></span>
+            <div className="truncate"><span className="truncate">{w.name} <span className="who-badge">IA</span></span><small className="truncate">{c?.name ?? '—'}{w.role === 'ajudante' ? ' · ajudante' : ''}</small></div>
+            {w.state !== 'copa' && <span className={`count ${w.state === 'aguardando' ? 'alert' : ''}`}>{LABEL[w.state]}</span>}
+          </button>
+        );
+      })}
+      {people.length + ai.length === 0 && <p className="muted small" style={{ padding: '0 8px' }}>Os funcionários de IA aparecem quando um cliente começa uma conversa.</p>}
+    </div>
+  );
+}
+
 /** Modo drone: visor com cantoneiras enquanto o Espaço está segurado; "Voltar para mim" quando a câmera está solta. */
 function DroneOverlay() {
   const drone = useStore((s) => s.drone);
@@ -336,7 +354,6 @@ function WorldHud() {
 /** Mapa do escritório. No mundo fica no canto; com uma página aberta flutua por cima (como o mini-mapa do Gather). */
 function MiniMap({ floating = false, onClose }: { floating?: boolean; onClose?: () => void }) {
   const presences = useStore((s) => s.presences);
-  const agents = useStore((s) => s.agents);
   const user = useStore((s) => s.user);
   const [, force] = useState(0);
   const members = useStore((s) => s.members);
@@ -345,7 +362,8 @@ function MiniMap({ floating = false, onClose }: { floating?: boolean; onClose?: 
   const toggle = () => setCollapsed((c) => { try { localStorage.setItem('office.mmCollapsed', c ? '0' : '1'); } catch { /* ok */ } return !c; });
   useStore((s) => s.mapRev);
   const W = BOUNDS.x1 - BOUNDS.x0, H = BOUNDS.z1 - BOUNDS.z0;
-  const waiting = agents.filter((a) => a.status === 'aguardando').length;
+  const workers = useStore((s) => s.workers);
+  const waiting = workers.filter((w) => !w.archivedAt && w.state === 'aguardando').length;
 
   if (floating && collapsed && !onClose) {
     return (
@@ -363,13 +381,16 @@ function MiniMap({ floating = false, onClose }: { floating?: boolean; onClose?: 
           <text x={(r.x0 + r.x1) / 2} y={(r.z0 + r.z1) / 2} fontSize={1.6} textAnchor="middle" dominantBaseline="middle">{r.key}</text>
         </g>
       ))}
-      {agents.map((a) => (
-        <g key={a.id} className={`mm-dot st-${a.status}`} onClick={() => goToAgent(a)}>
-          <title>Ir até {a.name} · {AGENT_LABEL[a.status]}</title>
-          {a.status !== 'livre' && <circle className="mm-ring" cx={agentSeat(a).x} cy={agentSeat(a).z} r={1.3} />}
-          <circle cx={agentSeat(a).x} cy={agentSeat(a).z} r={0.7} fill={a.color} />
-        </g>
-      ))}
+      {workerSpots(workers).map(([w, spot]) => {
+        const st = w.state === 'copa' ? 'livre' : w.state;
+        return (
+          <g key={w.id} className={`mm-dot st-${st}`} onClick={() => goTo(spot)}>
+            <title>Ir até {w.name} (IA) · {AGENT_LABEL[st]}</title>
+            {st !== 'livre' && <circle className="mm-ring" cx={spot.x} cy={spot.z} r={1.3} />}
+            <circle cx={spot.x} cy={spot.z} r={0.7} fill={w.color} />
+          </g>
+        );
+      })}
       {members.map((m) => {
         const d = HUMAN_DESKS.find((h) => h.id === m.desk);
         return d && (
@@ -440,7 +461,7 @@ function Chat({ inputRef }: { inputRef: React.RefObject<HTMLInputElement | null>
 }
 
 function Palette({ onClose }: { onClose: () => void }) {
-  const { agents, demands, clients, open, presences, members, user } = useStore();
+  const { workers, demands, clients, open, presences, members, user } = useStore();
   const [q, setQ] = useState('');
   const [sel, setSel] = useState(0);
   const items = useMemo(() => {
@@ -457,15 +478,14 @@ function Palette({ onClose }: { onClose: () => void }) {
         return { icon: Armchair, label: `Ir até a mesa de ${m.name}`, hint: 'fora', run: () => goTo({ x: d.x + 1.6, z: d.z + 1.1 }, d) };
       }),
       ...ROOMS.map((r) => ({ icon: Box, label: `Ir para ${r.label}`, hint: r.key, run: () => goTo(roomCenter(r)) })),
-      ...agents.map((a) => ({ icon: Bot, label: `${a.name} · ${a.role}`, hint: 'funcionário', run: () => open('agente', a.id) })),
-      ...agents.map((a) => ({ icon: Navigation, label: `Ir até ${a.name}`, hint: 'mesa', run: () => goToAgent(a) })),
+      ...workers.filter((w) => !w.archivedAt).map((w) => ({ icon: Bot, label: `${w.name} · IA · ${clients.find((c) => c.id === w.clientId)?.name ?? ''}`, hint: 'funcionário de IA', run: () => open('clientes', w.clientId) })),
       ...Object.values(presences).map((p) => ({ icon: Navigation, label: `Ir até ${p.name}`, hint: 'online', run: () => goToPerson(p) })),
       ...demands.filter((d) => d.status !== 'entregue').map((d) => ({ icon: KanbanSquare, label: d.title, hint: 'demanda', run: () => open('demandas', d.id) })),
       ...clients.map((c) => ({ icon: Users, label: c.name, hint: 'cliente', run: () => open('clientes', c.id) })),
     ];
     const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
     return all.filter((i) => norm(i.label).includes(norm(q))).slice(0, 12);
-  }, [q, agents, demands, clients, open, presences, members, user]);
+  }, [q, workers, demands, clients, open, presences, members, user]);
   return (
     <div className="palette-bg" onClick={onClose}>
       <div className="palette" onClick={(e) => e.stopPropagation()}>

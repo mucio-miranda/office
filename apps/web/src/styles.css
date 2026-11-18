@@ -1346,3 +1346,15 @@ label.check input { width: auto; height: auto; }
 .pcal-card-title { font-size: 12px; line-height: 16px; font-weight: 600; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .pcal-card-meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
 @media (max-width: 760px) { .pcal-day { min-height: 72px; } .pcal-thumb { width: 20px; height: 25px; } }
+
+/* Equipe: humanos e funcionários de IA numa lista só */
+.who-badge { display: inline-flex; align-items: center; height: 15px; padding: 0 5px; margin-left: 4px; border-radius: 4px; font: 600 9px/1 var(--mono); letter-spacing: .04em; vertical-align: middle; color: var(--review); background: color-mix(in srgb, var(--review) 14%, transparent); }
+.who-badge.human { color: var(--muted-foreground); background: var(--muted); }
+.team-count { margin-left: 6px; font-family: var(--mono); letter-spacing: 0; text-transform: none; }
+.team-list { display: flex; flex-direction: column; gap: 6px; padding-bottom: 8px; border-bottom: 1px solid var(--border); margin-bottom: 4px; }
+.team-row { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 8px; }
+.team-row > .truncate { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.team-row > .truncate small { font-size: 11px; }
+.team-row.archived { opacity: .6; }
+.team-past summary { cursor: pointer; padding: 4px 8px; }
+.nav-collapsed .who-badge, .nav-collapsed .team-count { display: none; }

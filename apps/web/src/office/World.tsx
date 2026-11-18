@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrthographicCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import type { AgentProfile, Presence, Vec2 } from '@office/shared';
+import type { AgentProfile, Presence, Vec2, Worker } from '@office/shared';
 import { useStore, showEmote } from '../lib/store';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/theme';
 import { PixelRoom } from './pixel/Room';
@@ -16,7 +16,7 @@ import { ClientArchive, cabinets, openArchive } from './Archive';
 import { MoodboardWall } from './MoodboardWall';
 
 const MAQUETE_WALL: Record<string, string> = { branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f', vidro: '#bfe6f5', 'vidro-fume': '#39444c' };
-import { agentSeat, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+import { agentSeat, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -291,10 +291,10 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       if (!owner) best = { d, key: `d:${hd.id}:livre`, n: { label: 'Ficar com esta mesa', action: () => { st.claimDesk(hd.id).then((ok) => ok && sitAt(hd)); } } };
       else if (owner.id === st.user?.id && !player.seated) best = { d, key: `d:${hd.id}:minha`, n: { label: 'Sentar na sua mesa', action: () => sitAt(hd) } };
     }
-    for (const a of st.agents) {
-      const desk = agentSeat(a);
-      const d = Math.hypot(desk.x - player.x, desk.z - player.z);
-      if (d < 2.2 && (!best || d < best.d)) best = { d, key: `a:${a.id}`, n: { label: `Nova demanda com ${a.name}`, action: () => st.askDemand({ agentId: a.id }) } };
+    for (const [w, spot] of workerSpots(st.workers)) {
+      const d = Math.hypot(spot.x - player.x, spot.z - player.z);
+      const client = st.clients.find((c) => c.id === w.clientId);
+      if (d < 2.2 && (!best || d < best.d)) best = { d, key: `w:${w.id}`, n: { label: `Conversar com ${w.name}${client ? ` (${client.name})` : ''}`, action: () => st.open('clientes', w.clientId) } };
     }
     if ((best?.key ?? null) !== lastNear.current) {
       lastNear.current = best?.key ?? null;
@@ -343,7 +343,23 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
   return <Avatar anchorId={`user:${pr.userId}`} color={pr.color} look={pr.look} p={p} getState={() => cur.current} />;
 }
 
-function AgentNPC({ a, p }: { a: AgentProfile; p: ScenePalette }) {
+/** Os funcionários ativos com o lugar de cada um: na sala do trabalho ou na copa, lado a lado. */
+export function workerSpots(workers: Worker[]) {
+  const count: Record<string, number> = {};
+  return workers.filter((w) => !w.archivedAt).map((w) => [w, workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1))] as const);
+}
+const WORKER_RING: Record<Worker['state'], string | null> = { copa: null, trabalhando: '#2563eb', aguardando: '#f59e0b' };
+
+function WorkerNPC({ w, spot, p }: { w: Worker; spot: Vec2; p: ScenePalette }) {
+  const open = useStore((s) => s.open);
+  const state = useMemo(() => ({ x: spot.x, z: spot.z, dir: Math.PI, moving: false }), [spot.x, spot.z]);
+  return (
+    <Avatar anchorId={`worker:${w.id}`} seated={w.state !== 'copa'} typing={w.state === 'trabalhando'} color={w.color} p={p}
+      ring={WORKER_RING[w.state]} pulse={w.state === 'aguardando'} getState={() => state} onClick={() => { if (!droneBlocksClick()) open('clientes', w.clientId); }} />
+  );
+}
+
+export function AgentNPC({ a, p }: { a: AgentProfile; p: ScenePalette }) {
   const open = useStore((s) => s.open);
   const desk = agentSeat(a);
   const state = useMemo(() => ({ x: desk.x, z: desk.z, dir: Math.PI, moving: false }), [desk.x, desk.z]);
@@ -510,6 +526,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
   useEffect(() => { if (blocked(player)) { const q = freeSpotNear(SPAWN); player.x = q.x; player.z = q.z; player.dirty = true; } }, [mapRev]);
   const presences = useStore((s) => s.presences);
   const agents = useStore((s) => s.agents);
+  const workers = useStore((s) => s.workers);
   const p = useScene();
   const px = usePixel();
   const pixel = useWorldStyle((s) => s.style) === 'pixel';
@@ -649,7 +666,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       <LiveScreens />
       <Beacon p={p} />
       <TileCursor />
-      {agents.map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
+      {workerSpots(workers).map(([w, spot]) => <WorkerNPC key={w.id} w={w} spot={spot} p={p} />)}
       {Object.values(presences).map((pr) => <Remote key={pr.userId} pr={pr} p={p} />)}
       {ready && <Player onNearby={onNearby} p={p} active={active} />}
       <LabelProjector />

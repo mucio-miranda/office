@@ -119,7 +119,8 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
 
   const cost = mine.reduce((n, j) => n + (j.costUsd ?? 0), 0);
   const running = active?.status === 'rodando' || active?.status === 'fila';
-  const worker = agents.find((a) => a.id === active?.agentId);
+  const workers = useStore((s) => s.workers);
+  const worker = workers.find((w) => w.id === active?.workerId) ?? agents.find((a) => a.id === active?.agentId);
   const typed = text.match(/^\/([\w-]*)$/)?.[1];
   const matches = typed === undefined ? [] : skills.filter((s) => s.name.includes(typed)).slice(0, 7);
   const pieces = useMemo(() => {

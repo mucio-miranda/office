@@ -47,7 +47,8 @@ const PRESENCE_STATUS = { disponivel: null, ocupado: 'ocupado', foco: 'foco', au
 /** Fica fora do Canvas: desenha os rótulos com dados do store. */
 export function LabelLayer() {
   const user = useStore((s) => s.user);
-  const agents = useStore((s) => s.agents);
+  const workers = useStore((s) => s.workers);
+  const clients = useStore((s) => s.clients);
   const presences = useStore((s) => s.presences);
   const emotes = useStore((s) => s.emotes);
   const open = useStore((s) => s.open);
@@ -64,8 +65,11 @@ export function LabelLayer() {
   if (user) items.push({ id: `user:${user.id}`, name: user.name, color: user.color, emoji: emotes[user.id]?.emoji, me: true });
   for (const p of Object.values(presences))
     items.push({ id: `user:${p.userId}`, name: p.name, color: p.color, emoji: emotes[p.userId]?.emoji, status: PRESENCE_STATUS[p.status], statusClass: 'st-livre' });
-  for (const a of agents)
-    items.push({ id: `agent:${a.id}`, name: a.name, sub: a.role, color: a.color, status: AGENT_STATUS[a.status], statusClass: `st-${a.status}`, onClick: () => open('agente', a.id) });
+  for (const w of workers) {
+    if (w.archivedAt) continue;
+    const st = w.state === 'copa' ? 'livre' : w.state;
+    items.push({ id: `worker:${w.id}`, name: `${w.name} · IA`, sub: clients.find((c) => c.id === w.clientId)?.name, color: w.color, status: AGENT_STATUS[st], statusClass: `st-${st}`, onClick: () => open('clientes', w.clientId) });
+  }
   // plaquinha das mesas com dono (o mundo esconde quando o dono está sentado nela)
   for (const m of members) {
     if (!m.desk) continue;

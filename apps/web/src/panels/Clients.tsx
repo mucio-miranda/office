@@ -2,7 +2,7 @@ import { ClientDrive } from './ClientDrive';
 import { canSeeFinance } from '@office/shared';
 import { useEffect, useState } from 'react';
 import { Bot, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
-import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession } from '@office/shared';
+import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession, type Worker } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
 import { PathField } from '../lib/PathPicker';
@@ -118,8 +118,13 @@ type Tab = 'conversa' | 'sessoes' | 'briefing' | 'demandas' | 'arquivos';
  * que é do cliente. A conversa fica com a altura toda; as sessões têm aba própria.
  */
 function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
-  const { office, demands, agents, jobs, open, notify } = useStore();
+  const { office, demands, agents, jobs, open, notify, workers } = useStore();
   const base = `/api/offices/${office!.id}/clients/${c.id}`;
+  // a equipe deste cliente: o titular (a conversa contínua), ajudantes e quem já trabalhou aqui
+  const team = workers.filter((w) => w.clientId === c.id);
+  const titular = team.find((w) => w.role === 'titular' && !w.archivedAt);
+  const helpers = team.filter((w) => w.role === 'ajudante' && !w.archivedAt);
+  const past = team.filter((w) => w.archivedAt).sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''));
   const patch = (body: Partial<Client>) => api(base, { method: 'PATCH', body });
   const mine = demands.filter((d) => d.clientId === c.id);
   const rafa = agents.find((a) => a.slug === 'gerente');
@@ -155,7 +160,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
       await api(`${base}/conversa/nova`, { body: {} });
       setView(null);
       setTab('conversa');
-      notify('O próximo pedido começa uma conversa nova');
+      notify(titular ? `${titular.name} foi arquivado. O próximo pedido chama outro funcionário, com conversa nova.` : 'O próximo pedido começa uma conversa nova');
     } catch (x) { notify((x as Error).message); }
     setConfirmReset(false);
   };
@@ -181,7 +186,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   };
   const tabs: { id: Tab; label: string; count?: number; alert?: boolean }[] = [
     { id: 'conversa', label: 'Conversa' },
-    { id: 'sessoes', label: 'Sessões', count: sessions.length },
+    { id: 'sessoes', label: 'Equipe', count: team.filter((w) => !w.archivedAt).length },
     { id: 'briefing', label: 'Briefing', alert: !hasBriefing },
     { id: 'demandas', label: 'Demandas', count: openDemands.length },
     { id: 'arquivos', label: 'Arquivos' },
@@ -216,6 +221,13 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
                 </div>
               </div>
               <div>
+                <small className="muted">Tipo</small>
+                <div className="seg">
+                  <button className={c.kind !== 'projeto' ? 'on' : ''} onClick={() => patch({ kind: 'cliente' })}>Cliente</button>
+                  <button className={c.kind === 'projeto' ? 'on' : ''} title="Projeto da casa: o site, o perfil da agência, uma campanha interna" onClick={() => patch({ kind: 'projeto' })}>Projeto</button>
+                </div>
+              </div>
+              <div>
                 <small className="muted">Pasta do cliente</small>
                 <code className="truncate" title={c.folder ?? ''}>{c.folder ?? 'sem pasta'}</code>
                 <button className="ghost small" title="Cria só as pastas que faltam (REDES SOCIAIS e ARQUIVOS no padrão novo); nada é movido nem apagado"
@@ -243,17 +255,30 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
       {tab === 'sessoes' && (
         <div className="card">
           <div className="card-head">
-            <h4>Sessões de {c.name}</h4>
+            <h4>Equipe de {c.name}</h4>
             {confirmReset ? (
               <div className="row gap">
-                <span className="muted small">O funcionário deixa de lembrar a conversa atual.</span>
+                <span className="muted small">{titular ? `${titular.name} é arquivado e deixa de lembrar a conversa; o próximo pedido chama outro funcionário.` : 'A conversa atual é esquecida.'}</span>
                 <button className="ghost small" onClick={() => setConfirmReset(false)}>Manter</button>
-                <button className="small" onClick={reset}>Começar nova</button>
+                <button className="small" onClick={reset}>Trocar</button>
               </div>
             ) : (
-              <button className="ghost small" disabled={!c.sessionId || busy} onClick={() => setConfirmReset(true)}><MessageSquarePlus size={13} /> Começar conversa nova</button>
+              <button className="ghost small" disabled={(!c.sessionId && !titular) || busy} title={busy ? 'Espere o trabalho atual terminar' : undefined} onClick={() => setConfirmReset(true)}><MessageSquarePlus size={13} /> Trocar de funcionário (conversa nova)</button>
             )}
           </div>
+          <div className="team-list" role="list">
+            {titular ? (
+              <TeamRow w={titular} label="Titular · a conversa contínua" onOpen={() => { setView(null); setTab('conversa'); }} />
+            ) : <p className="muted small">Ainda sem funcionário. O primeiro pedido na conversa chama um.</p>}
+            {helpers.map((w) => <TeamRow key={w.id} w={w} label="Ajudante" />)}
+            {past.length > 0 && (
+              <details className="team-past">
+                <summary className="muted small">Já trabalharam aqui · {past.length}</summary>
+                {past.map((w) => <TeamRow key={w.id} w={w} label={`${w.role === 'titular' ? 'Titular' : 'Ajudante'} até ${new Date(w.archivedAt!).toLocaleDateString('pt-BR')}`} />)}
+              </details>
+            )}
+          </div>
+          <div className="section-label" style={{ padding: '6px 0 0' }}>Sessões desta pasta (Office e terminal)</div>
           <div className="session-list" role="list">
             <button type="button" role="listitem" className={`session-item ${view === null ? 'on' : ''}`} onClick={() => { setView(null); setTab('conversa'); }}>
               <b>Sessão atual</b><span className="muted small">{c.sessionId ? 'o funcionário lembra desta conversa' : 'o próximo pedido começa uma sessão nova'}</span>
@@ -435,6 +460,20 @@ function NewClient({ onClose }: { onClose: (id?: string) => void }) {
         </div>
         <footer className="modal-foot"><span /><div className="row gap"><button type="button" className="ghost" onClick={() => onClose()}>Cancelar</button><button className="primary" disabled={busy}>Cadastrar</button></div></footer>
       </form>
+    </div>
+  );
+}
+
+const STATE_LABEL = { trabalhando: 'trabalhando', aguardando: 'precisa de você', copa: 'na copa' } as const;
+
+/** Um funcionário de IA da equipe do cliente: nome, selo IA, papel e onde está. */
+function TeamRow({ w, label, onOpen }: { w: Worker; label: string; onOpen?: () => void }) {
+  const st = w.archivedAt ? 'arquivado' : w.state === 'copa' ? 'livre' : w.state;
+  return (
+    <div role="listitem" className={`team-row agent-row st-${st} ${w.archivedAt ? 'archived' : ''}`}>
+      <span className="avatar" style={{ background: w.color }}>{w.name[0]}<span className="status-dot" /></span>
+      <div className="truncate"><b>{w.name}</b> <span className="who-badge">IA</span><small className="muted truncate">{label}{w.archivedAt ? '' : ` · ${STATE_LABEL[w.state]}`}</small></div>
+      {onOpen && <button className="ghost small" onClick={onOpen}>Conversar</button>}
     </div>
   );
 }
