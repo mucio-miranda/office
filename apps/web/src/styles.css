@@ -1220,3 +1220,30 @@ label.check input { width: auto; height: auto; }
 .update-card button { flex: none; }
 .nav-collapsed .update-card { justify-content: center; padding: 8px 0; }
 .nav-collapsed .update-card .update-text, .nav-collapsed .update-card span { display: none; }
+
+/* pastas do cliente como estão no Drive (aba Arquivos do cliente e página Arquivos) */
+.drive-browser { display: flex; flex-direction: column; gap: 10px; min-height: 0; flex: 1; border: 1px solid var(--border); border-radius: 12px; padding: 12px 14px; background: var(--background); }
+.client-detail > .drive-browser { min-height: 480px; }
+.archive-main > .drive-browser { border: 0; border-radius: 0; padding: 16px 20px; }
+.drive-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.drive-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; min-width: 0; font-size: 13px; }
+.drive-crumbs button { height: 26px; padding: 0 6px; border: 0; background: none; color: var(--muted-foreground); max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.drive-crumbs button:hover { color: var(--foreground); background: var(--accent); }
+.drive-crumbs button.on { color: var(--foreground); font-weight: 600; }
+.drive-shortcuts { flex: none; }
+.drive-list { overflow: auto; min-height: 0; padding-right: 4px; }
+.drive-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 10px; }
+.drive-tile { height: auto; display: flex; flex-direction: column; align-items: stretch; gap: 4px; padding: 6px; border: 1px solid transparent; border-radius: 10px; background: none; text-align: left; white-space: normal; }
+.drive-tile:hover { background: var(--accent); }
+.drive-tile.on { border-color: var(--foreground); }
+.drive-thumb { aspect-ratio: 4 / 5; border-radius: 8px; background: var(--muted); display: grid; place-items: center; overflow: hidden; color: var(--muted-foreground); }
+.drive-tile.folder .drive-thumb { aspect-ratio: 16 / 10; }
+.drive-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.drive-name { font-size: 12px; line-height: 16px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-word; }
+.drive-tile small { font-size: 11px; }
+.drive-preview { display: flex; flex-direction: column; min-height: 0; border-left: 1px solid var(--border); }
+.drive-preview > .archive-preview { border-left: 0; flex: 1; }
+.drive-preview-links { padding: 0 16px 12px; }
+.spin { animation: drive-spin 1s linear infinite; }
+@keyframes drive-spin { to { transform: rotate(360deg); } }
+@media (max-width: 760px) { .archive-body.with-preview { grid-template-columns: minmax(0, 1fr); } .drive-preview { border-left: 0; border-top: 1px solid var(--border); } .drive-grid { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); } }

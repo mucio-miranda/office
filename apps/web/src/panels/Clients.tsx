@@ -1,6 +1,7 @@
+import { ClientDrive } from './ClientDrive';
 import { canSeeFinance } from '@office/shared';
 import { useEffect, useState } from 'react';
-import { Bot, FileText, Film, FolderInput, FolderOpen, FolderPlus, History, Image, MessageSquarePlus, Music, PanelLeftClose, PanelLeftOpen, Plus, RefreshCw, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
+import { Bot, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
@@ -10,12 +11,7 @@ import { Conversa, when } from './Conversa';
 import { desktop } from '../lib/desktop';
 import { usePersisted } from '../lib/persisted';
 
-interface IndexedFile { rel: string; size: number; mtime: string; kind: 'imagem' | 'video' | 'audio' | 'doc' | 'design' | 'outro' }
-interface FileGroup { key: string; label: string; count: number; size: number; files: IndexedFile[] }
-interface ClientIndex { root: string | null; exists: boolean; total: number; truncated: boolean; groups: FileGroup[] }
 
-const mb = (n: number) => (n > 1e9 ? `${(n / 1e9).toFixed(1)} GB` : n > 1e6 ? `${Math.round(n / 1e6)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
-const WEB_IMG = /\.(jpe?g|png|webp|gif)$/i;
 
 /**
  * Clientes: cadastro com a pasta no padrão da casa, briefing (entrevista com o gerente de IA ou à mão),
@@ -288,7 +284,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
           ))}
         </div>
       )}
-      {tab === 'arquivos' && <FilesCard c={c} base={base} />}
+      {tab === 'arquivos' && <ClientDrive c={c} />}
     </section>
   );
 }
@@ -324,47 +320,6 @@ function BriefingCard({ c, onInterview, interviewing, save }: { c: Client; onInt
       ) : (
         <p className="muted small">Sem briefing ainda. A entrevista é pelo chat: o gerente lê a pasta, pergunta o que falta e grava o BRIEFING.md.</p>
       )}
-    </div>
-  );
-}
-
-function FileIcon({ kind }: { kind: IndexedFile['kind'] }) {
-  if (kind === 'video') return <Film size={14} />;
-  if (kind === 'audio') return <Music size={14} />;
-  if (kind === 'imagem' || kind === 'design') return <Image size={14} />;
-  return <FileText size={14} />;
-}
-
-function FilesCard({ c, base }: { c: Client; base: string }) {
-  const [idx, setIdx] = useState<ClientIndex | null>(null);
-  const [err, setErr] = useState('');
-  const load = () => api<ClientIndex>(`${base}/files`).then((r) => { setIdx(r); setErr(''); }).catch((e) => setErr((e as Error).message));
-  useEffect(() => { load(); }, [c.folder]); // eslint-disable-line react-hooks/exhaustive-deps
-  // <img> não manda o cabeçalho de login: a miniatura usa o cookie de sessão
-  const thumb = (rel: string) => `${base}/file?rel=${encodeURIComponent(rel)}`;
-  return (
-    <div className="card files">
-      <div className="card-head">
-        <h4>Arquivos {idx?.total ? <span className="muted small">· {idx.total}{idx.truncated ? '+' : ''}</span> : null}</h4>
-        <button className="icon" onClick={load} title="Atualizar o índice"><RefreshCw size={14} /></button>
-      </div>
-      {err && <div className="error">{err}</div>}
-      {idx && !idx.root && <p className="muted small">Sem pasta definida. Use "Estrutura padrão" para criar uma.</p>}
-      {idx?.root && !idx.exists && <p className="muted small">A pasta {idx.root} não existe.</p>}
-      {idx?.exists && idx.total === 0 && <p className="muted small">A pasta está vazia. Coloque os brutos em ARQUIVOS – CLIENTE\BRUTOS\&lt;captação&gt; e o kit da marca em REDES SOCIAIS\IDENTIDADE VISUAL.</p>}
-      {idx?.groups.map((g) => {
-        const imgs = g.files.filter((f) => WEB_IMG.test(f.rel)).slice(0, 8);
-        const others = g.files.filter((f) => !WEB_IMG.test(f.rel)).slice(0, imgs.length ? 3 : 6);
-        return (
-          <div key={g.key} className="file-group">
-            <div className="row between"><b>{g.label}</b><span className="muted small">{g.count} · {mb(g.size)}</span></div>
-            {imgs.length > 0 && (
-              <div className="thumbs">{imgs.map((f) => <img key={f.rel} src={thumb(f.rel)} alt={f.rel} title={f.rel} loading="lazy" />)}</div>
-            )}
-            {others.map((f) => <div key={f.rel} className="file-row truncate" title={f.rel}><FileIcon kind={f.kind} /> {f.rel}</div>)}
-          </div>
-        );
-      })}
     </div>
   );
 }

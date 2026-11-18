@@ -34,6 +34,7 @@ import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef,
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePlan, saveCheck, undoRenames } from '../clients/month.ts';
 import { thumbOf } from '../clients/thumb.ts';
+import { clientBase, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
@@ -1004,6 +1005,30 @@ export async function api(app: FastifyInstance) {
       if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
       const dir = clientDir(office, c);
       return dir ? indexClient(dir) : { root: null, exists: false, total: 0, truncated: false, groups: [], scannedAt: now() };
+    });
+
+    // as pastas do cliente como estão no Drive, uma por vez, com atalhos e o link do Drive
+    const browseCtx = (req: FastifyRequest, reply: FastifyReply) => {
+      if (!requireMember(req, reply)) return null;
+      const { officeId, id } = req.params as any;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      if (!c) { reply.code(404).send({ error: 'Cliente não encontrado' }); return null; }
+      const base = clientBase(office, c);
+      if (!base) { reply.code(404).send({ error: 'Este cliente ainda não tem pasta.' }); return null; }
+      return { office, base, rel: String((req.query as any).rel ?? '') };
+    };
+    r.get('/api/offices/:officeId/clients/:id/pasta', async (req, reply) => {
+      const ctx = browseCtx(req, reply);
+      if (!ctx) return;
+      const list = listFolder(ctx.base, ctx.rel);
+      if (!list) return reply.code(403).send({ error: 'Fora da pasta do cliente' });
+      return { ...list, shortcuts: list.rel ? [] : shortcuts(ctx.office, ctx.base) };
+    });
+    r.get('/api/offices/:officeId/clients/:id/pasta/link', async (req, reply) => {
+      const ctx = browseCtx(req, reply);
+      if (!ctx) return;
+      return { link: linkOf(ctx.base, ctx.rel) };
     });
 
     // miniaturas do índice: só imagens que o navegador abre, de dentro da pasta do cliente
