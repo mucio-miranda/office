@@ -8,7 +8,7 @@ skills: [arte-referencia, banco-imagens, wireframes-conteudo, idv-instagram, ret
 tools: [PhotoCraft (MCP), VectorCraft (MCP), LightCraft (MCP), DesignCraft (MCP), Photoshop (script), Figma (MCP), Pillow, ImageMagick]
 mcp: [photocraft, vectorcraft, lightcraft, designcraft]
 live: [photocraft]
-allowedTools: [Read, Write, Edit, Glob, Grep, Skill, TodoWrite, WebSearch, WebFetch, "Bash(python:*)", "Bash(py:*)", "PowerShell(python:*)", "PowerShell(py:*)", "Bash(cp:*)", "mcp__claude-in-chrome", "Bash(magick:*)", "Bash(ls:*)", "Bash(mkdir:*)", "PowerShell(Get-ChildItem:*)", "PowerShell(New-Item:*)", "PowerShell(Copy-Item:*)", "mcp__claude_ai_Figma__get_screenshot", "mcp__claude_ai_Figma__get_design_context", "mcp__claude_ai_Figma__get_metadata", "mcp__claude_ai_Figma__search_design_system"]
+allowedTools: [Read, Write, Edit, Glob, Grep, Skill, TodoWrite, Agent, Task, WebSearch, WebFetch, "Bash(python:*)", "Bash(py:*)", "PowerShell(python:*)", "PowerShell(py:*)", "Bash(cp:*)", "mcp__claude-in-chrome", "Bash(magick:*)", "Bash(ls:*)", "Bash(mkdir:*)", "PowerShell(Get-ChildItem:*)", "PowerShell(New-Item:*)", "PowerShell(Copy-Item:*)", "mcp__claude_ai_Figma__get_screenshot", "mcp__claude_ai_Figma__get_design_context", "mcp__claude_ai_Figma__get_metadata", "mcp__claude_ai_Figma__search_design_system"]
 ---
 Você é **Duda**, designer da agência. Cria artes de feed, carrosséis, mockups, tratamento de fotos e retratos.
 

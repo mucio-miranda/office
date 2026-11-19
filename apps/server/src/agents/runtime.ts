@@ -59,6 +59,11 @@ let browser: { jobId: string; until: number } | null = null;
 const browserWaiting = new Set<string>();
 const clientNameOf = (jobId: string) => one<{ name: string }>('SELECT c.name FROM jobs j JOIN clients c ON c.id = j.client_id WHERE j.id = ?', jobId)?.name;
 
+/** Teto de contexto dos funcionários, em tokens. */
+export const COMPACT_WINDOW = 200_000;
+/** Custo de uma tarefa a partir do qual o chat avisa (uma vez). */
+export const COST_ALERT_USD = 10;
+
 // a vez do render: o gancho pede só quando o comando renderiza ou transcreve, e devolve quando ele termina
 const RENDER_LEASE = 3 * 3_600_000;
 let render: { jobId: string; until: number } | null = null;
@@ -412,7 +417,9 @@ async function start(jobId: string, typed: string, resume: boolean) {
     const [bin, pre] = /\.m?js$/.test(config.claudeBin) ? [process.execPath, [config.claudeBin]] : [config.claudeBin, []];
     // o gancho do navegador roda com o mesmo executável do Office (no app instalado, Electron em modo Node)
     const hookEnv = token ? { ELECTRON_RUN_AS_NODE: '1', OFFICE_API: `http://127.0.0.1:${config.port}`, OFFICE_JOB_TOKEN: token } : {};
-    child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, ...hookEnv, OFFICE_JOB_ID: jobId } });
+    // teto de contexto: ao passar disso a conversa é resumida e segue (sem o teto ela ia a ~1 milhão de tokens, relidos a cada passo)
+    const compact = { CLAUDE_CODE_AUTO_COMPACT_WINDOW: process.env.OFFICE_COMPACT_WINDOW ?? String(COMPACT_WINDOW) };
+    child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, ...compact, ...hookEnv, OFFICE_JOB_ID: jobId } });
   } catch (e) {
     addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o Claude Code: ${(e as Error).message}`);
     setJob(jobId, { status: 'erro' });
@@ -427,6 +434,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   child.stdin?.end(input);
 
   let buf = '';
+  let lastCtx = 0;
   let finalText = '';
   let isError = false;
   let stderr = '';
@@ -444,6 +452,10 @@ async function start(jobId: string, typed: string, resume: boolean) {
         setJob(jobId, { sessionId: ev.session_id });
         saveSession(ev.session_id);
       } else if (ev.type === 'assistant') {
+        const u = ev.message?.usage;
+        const ctx = u ? (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) : 0;
+        // só grava quando muda de verdade (o medidor não precisa de cada passo)
+        if (ctx && Math.abs(ctx - lastCtx) >= 5_000) { lastCtx = ctx; setJob(jobId, { contextTokens: ctx }); }
         for (const block of ev.message?.content ?? []) {
           if (block.type === 'text' && block.text?.trim()) addMessage(jobId, office.id, 'agente', block.text.replace(APPROVAL_MARKER, '').trim());
           if (block.type === 'tool_use') addMessage(jobId, office.id, 'ferramenta', describeTool(block.name, block.input ?? {}));
@@ -457,6 +469,10 @@ async function start(jobId: string, typed: string, resume: boolean) {
         const spent = sessionTotal < 0 ? 0 : turnCost(reported, sessionTotal);
         sessionTotal = reported;
         setJob(jobId, { costUsd: (prev?.costUsd ?? 0) + spent, sessionCost: reported, sessionId: ev.session_id ?? undefined });
+        const before = prev?.costUsd ?? 0;
+        if (before < COST_ALERT_USD && before + spent >= COST_ALERT_USD) {
+          addMessage(jobId, office.id, 'sistema', `Esta tarefa já custou US$ ${(before + spent).toFixed(2)}. Se ainda falta muito, vale começar uma conversa nova com um resumo do que foi feito, ou dividir em pedidos menores.`);
+        }
         if (ev.session_id) saveSession(ev.session_id);
         if (conversation) update('clients', conversation.id, { sessionCost: reported });
       }

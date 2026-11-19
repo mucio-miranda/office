@@ -192,7 +192,13 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
           {sessions.length > 1 && <span className="muted"> · {sessions.length} sessões</span>}
         </button>
         <span className="spacer" />
-        {cost > 0 && <span className="muted small mono" title="Custo desta sessão">US$ {cost.toFixed(2)}</span>}
+        {!!active?.contextTokens && (
+          <span className={`muted small mono ${active.contextTokens > 150_000 ? 'ctx-high' : ''}`}
+            title="Tamanho da conversa: o funcionário relê isso a cada passo. Perto de 200 mil, ela é resumida sozinha e segue.">
+            contexto {Math.round(active.contextTokens / 1000)} mil
+          </span>
+        )}
+        {cost > 0 && <span className={`muted small mono ${cost >= 10 ? 'ctx-high' : ''}`} title="Custo desta sessão">US$ {cost.toFixed(2)}</span>}
       </div>
       {view && (
         <div className="session-banner">

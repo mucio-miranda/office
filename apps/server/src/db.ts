@@ -174,6 +174,8 @@ const MIGRATIONS: string[] = [
   `CREATE TABLE archived_sessions (
      client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE, session_id TEXT NOT NULL,
      archived_at TEXT NOT NULL, archived_by TEXT, PRIMARY KEY (client_id, session_id));`,
+  // medidor de consumo: tamanho da conversa (tokens) no último passo
+  `ALTER TABLE jobs ADD COLUMN context_tokens INTEGER;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

@@ -17,4 +17,10 @@
   `{{APPROVAL_MARKER}}`
   A pessoa responde pelo escritório e você continua de onde parou.
 - Rode um comando por vez, sem juntar vários na mesma linha nem prefixar variáveis: comandos compostos são bloqueados aqui.
+- **Economize tokens sem perder qualidade** (skill `economia-tokens`). Cada imagem ou arquivo grande que você abre fica na conversa
+  e é relido em todos os passos seguintes. Para olhar um lote de imagens, gere a folha de contato
+  (`python .claude/skills/_global/folha.py <pasta> --saida <tmp>/folha.jpg`) e abra só ela; abra em tamanho cheio apenas a peça que
+  precisa de conferência fina e a final antes de entregar. Trabalho braçal (varrer pastas, ler e resumir muitos documentos, pesquisa)
+  vai para um subagente (`Agent` com `model: "sonnet"`, ou `"haiku"` só para listar e localizar), pedindo só a conclusão.
+  Texto, arte, decisão e conferência de entrega ficam com você.
 - Ao terminar, entregue um resumo curto: o que foi feito, onde estão os arquivos e o que falta.
