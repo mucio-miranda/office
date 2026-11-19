@@ -135,7 +135,7 @@ test('calendário: a pessoa e o funcionário preenchem; arte não passa de confe
   issueJobToken('outro-cliente');
   assert.equal(takeBrowser({ id: 'outro-cliente', officeId: job.officeId } as any), true);
   const hook = spawn(process.execPath, [path.resolve('src/agents/office-hook.mjs')], { env: { ...process.env, OFFICE_API: `http://127.0.0.1:${port}`, OFFICE_JOB_TOKEN: token } });
-  hook.stdin.end('{}');
+  hook.stdin.end(JSON.stringify({ hook_event_name: 'PreToolUse', tool_name: 'mcp__claude-in-chrome__navigate' }));
   let hookDone: number | null = null;
   hook.on('exit', (code) => { hookDone = code ?? -1; });
   await new Promise((r) => setTimeout(r, 1500));
@@ -146,6 +146,31 @@ test('calendário: a pessoa e o funcionário preenchem; arte não passa de confe
   await wait(() => hookDone !== null);
   assert.equal(hookDone, 0);
   releaseBrowser(job.id);
+
+  // vez do render: só o comando que renderiza espera; o resto do Bash (roteiro, ler arquivos) segue na hora
+  const { takeRender, releaseRender } = await import('../agents/runtime.ts');
+  assert.equal(takeRender({ id: 'outro-cliente', officeId: job.officeId } as any), true);
+  const runHook = (ev: object) => {
+    const h = spawn(process.execPath, [path.resolve('src/agents/office-hook.mjs')], { env: { ...process.env, OFFICE_API: `http://127.0.0.1:${port}`, OFFICE_JOB_TOKEN: token } });
+    h.stdin.end(JSON.stringify(ev));
+    const st = { code: null as number | null };
+    h.on('exit', (code) => { st.code = code ?? -1; });
+    return st;
+  };
+  const leitura = runHook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ls "H:/Meu Drive/REZZU"' } });
+  await wait(() => leitura.code !== null);
+  assert.equal(leitura.code, 0, 'comando que não renderiza não espera');
+  const ff = runHook({ hook_event_name: 'PreToolUse', tool_name: 'Bash', tool_input: { command: 'ffmpeg -i bruto.mp4 final.mp4' } });
+  await new Promise((r) => setTimeout(r, 1500));
+  assert.equal(ff.code, null, 'render espera o outro vídeo');
+  assert.ok((db.prepare("SELECT text FROM job_messages WHERE job_id = ? AND role = 'sistema'").all(job.id) as any[]).some((m) => m.text.startsWith('Esperando a vez de renderizar')));
+  releaseRender('outro-cliente');
+  await wait(() => ff.code !== null);
+  // terminou o comando: o PostToolUse devolve a vez
+  const fim = runHook({ hook_event_name: 'PostToolUse', tool_name: 'Bash', tool_input: { command: 'ffmpeg -i bruto.mp4 final.mp4' } });
+  await wait(() => fim.code !== null);
+  assert.equal(takeRender({ id: 'outro-cliente', officeId: job.officeId } as any), true, 'a vez voltou');
+  releaseRender('outro-cliente');
 
   // token errado ou de fora da máquina não entra
   const bad = await app.inject({ method: 'POST', url: '/api/agente/calendario_listar', remoteAddress: '127.0.0.1', headers: { host: 'localhost', authorization: 'Bearer x' }, payload: {} });

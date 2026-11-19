@@ -59,6 +59,31 @@ let browser: { jobId: string; until: number } | null = null;
 const browserWaiting = new Set<string>();
 const clientNameOf = (jobId: string) => one<{ name: string }>('SELECT c.name FROM jobs j JOIN clients c ON c.id = j.client_id WHERE j.id = ?', jobId)?.name;
 
+// a vez do render: o gancho pede só quando o comando renderiza ou transcreve, e devolve quando ele termina
+const RENDER_LEASE = 3 * 3_600_000;
+let render: { jobId: string; until: number } | null = null;
+const renderWaiting = new Set<string>();
+
+export function takeRender(job: AgentJob) {
+  const t = Date.now();
+  if (render && render.jobId !== job.id && jobTokens.has(render.jobId) && render.until > t) {
+    if (!renderWaiting.has(job.id)) {
+      renderWaiting.add(job.id);
+      const who = clientNameOf(render.jobId);
+      addMessage(job.id, job.officeId, 'sistema', `Esperando a vez de renderizar${who ? `: o vídeo de ${who} está renderizando` : ''}. Vídeo renderiza um por vez; sigo assim que ele terminar.`);
+    }
+    return false;
+  }
+  render = { jobId: job.id, until: t + RENDER_LEASE };
+  if (renderWaiting.delete(job.id)) addMessage(job.id, job.officeId, 'sistema', 'Peguei a vez de renderizar. Seguindo.');
+  return true;
+}
+
+export function releaseRender(jobId: string) {
+  renderWaiting.delete(jobId);
+  if (render?.jobId === jobId) render = null;
+}
+
 export function takeBrowser(job: AgentJob) {
   const t = Date.now();
   // o token só existe enquanto a tarefa roda: tarefa encerrada não segura o navegador
@@ -242,6 +267,7 @@ export function cancelJob(jobId: string) {
   if (child) killTree(child);
   releaseLiveForJob(jobId);
   releaseBrowser(jobId);
+  releaseRender(jobId);
   queueNoticed.delete(jobId);
   const job = setJob(jobId, { status: 'cancelado' });
   setAgentStatus(job.agentId, job.officeId, 'livre');
@@ -250,10 +276,8 @@ export function cancelJob(jobId: string) {
 function queueEntry(jobId: string, isReply: boolean): QueueEntry {
   const job = one<AgentJob>('SELECT id, client_id, demand_id, agent_id, stage FROM jobs WHERE id = ?', jobId)!;
   const d = job.demandId ? one<Pick<Demand, 'kind' | 'priority'>>('SELECT kind, priority FROM demands WHERE id = ?', job.demandId) : undefined;
-  const a = one<{ slug: string; base: string | null }>('SELECT slug, base FROM agents WHERE id = ?', job.agentId);
-  // quem revisa só lê: não disputa o render
-  const lane = job.stage !== 'aprovacao' && (d?.kind === 'video' || a?.slug === 'editor-de-video' || a?.base === 'editor-de-video') ? 'video' : null;
-  return { id: jobId, clientId: job.clientId ?? null, lane, rank: queueRank(d?.priority, isReply) };
+  // vídeo não trava mais a tarefa inteira: só o comando de render pede a vez (gancho), o roteiro e a decupagem correm juntos
+  return { id: jobId, clientId: job.clientId ?? null, lane: null, rank: queueRank(d?.priority, isReply) };
 }
 
 function pump() {
@@ -365,12 +389,14 @@ async function start(jobId: string, typed: string, resume: boolean) {
   if (path.resolve(cwd) !== path.resolve(office.rootPath)) args.push('--add-dir', office.rootPath);
   // tunning no navegador: usa a extensão do Chrome, e a imagem gerada cai em Downloads
   if (usesChrome) args.push('--chrome', '--add-dir', path.join(homedir(), 'Downloads'));
-  // vez do navegador: o gancho pede ao Office antes de cada uso do Chrome e espera se outro cliente estiver usando
-  if (usesChrome && token && existsSync(config.officeHook)) {
+  // vez do navegador e do render: o gancho pede ao Office antes de usar o Chrome ou de renderizar (Bash com ffmpeg,
+  // Whisper, motor de vídeo) e espera se outro cliente estiver usando; o render devolve a vez quando o comando termina
+  if (!reviewer && token && existsSync(config.officeHook)) {
     const settingsFile = path.join(dir, 'settings.json');
     const q = (p: string) => `"${p.replace(/\\/g, '/')}"`;
-    const hook = { type: 'command', command: `${q(process.execPath)} ${q(config.officeHook)}`, timeout: 7200 };
-    writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: [{ matcher: 'mcp__claude-in-chrome__.*', hooks: [hook] }] } }, null, 2), 'utf8');
+    const hook = { type: 'command', command: `${q(process.execPath)} ${q(config.officeHook)}`, timeout: 4 * 3600 };
+    const pre = [{ matcher: 'Bash', hooks: [hook] }, ...(usesChrome ? [{ matcher: 'mcp__claude-in-chrome__.*', hooks: [hook] }] : [])];
+    writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: pre, PostToolUse: [{ matcher: 'Bash', hooks: [hook] }] } }, null, 2), 'utf8');
     args.push('--settings', settingsFile);
   }
   if (session) args.push('--resume', session);
@@ -442,6 +468,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
     running.delete(jobId);
     jobTokens.delete(jobId);
     releaseBrowser(jobId);
+    releaseRender(jobId);
     const skillsAfter = skillsBefore ? skillsFingerprint(office) : null;
     const touched = skillsBefore && skillsAfter ? changedSkillFiles(skillsBefore, skillsAfter) : [];
     if (touched.length || (skillsBefore && skillsAfter && skillsBefore.split('\n')[0] !== skillsAfter.split('\n')[0])) {

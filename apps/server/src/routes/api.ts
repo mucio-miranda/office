@@ -17,7 +17,7 @@ import { disconnectUser, invalidate, onlineUsers, refreshPresence, sendToUsers }
 import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts';
 import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
-import { authorName, cancelJob, enqueueJob, jobForToken, releaseBrowser, replyToJob, takeBrowser } from '../agents/runtime.ts';
+import { authorName, cancelJob, enqueueJob, jobForToken, releaseBrowser, releaseRender, replyToJob, takeBrowser, takeRender } from '../agents/runtime.ts';
 import { approveAndDeliver, deliverApproved, postPieces, postsOf, progress, refreshLinks, savePosts, type PostInput } from '../agents/calendar.ts';
 import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
 import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '../agents/skillsRepo.ts';
@@ -153,6 +153,8 @@ export async function api(app: FastifyInstance) {
     // a vez do navegador vale para qualquer tarefa que usa o Chrome, com ou sem cliente
     if (job && tool === 'navegador_pegar') return { ok: takeBrowser(job) };
     if (job && tool === 'navegador_liberar') { releaseBrowser(job.id); return { ok: true, texto: 'Navegador liberado para os outros clientes.' }; }
+    if (job && tool === 'render_pegar') return { ok: takeRender(job) };
+    if (job && tool === 'render_liberar') { releaseRender(job.id); return { ok: true }; }
     if (!job?.clientId) return reply.code(401).send({ error: 'Tarefa encerrada ou sem cliente.' });
     if (tool === 'pedir_ajudante') {
       const q = (req.body ?? {}) as { tarefa?: string; motivo?: string };
