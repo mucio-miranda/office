@@ -34,7 +34,7 @@ import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef,
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePlan, saveCheck, undoRenames } from '../clients/month.ts';
 import { thumbOf } from '../clients/thumb.ts';
-import { clientBase, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
+import { clientBase, deleteEntries, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
 import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../agents/agenda.ts';
 import { archiveWorker } from '../agents/workers.ts';
 import { localPaths, saveAttachment } from '../agents/attachments.ts';
@@ -1151,6 +1151,20 @@ export async function api(app: FastifyInstance) {
       const list = listFolder(ctx.base, ctx.rel);
       if (!list) return reply.code(403).send({ error: 'Fora da pasta do cliente' });
       return { ...list, shortcuts: list.rel ? [] : shortcuts(ctx.office, ctx.base) };
+    });
+    // apagar arquivos e pastas do cliente: no Drive vai para a lixeira do Google Drive (30 dias); convidado não apaga
+    r.post('/api/offices/:officeId/clients/:id/pasta/apagar', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const ctx = browseCtx(req, reply);
+      if (!ctx) return;
+      const { rels } = z.object({ rels: z.array(z.string().min(1).max(1000)).min(1).max(200) }).parse(req.body);
+      const c = one<Client>('SELECT * FROM clients WHERE id = ?', (req.params as any).id)!;
+      const out = deleteEntries(ctx.base, rels, {
+        driveRoot: ctx.office.driveRoot ?? null, trashDir: path.join(config.dataDir, 'lixeira'),
+        logFile: path.join(config.dataDir, 'apagados.jsonl'), by: req.user.name, client: c.name,
+      });
+      if (out.deleted.length) logActivity(ctx.office.id, `user:${req.user.id}`, `apagou ${out.deleted.length === 1 ? out.deleted[0].split('/').pop() : `${out.deleted.length} itens`} de`, c.name);
+      return out;
     });
     r.get('/api/offices/:officeId/clients/:id/pasta/link', async (req, reply) => {
       const ctx = browseCtx(req, reply);

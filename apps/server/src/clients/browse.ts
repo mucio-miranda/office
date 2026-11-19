@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, statSync } from 'node:fs';
+import { appendFileSync, cpSync, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import path from 'node:path';
 import type { Client, Office } from '@office/shared';
 import { clientDriveFolder } from './drive.ts';
@@ -8,7 +8,7 @@ import { clientPaths, layoutMap } from './layout.ts';
 
 /**
  * Pastas do cliente como estão no Drive, para ver tudo organizado sem abrir o Drive: uma pasta por vez, com as
- * subpastas primeiro (meses do mais novo para o mais antigo) e os arquivos depois. Só lê: nada é criado, movido ou apagado.
+ * subpastas primeiro (meses do mais novo para o mais antigo) e os arquivos depois. Apagar fica em deleteEntries, no fim.
  */
 
 export interface FolderEntry { name: string; rel: string; dir: boolean; size: number; mtime: string; kind: FileKind | 'pasta'; items?: number }
@@ -85,4 +85,39 @@ export function linkOf(base: string, rel: string) {
   const abs = resolveRel(base, rel);
   if (!abs || !existsSync(abs)) return null;
   return statSync(abs).isDirectory() ? driveFolderLink(abs) : driveLink(abs);
+}
+
+/**
+ * Apagar pelo Office (aba Arquivos do cliente e página Arquivos). No Drive montado, apagar manda para a lixeira do
+ * Google Drive, que guarda por 30 dias; fora do Drive, o item vai para a lixeira do Office (`dados\lixeira`), nunca some
+ * de vez. A raiz do cliente e as pastas de primeiro nível (REDES SOCIAIS, ARQUIVOS – …) não podem ser apagadas.
+ */
+export function deleteEntries(base: string, rels: string[], opts: { driveRoot: string | null; trashDir: string; logFile: string; by: string; client: string }) {
+  const onDrive = !!opts.driveRoot && isInside(opts.driveRoot, base);
+  const done: string[] = [];
+  const refused: { rel: string; why: string }[] = [];
+  for (const rel of [...new Set(rels)]) {
+    const abs = resolveRel(base, rel);
+    const clean = abs ? path.relative(base, abs).split(path.sep).filter(Boolean) : [];
+    if (!abs || !clean.length) { refused.push({ rel, why: 'fora da pasta do cliente' }); continue; }
+    if (!existsSync(abs)) { refused.push({ rel, why: 'não existe mais' }); continue; }
+    const isDir = statSync(abs).isDirectory();
+    if (isDir && clean.length === 1) { refused.push({ rel, why: 'pasta principal do cliente' }); continue; }
+    try {
+      if (onDrive) rmSync(abs, { recursive: true, force: false });
+      else {
+        const to = path.join(opts.trashDir, new Date().toISOString().slice(0, 10), opts.client.replace(/[<>:"/\|?*]/g, '_'), ...clean);
+        mkdirSync(path.dirname(to), { recursive: true });
+        try { renameSync(abs, to); } catch { cpSync(abs, to, { recursive: true }); rmSync(abs, { recursive: true }); }
+      }
+      done.push(clean.join('/'));
+      appendFileSync(opts.logFile, JSON.stringify({ quando: new Date().toISOString(), quem: opts.by, cliente: opts.client, caminho: abs, pasta: isDir, destino: onDrive ? 'lixeira do Google Drive' : 'lixeira do Office' }) + '\n');
+    } catch (e) { refused.push({ rel, why: (e as Error).message }); }
+  }
+  return { deleted: done, refused, trash: onDrive ? 'drive' : 'office' };
+}
+
+function isInside(parent: string, child: string) {
+  const r = path.relative(path.resolve(parent), path.resolve(child));
+  return !r.startsWith('..') && !path.isAbsolute(r);
 }

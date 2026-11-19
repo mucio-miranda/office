@@ -1391,3 +1391,13 @@ label.check input { width: auto; height: auto; }
 
 /* contador dos parados na copa */
 .nametag.copa { pointer-events: auto; cursor: help; opacity: 0.85; }
+
+/* apagar no navegador de pastas do cliente */
+.drive-tile-wrap { position: relative; }
+.drive-tile-wrap .drive-tile { width: 100%; }
+.drive-del { position: absolute; top: 8px; right: 8px; opacity: 0; background: var(--background); border: 1px solid var(--border); color: var(--error); }
+.drive-tile-wrap:hover .drive-del, .drive-del:focus-visible { opacity: 1; }
+@media (hover: none) { .drive-del { opacity: 1; } }
+.drive-confirm { width: min(440px, 100%); padding: 20px; gap: 10px; }
+.drive-confirm h3 { margin: 0; }
+.drive-confirm p { margin: 0; }
