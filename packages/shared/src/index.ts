@@ -629,6 +629,8 @@ export interface ClientSession {
   current: boolean;
   costUsd: number;
   people: string[];
+  /** arquivada: sai da lista principal (o arquivo da sessão não é apagado) */
+  archivedAt?: string | null;
 }
 
 /** Marcador que o agente escreve quando para num checkpoint e precisa de aprovação humana. */

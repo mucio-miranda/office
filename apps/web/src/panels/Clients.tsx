@@ -1,7 +1,7 @@
 import { ClientDrive } from './ClientDrive';
-import { canSeeFinance } from '@office/shared';
+import { canSeeFinance, canWork } from '@office/shared';
 import { useEffect, useState } from 'react';
-import { Bot, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
+import { Archive as ArchiveIcon, Bot, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession, type Worker } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
@@ -134,6 +134,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   // null = a sessão atual; um id = uma sessão anterior, só para ler até alguém continuar nela
   const [view, setView] = useState<string | null>(null);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [showArchived, setShowArchived] = useState(false);
   const clientJobs = jobs.filter((j) => j.clientId === c.id);
   const busy = clientJobs.some((j) => j.status === 'rodando' || j.status === 'fila' || j.status === 'aguardando');
   useEffect(() => {
@@ -153,6 +154,14 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
       setView(null);
       setTab('conversa');
       notify('A próxima mensagem continua essa sessão');
+    } catch (x) { notify((x as Error).message); }
+  };
+  const archive = async (id: string, archived: boolean) => {
+    try {
+      await api(`${base}/sessoes/${id}/arquivar`, { body: { archived } });
+      setSessions((ss) => ss.map((s) => (s.id === id ? { ...s, archivedAt: archived ? new Date().toISOString() : null } : s)));
+      if (archived && view === id) setView(null);
+      notify(archived ? 'Sessão arquivada. Fica em "Arquivadas", no fim da lista.' : 'Sessão de volta à lista');
     } catch (x) { notify((x as Error).message); }
   };
   const reset = async () => {
@@ -290,16 +299,31 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
             <button type="button" role="listitem" className={`session-item ${view === null ? 'on' : ''}`} onClick={() => { setView(null); setTab('conversa'); }}>
               <b>Sessão atual</b><span className="muted small">{c.sessionId ? 'o funcionário lembra desta conversa' : 'o próximo pedido começa uma sessão nova'}</span>
             </button>
-            {sessions.filter((s) => !s.current).map((s) => (
+            {sessions.filter((s) => !s.current && !s.archivedAt).map((s) => (
               <div key={s.id} role="listitem" className={`session-item row ${view === s.id ? 'on' : ''}`}>
                 <button type="button" className="session-open" onClick={() => { setView(s.id); setTab('conversa'); }}>
                   <span className="row gap">{s.origin === 'terminal' ? <Terminal size={12} /> : <History size={12} />}<b className="truncate">{s.title}</b></span>
                   <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)}{s.costUsd > 0 ? ` · US$ ${s.costUsd.toFixed(2)}` : ''}{s.people.length ? ` · ${s.people.join(', ')}` : ''}</span>
                 </button>
                 <button type="button" className="ghost small" disabled={busy} title={busy ? 'Espere o trabalho atual terminar' : 'A próxima mensagem continua nesta sessão'} onClick={() => resume(s.id)}>Continuar</button>
+                {canWork(office!.role) && <button type="button" className="icon" title="Arquivar: sai da lista (nada é apagado)" aria-label={`Arquivar ${s.title}`} onClick={() => archive(s.id, true)}><ArchiveIcon size={13} /></button>}
               </div>
             ))}
             {sessions.length === 0 && <p className="muted small">Nenhuma sessão ainda nesta pasta.</p>}
+            {sessions.some((s) => s.archivedAt) && (
+              <button type="button" className="ghost small" style={{ alignSelf: 'flex-start' }} onClick={() => setShowArchived((v) => !v)}>
+                <ArchiveIcon size={12} /> Arquivadas ({sessions.filter((s) => s.archivedAt).length}) {showArchived ? '▴' : '▾'}
+              </button>
+            )}
+            {showArchived && sessions.filter((s) => s.archivedAt).map((s) => (
+              <div key={s.id} role="listitem" className={`session-item row archived ${view === s.id ? 'on' : ''}`}>
+                <button type="button" className="session-open" onClick={() => { setView(s.id); setTab('conversa'); }}>
+                  <span className="row gap">{s.origin === 'terminal' ? <Terminal size={12} /> : <History size={12} />}<b className="truncate">{s.title}</b></span>
+                  <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)} · arquivada {when(s.archivedAt!)}</span>
+                </button>
+                {canWork(office!.role) && <button type="button" className="ghost small" onClick={() => archive(s.id, false)}>Desarquivar</button>}
+              </div>
+            ))}
           </div>
         </div>
       )}

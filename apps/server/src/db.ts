@@ -170,6 +170,10 @@ const MIGRATIONS: string[] = [
      client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE, worker_id TEXT NOT NULL, job_id TEXT NOT NULL,
      task TEXT NOT NULL, reason TEXT NOT NULL DEFAULT '', status TEXT NOT NULL DEFAULT 'pendente', helper_id TEXT,
      created_at TEXT NOT NULL, decided_by TEXT);`,
+  // sessões arquivadas: só saem da lista; o arquivo da sessão continua onde está
+  `CREATE TABLE archived_sessions (
+     client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE, session_id TEXT NOT NULL,
+     archived_at TEXT NOT NULL, archived_by TEXT, PRIMARY KEY (client_id, session_id));`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

@@ -1022,10 +1022,25 @@ export async function api(app: FastifyInstance) {
                 (SELECT GROUP_CONCAT(DISTINCT m.author) FROM job_messages m JOIN jobs j2 ON j2.id = m.job_id WHERE j2.session_id = j.session_id AND m.author IS NOT NULL) AS people
          FROM jobs j WHERE j.client_id = ? AND j.session_id IS NOT NULL GROUP BY j.session_id`, id);
       const byId = new Map(mine.map((s) => [s.sessionId, s]));
+      const archived = new Map(all<{ sessionId: string; archivedAt: string }>('SELECT session_id, archived_at FROM archived_sessions WHERE client_id = ?', id).map((a) => [a.sessionId, a.archivedAt]));
       return listSessions(found.cwd).map((s) => ({
         ...s, origin: byId.has(s.id) ? 'office' : 'terminal', current: s.id === found.c.sessionId,
         costUsd: byId.get(s.id)?.cost ?? 0, people: byId.get(s.id)?.people?.split(',') ?? [],
+        archivedAt: s.id === found.c.sessionId ? null : archived.get(s.id) ?? null,
       }));
+    });
+    r.post('/api/offices/:officeId/clients/:id/sessoes/:sid/arquivar', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ archived: z.boolean() }), req, reply);
+      if (!b) return;
+      const { officeId, id, sid } = req.params as any;
+      const found = clientCwd(officeId, id);
+      if (!found || !SESSION_ID.test(sid)) return reply.code(404).send({ error: 'Sessão não encontrada' });
+      if (b.archived && sid === found.c.sessionId) return reply.code(409).send({ error: 'Esta é a sessão atual. Use "Conversa nova" para começar outra antes de arquivar.' });
+      if (b.archived) db.prepare('INSERT OR REPLACE INTO archived_sessions (client_id, session_id, archived_at, archived_by) VALUES (?, ?, ?, ?)').run(id, sid, new Date().toISOString(), req.user.name);
+      else db.prepare('DELETE FROM archived_sessions WHERE client_id = ? AND session_id = ?').run(id, sid);
+      logActivity(officeId, `user:${req.user.id}`, b.archived ? 'arquivou uma sessão' : 'desarquivou uma sessão', `${found.c.name}: ${sid}`);
+      return { ok: true };
     });
     r.get('/api/offices/:officeId/clients/:id/sessoes/:sid', async (req, reply) => {
       if (!requireMember(req, reply)) return;
@@ -1042,6 +1057,7 @@ export async function api(app: FastifyInstance) {
       if (!found || !SESSION_ID.test(sid) || !sessionFile(found.cwd, sid)) return reply.code(404).send({ error: 'Sessão não encontrada' });
       const err = resumeSession(id, sid);
       if (err) return reply.code(409).send({ error: err });
+      db.prepare('DELETE FROM archived_sessions WHERE client_id = ? AND session_id = ?').run(id, sid); // continuar nela desarquiva
       logActivity(officeId, `user:${req.user.id}`, 'retomou uma sessão', `${found.c.name}: ${sid}`);
       invalidate(officeId, 'clients');
       return { ok: true };

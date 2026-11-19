@@ -1,6 +1,6 @@
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -75,6 +75,17 @@ test('sessões do cliente: lista as do terminal e retoma uma delas', async () =>
   assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/${sid}/retomar`, {})).status, 200);
   const row = db.prepare('SELECT session_id, session_cost FROM clients WHERE id = ?').get(c.id) as any;
   assert.deepEqual([row.session_id, row.session_cost], [sid, -1], 'custo anterior desconhecido');
+  // a atual não se arquiva; outra sai da lista e volta ao desarquivar ou ao continuar nela
+  assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/${sid}/arquivar`, { archived: true })).status, 409);
+  const other = 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  writeFileSync(path.join(proj, `${other}.jsonl`), `${JSON.stringify({ type: 'user', timestamp: '2026-11-05T10:00:00Z', message: { content: 'outra' } })}
+`);
+  assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/${other}/arquivar`, { archived: true })).status, 200);
+  const arch = (await call('GET', `${O}/clients/${c.id}/sessoes`)).json as any[];
+  assert.ok(arch.find((s) => s.id === other).archivedAt);
+  assert.ok(existsSync(path.join(proj, `${other}.jsonl`)), 'nada é apagado');
+  assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/${other}/arquivar`, { archived: false })).status, 200);
+  assert.equal((await call('GET', `${O}/clients/${c.id}/sessoes`)).json.find((s: any) => s.id === other).archivedAt, null);
 });
 
 test('calendário: a pessoa e o funcionário preenchem; arte não passa de conferência sem tunning; token de fora não entra', async () => {
