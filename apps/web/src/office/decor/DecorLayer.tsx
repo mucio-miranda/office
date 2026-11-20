@@ -5,6 +5,7 @@ import type { DecorItem } from '@office/shared';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../../lib/theme';
 import { useStore } from '../../lib/store';
 import { BOUNDS, roomAt, type FurnitureKind } from '../layout';
+import { usePlan } from './plan';
 import { FurnitureMesh } from '../Furniture';
 import { OutlineColor } from '../pixel/kit';
 import { DEF, footprint, type DecorDef } from './catalog';
@@ -249,13 +250,14 @@ export function DecorLayer() {
 
   const handlers = (it: DecorItem) => editing ? {
     onDown: (e: any) => {
-      if (e.button !== 0 || useDecor.getState().placing || useStore.getState().drone) return;
+      // na Planta, o clique passa para a camada das salas
+      if (e.button !== 0 || useDecor.getState().placing || useStore.getState().drone || usePlan.getState().on) return;
       e.stopPropagation();
       hitItem.current = true;
       dragId.current = it.id;
       useDecor.setState({ sel: it.id });
     },
-    onOver: (e: any) => { e.stopPropagation(); setHover(it.id); document.body.style.cursor = 'grab'; },
+    onOver: (e: any) => { if (usePlan.getState().on) return; e.stopPropagation(); setHover(it.id); document.body.style.cursor = 'grab'; },
     onOut: () => { setHover((h) => (h === it.id ? null : h)); document.body.style.cursor = ''; },
   } : {};
 

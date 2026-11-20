@@ -7,7 +7,8 @@ import { useTheme, useWorldStyle, usePixel } from '../../lib/theme';
 import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
-import { ROOMS } from '../layout';
+import { ROOMS, customRects } from '../layout';
+import { usePlan } from './plan';
 import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, allWalls, applyWall, defaultWall, dividerWall, openOffice, saveWalls, setOpenOffice, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
@@ -201,6 +202,7 @@ function TopBar() {
       <button className="ghost small pill" onClick={() => { if (confirm('Voltar à decoração padrão do Office? Dá para desfazer depois.')) restoreDefault(); }} title="Decoração padrão">
         <RotateCcw size={14} /> Padrão
       </button>
+      <PlanToolButton />
       <WallToolButton />
       <button className="primary small decor-done" onClick={() => setEditing(false)}><Check size={14} /> Concluir <kbd>X</kbd></button>
     </div>
@@ -223,6 +225,42 @@ const MODE_HELP: Record<WallMode, (t: string) => string> = {
   apagar: () => 'Arraste por cima de uma parede para tirar só os pedaços por onde passar. As paredes de fora do prédio só trocam de acabamento.',
 };
 
+/** Planta: mover, aumentar e diminuir as salas novas e desenhar sala nova a leste do prédio. */
+function PlanToolButton() {
+  const on = usePlan((s) => s.on);
+  const sel = usePlan((s) => s.sel);
+  const drag = usePlan((s) => s.drag);
+  const problem = usePlan((s) => s.problem);
+  const busy = usePlan((s) => s.busy);
+  const rooms = useStore((s) => s.rooms);
+  useEffect(() => () => usePlan.setState({ on: false, drag: null, sel: null }), []);
+  const toggle = () => {
+    if (!on) { useWallTool.getState().setTool(null); useDecor.setState({ placing: null, ghost: null, sel: null }); }
+    usePlan.setState({ on: !on, drag: null, problem: null });
+  };
+  const rect = drag?.rect ?? (sel ? customRects.get(sel) : undefined);
+  const name = drag && drag.mode !== 'novo' ? rooms.find((r) => r.id === drag.id)?.name : drag ? 'Sala nova' : rooms.find((r) => r.id === sel)?.name;
+  return (
+    <>
+      <button className={`ghost small ${on ? 'on' : ''}`} onClick={toggle} title="Mover, aumentar e criar salas">Planta</button>
+      {on && (
+        <div className="wall-panel">
+          <b>Planta</b>
+          <p className="muted small" style={{ margin: 0 }}>
+            Na área azul, a leste do prédio: <b>arraste uma sala</b> para mudar de lugar, <b>arraste a borda</b> para aumentar ou
+            diminuir e <b>arraste no vazio</b> para desenhar uma sala nova. A decoração vai junto. A porta aparece sozinha onde a sala
+            encosta no prédio ou em outra sala.
+          </p>
+          {rect && <p className="small" style={{ margin: 0 }}><b>{name}</b> · {rect.x1 - rect.x0} × {rect.z1 - rect.z0} m</p>}
+          {drag && problem && <p className="small" style={{ margin: 0, color: '#e5484d' }}>{problem}</p>}
+          {busy && <p className="muted small" style={{ margin: 0 }}>Salvando…</p>}
+          <p className="muted small" style={{ margin: 0 }}>As salas originais (Gerência, Vídeo, Design…) ainda não mudam. Nome, ícone e remover ficam na aba Equipe.</p>
+        </div>
+      )}
+    </>
+  );
+}
+
 /** Paredes: pintar trechos, desenhar e apagar em pedaços, ou aplicar na sala inteira. Parede removida deixa passar. */
 function WallToolButton() {
   const { tool, setTool, mode, setMode } = useWallTool();
@@ -231,7 +269,7 @@ function WallToolButton() {
   useEffect(() => () => setTool(null), [setTool]);
   return (
     <>
-      <button className={`ghost small ${tool ? 'on' : ''}`} onClick={() => setTool(tool ? null : defaultWall() === 'alvenaria' ? 'reboco' : defaultWall())}>Paredes</button>
+      <button className={`ghost small ${tool ? 'on' : ''}`} onClick={() => { usePlan.setState({ on: false, drag: null }); setTool(tool ? null : defaultWall() === 'alvenaria' ? 'reboco' : defaultWall()); }}>Paredes</button>
       {tool && (
         <div className="wall-panel">
           <b>Paredes</b>

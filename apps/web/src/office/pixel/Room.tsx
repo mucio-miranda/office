@@ -3,6 +3,8 @@ import { baseOf, useTheme, type PixelPalette } from '../../lib/theme';
 import { useStore } from '../../lib/store';
 import { BOUNDS, PIECE, ROOMS, WALL_T, pieceOf, wallRuns } from '../layout';
 import { applyWall, dragKeys, useWallDrag, useWallTool } from '../decor/walls';
+import { PlanLayer } from '../decor/PlanLayer';
+import { usePlan } from '../decor/plan';
 import { roomFloors, useDecor } from '../decor/state';
 import { FLOOR_MATERIAL_M, GLASS_FLOORS, floorMaterialTexture } from './floors';
 import { PBox, tiled, useFloorTextures, wallFinishTexture, wallpaperTexture } from './kit';
@@ -45,6 +47,7 @@ export function PixelRoom({ p, onWalk, onHover, onLeave }: { p: PixelPalette; on
   const mapRev = useStore((s) => s.mapRev);
   const tool = useWallTool((s) => s.tool);
   const mode = useWallTool((s) => s.mode);
+  const plan = usePlan((s) => s.on);
   // pintar: o clique troca o trecho inteiro (pedaços vizinhos do mesmo acabamento)
   const wallClick = (keys: string[]) => (tool && mode === 'pintar' ? { onClick: (e: any) => { e.stopPropagation(); applyWall(keys, tool); } } : {});
   const walls = useMemo(() => wallRuns(styles).map((w) => {
@@ -122,6 +125,7 @@ export function PixelRoom({ p, onWalk, onHover, onLeave }: { p: PixelPalette; on
         <PBox key={`r${i}`} p={p} pos={[w.x + (w.w > w.d ? 0 : WALL_T), 0.08, w.z + (w.w > w.d ? WALL_T : 0)]} size={[w.w > w.d ? w.w : 0.04, 0.16, w.w > w.d ? 0.04 : w.d]} color={p.baseboard} outline={false} />
       ))}
       {tool && mode !== 'pintar' && <WallDrawLayer erase={mode === 'apagar'} />}
+      {plan && <PlanLayer />}
     </group>
   );
 }

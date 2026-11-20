@@ -1,4 +1,4 @@
-import type { CustomRoom, RoomId, Vec2, WallType } from '@office/shared';
+import { PLAN, roomRect, sharedEdge, type CustomRoom, type Rect, type RoomId, type Vec2, type WallType } from '@office/shared';
 import type { PanelId } from '../lib/store';
 
 /**
@@ -402,12 +402,6 @@ export const setDecorSolids = (b: Box[]) => { decorSolids = b; resetGrid(); };
 // ---------------------------------------------------------------- planta que muda: anexos, paredes e mesas extras
 
 const MAIN = { rooms: [...ROOMS], furniture: [...FURNITURE], desks: [...HUMAN_DESKS], x1: BOUNDS.x1, walls: WALL_DEFS };
-const ANNEX_W = 14, ANNEX_D = 12, ANNEX_ROWS = 3;
-const annexRect = (slot: number) => {
-  const col = Math.floor(slot / ANNEX_ROWS), row = slot % ANNEX_ROWS;
-  const x0 = MAIN.x1 + col * ANNEX_W, z0 = BOUNDS.z0 + row * ANNEX_D;
-  return { col, row, x0, x1: x0 + ANNEX_W, z0, z1: z0 + ANNEX_D };
-};
 
 let agentDesks: Box[] = [];
 export const wallTypeOf = (key: string): WallType => styleOf(wallStyles, key);
@@ -434,40 +428,51 @@ export function setAgentDesks(agents: { seat?: Vec2 | null }[]) {
   rebuildSolids();
 }
 
-/** Salas novas: cada uma ganha paredes próprias, porta para o vizinho e duas mesas para pessoas. */
+/** Retângulo de cada sala nova (o próprio, da Planta, ou o do slot). */
+export const customRects = new Map<string, Rect>();
+
+/**
+ * Salas novas: cada uma ganha paredes próprias nas quatro bordas, uma porta onde encosta no prédio ou em outra sala
+ * (no meio do trecho em comum) e mesas para pessoas. Parede encostada sai uma só, com a mesma porta dos dois lados.
+ */
 export function setCustomRooms(list: CustomRoom[]) {
-  const taken = new Map(list.map((r) => [r.slot, r]));
-  const has = (col: number, row: number) => row >= 0 && row < ANNEX_ROWS && col >= 0 && taken.has(col * ANNEX_ROWS + row);
+  const rects = list.map((r) => ({ r, rect: roomRect(r) }));
+  customRects.clear();
+  for (const { r, rect } of rects) customRects.set(r.id, rect);
   ROOMS.length = 0;
-  ROOMS.push(...MAIN.rooms, ...list.map((r): Room => {
-    const a = annexRect(r.slot);
-    return { id: r.id, label: r.name, emoji: r.emoji, x0: a.x0, x1: a.x1, z0: a.z0, z1: a.z1, floor: r.floor, key: r.slot < 2 ? String(8 + r.slot) : '' };
-  }));
+  ROOMS.push(...MAIN.rooms, ...rects.map(({ r, rect: a }): Room => (
+    { id: r.id, label: r.name, emoji: r.emoji, x0: a.x0, x1: a.x1, z0: a.z0, z1: a.z1, floor: r.floor, key: r.slot < 2 ? String(8 + r.slot) : '' })));
+  const building: Rect = { x0: BOUNDS.x0, z0: BOUNDS.z0, x1: MAIN.x1, z1: BOUNDS.z1 };
+  const snap = (v: number) => Math.round(v / PIECE) * PIECE;
+  /** Portas de uma borda: no meio de cada trecho em comum com um vizinho em que caiba porta. */
+  const doorsOn = (me: Rect, others: Rect[], vertical: boolean, line: number) => others.flatMap((o) => {
+    const e = sharedEdge(me, o);
+    return e && e.vertical === vertical && Math.abs(e.line - line) < 1e-6 && e.to - e.from >= PLAN.door + 1 ? [snap((e.from + e.to) / 2)] : [];
+  });
   const extra: WallDef[] = [];
-  for (const r of list) {
-    const { col, row, x0, x1, z0, z1 } = annexRect(r.slot);
-    const xc = (x0 + x1) / 2, zc = (z0 + z1) / 2;
-    if (!has(col, row - 1)) extra.push({ a: { x: x0, z: z0 }, b: { x: x1, z: z0 }, doors: [] });
-    extra.push({ a: { x: x0, z: z1 }, b: { x: x1, z: z1 }, doors: has(col, row + 1) ? [xc] : [] });
-    extra.push({ a: { x: x1, z: z0 }, b: { x: x1, z: z1 }, doors: has(col + 1, row) ? [zc] : [] });
-    if (col > 0 && !has(col - 1, row)) extra.push({ a: { x: x0, z: z0 }, b: { x: x0, z: z1 }, doors: [] });
+  for (const { rect: a } of rects) {
+    const others = [building, ...rects.map((x) => x.rect).filter((o) => o !== a)];
+    extra.push({ a: { x: a.x0, z: a.z0 }, b: { x: a.x1, z: a.z0 }, doors: doorsOn(a, others, false, a.z0) });
+    extra.push({ a: { x: a.x0, z: a.z1 }, b: { x: a.x1, z: a.z1 }, doors: doorsOn(a, others, false, a.z1) });
+    extra.push({ a: { x: a.x0, z: a.z0 }, b: { x: a.x0, z: a.z1 }, doors: doorsOn(a, others, true, a.x0) });
+    extra.push({ a: { x: a.x1, z: a.z0 }, b: { x: a.x1, z: a.z1 }, doors: doorsOn(a, others, true, a.x1) });
   }
-  // a parede leste do prédio abre uma porta para cada sala da primeira coluna
-  const eastDoors = [0, 1, 2].filter((row) => has(0, row)).map((row) => BOUNDS.z0 + (row + 0.5) * ANNEX_D);
+  // a parede leste do prédio abre uma porta para cada sala encostada nela
+  const eastDoors = doorsOn(building, rects.map((x) => x.rect), true, MAIN.x1);
   const defs = [...MAIN.walls.map((d) => (d.a.x === MAIN.x1 && d.b.x === MAIN.x1 && d.a.z === BOUNDS.z0 ? { ...d, doors: eastDoors } : d)), ...extra];
   setDefs(defs);
   rebuildWalls();
   DOOR_ZONES.length = 0;
   DOOR_ZONES.push(...defs.flatMap(doorZones));
-  const desks = list.flatMap((r): HumanDesk[] => {
-    const a = annexRect(r.slot);
-    return [{ id: `${r.id}-1`, room: r.id, x: a.x0 + 3.5, z: a.z0 + 3 }, { id: `${r.id}-2`, room: r.id, x: a.x1 - 3.5, z: a.z0 + 3 }];
-  });
+  // mesas das pessoas no fundo da sala: duas, ou uma no meio se a sala for estreita
+  const desks = rects.flatMap(({ r, rect: a }): HumanDesk[] => (a.x1 - a.x0 >= 10
+    ? [{ id: `${r.id}-1`, room: r.id, x: a.x0 + 3.5, z: a.z0 + 3 }, { id: `${r.id}-2`, room: r.id, x: a.x1 - 3.5, z: a.z0 + 3 }]
+    : [{ id: `${r.id}-1`, room: r.id, x: (a.x0 + a.x1) / 2, z: a.z0 + 3 }]));
   HUMAN_DESKS.length = 0;
   HUMAN_DESKS.push(...MAIN.desks, ...desks);
   FURNITURE.length = 0;
   FURNITURE.push(...MAIN.furniture, ...desks.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true })));
-  BOUNDS.x1 = list.reduce((m, r) => Math.max(m, annexRect(r.slot).x1), MAIN.x1);
+  BOUNDS.x1 = rects.reduce((m, { rect }) => Math.max(m, rect.x1), MAIN.x1);
   COLS = Math.round((BOUNDS.x1 - BOUNDS.x0) / CELL);
   rebuildSolids();
 }

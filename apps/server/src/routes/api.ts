@@ -5,7 +5,7 @@ import { createReadStream, existsSync, statSync, readdirSync, readFileSync } fro
 import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import { POST_FORMATS, POST_STATUSES, MONTH_STEPS, CHECK_STATES, MONTH_STEP_LABEL,
-  BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, PROCESSES, WALL_TYPES, processById, uid,
+  BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, annexRect, planProblem, roomRect, type Rect, PROCESSES, WALL_TYPES, processById, uid,
   type AgentJob, type AgentProfile, type Worker, type DirectMessage, type HelperRequest, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
@@ -528,15 +528,33 @@ export async function api(app: FastifyInstance) {
       return all<CustomRoom>('SELECT * FROM office_rooms WHERE office_id = ? ORDER BY slot', (req.params as any).officeId);
     });
     const roomSchema = z.object({ name: z.string().trim().min(2).max(40), emoji: z.string().trim().min(1).max(8).default('🚪'), floor: hexColor.default('#e8e4dc') });
+    const rectSchema = z.object({ x0: z.number(), z0: z.number(), x1: z.number(), z1: z.number() });
+    /** A planta das salas novas com uma mudada (ou uma a mais): o problema, ou null se pode salvar. */
+    const planWith = (officeId: string, change: { id: string; name: string; rect: Rect }) => {
+      const rooms = all<CustomRoom>('SELECT * FROM office_rooms WHERE office_id = ?', officeId)
+        .filter((r) => r.id !== change.id).map((r) => ({ id: r.id, name: r.name, rect: roomRect(r) }));
+      return planProblem([...rooms, change]);
+    };
     r.post('/api/offices/:officeId/rooms', async (req, reply) => {
       if (!requireOwner(req, reply)) return;
       const { officeId } = req.params as { officeId: string };
-      const b = body(roomSchema, req, reply);
+      const b = body(roomSchema.extend({ rect: rectSchema.optional() }), req, reply);
       if (!b) return;
+      const { rect: asked, ...fields } = b;
       const used = new Set(all<{ slot: number }>('SELECT slot FROM office_rooms WHERE office_id = ?', officeId).map((x) => x.slot));
       const slot = Array.from({ length: MAX_CUSTOM_ROOMS }, (_, i) => i).find((i) => !used.has(i));
       if (slot === undefined) return reply.code(409).send({ error: `O limite é de ${MAX_CUSTOM_ROOMS} salas novas.` });
-      const room: CustomRoom = { id: `sala-${randomBytes(4).toString('hex')}`, officeId, ...b, slot };
+      const id = `sala-${randomBytes(4).toString('hex')}`;
+      // desenhada na Planta: vale o retângulo (se couber); senão, o primeiro espaço de anexo livre que encoste em algo
+      let rect = asked ?? null;
+      if (rect) {
+        const problem = planWith(officeId, { id, name: fields.name, rect });
+        if (problem) return reply.code(400).send({ error: problem });
+      } else {
+        rect = Array.from({ length: MAX_CUSTOM_ROOMS * 2 }, (_, i) => annexRect(i)).find((r) => !planWith(officeId, { id, name: fields.name, rect: r })) ?? null;
+        if (!rect) return reply.code(409).send({ error: 'Não achei espaço livre para a sala nova. Abra espaço na Planta (Decorar).' });
+      }
+      const room: CustomRoom = { id, officeId, ...fields, slot, ...rect };
       insert('office_rooms', room as never);
       logActivity(officeId, `user:${req.user.id}`, 'criou a sala', room.name);
       invalidate(officeId, 'rooms');
@@ -546,9 +564,15 @@ export async function api(app: FastifyInstance) {
       if (!requireOwner(req, reply)) return;
       const { officeId, id } = req.params as { officeId: string; id: string };
       if (!one('SELECT id FROM office_rooms WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Sala não encontrada' });
-      const b = body(roomSchema.partial(), req, reply);
+      const b = body(roomSchema.partial().extend({ rect: rectSchema.optional() }), req, reply);
       if (!b) return;
-      update('office_rooms', id, b);
+      const { rect, ...fields } = b;
+      if (rect) {
+        const cur = one<CustomRoom>('SELECT * FROM office_rooms WHERE id = ?', id)!;
+        const problem = planWith(officeId, { id, name: fields.name ?? cur.name, rect });
+        if (problem) return reply.code(400).send({ error: problem });
+      }
+      update('office_rooms', id, { ...fields, ...(rect ?? {}) });
       invalidate(officeId, 'rooms');
       return { ok: true };
     });

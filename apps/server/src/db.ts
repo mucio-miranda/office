@@ -181,6 +181,11 @@ const MIGRATIONS: string[] = [
   // limite da assinatura do Claude (janela de 5 h e semana), como o Claude Code informa a cada rodada
   `CREATE TABLE usage_snapshots (at TEXT NOT NULL, five_hour REAL, seven_day REAL, five_hour_resets TEXT, seven_day_resets TEXT);
    CREATE INDEX usage_snapshots_at ON usage_snapshots(at);`,
+  // planta: posição e tamanho próprios de cada sala nova (vazio = a posição do slot)
+  `ALTER TABLE office_rooms ADD COLUMN x0 REAL;
+   ALTER TABLE office_rooms ADD COLUMN z0 REAL;
+   ALTER TABLE office_rooms ADD COLUMN x1 REAL;
+   ALTER TABLE office_rooms ADD COLUMN z1 REAL;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

@@ -104,3 +104,22 @@ test('paredes: o tipo de cada trecho fica salvo, com validação', async () => {
   assert.equal((await call('PUT', `${O}/walls`, owner, { 'x; drop': 'vidro' })).status, 400);
 });
 
+
+test('planta: sala nova muda de lugar e tamanho, sem passar por cima de outra nem ficar sem porta', async () => {
+  const rooms = (await call('GET', `${O}/rooms`, owner)).json as any[];
+  const { roomRect } = await import('@office/shared');
+  const east = rooms.map((r) => ({ r, rect: roomRect(r) })).sort((a, b) => b.rect.x1 - a.rect.x1)[0];
+  const bigger = { ...east.rect, x1: east.rect.x1 + 6 };
+  assert.equal((await call('PATCH', `${O}/rooms/${east.r.id}`, owner, { rect: bigger })).status, 200, 'aumenta para o lado vazio');
+  assert.deepEqual(roomRect((await call('GET', `${O}/rooms`, owner)).json.find((x: any) => x.id === east.r.id)), bigger);
+  const over = { ...east.rect, x0: east.rect.x0 - 4 };
+  const r1 = await call('PATCH', `${O}/rooms/${east.r.id}`, owner, { rect: over });
+  assert.equal(r1.status, 400);
+  assert.match(r1.json.error, /uma em cima da outra/);
+  const far = { x0: 200, z0: -18, x1: 214, z1: -6 };
+  const r2 = await call('PATCH', `${O}/rooms/${east.r.id}`, owner, { rect: far });
+  assert.equal(r2.status, 400);
+  assert.match(r2.json.error, /sem porta/);
+  assert.equal((await call('PATCH', `${O}/rooms/${east.r.id}`, owner, { rect: { ...bigger, x1: bigger.x1 + 0.3 } })).status, 400, 'fora da grade');
+  assert.equal((await call('PATCH', `${O}/rooms/${east.r.id}`, owner, { rect: { ...bigger, z0: -30 } })).status, 400, 'fora da faixa do prédio');
+});

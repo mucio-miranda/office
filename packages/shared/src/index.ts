@@ -31,10 +31,70 @@ export interface CustomRoom {
   name: string;
   emoji: string;
   floor: string;
-  /** Posição na grade de anexos: 3 salas por coluna. */
+  /** Posição na grade de anexos: 3 salas por coluna (usada quando a sala não tem retângulo próprio). */
   slot: number;
+  /** Retângulo da sala no mapa (metros), desde a ferramenta Planta; vazio = a posição do slot. */
+  x0?: number | null;
+  z0?: number | null;
+  x1?: number | null;
+  z1?: number | null;
 }
 export const MAX_CUSTOM_ROOMS = 12;
+
+/**
+ * Planta das salas novas: ficam a leste do prédio (x a partir de 27), entre o fundo e a frente dele (z de -18 a 18),
+ * para as paredes do fundo e da esquerda, onde vai a decoração de parede, continuarem no lugar. Uma sala não passa
+ * por cima de outra e precisa encostar no prédio ou numa sala que encoste, com espaço para uma porta.
+ */
+export interface Rect { x0: number; z0: number; x1: number; z1: number }
+export const PLAN = { x0: 27, z0: -18, z1: 18, annexW: 14, annexD: 12, rows: 3, minW: 6, minD: 6, maxW: 60, maxD: 36, door: 2.6, grid: 0.5 };
+export const annexRect = (slot: number): Rect => {
+  const col = Math.floor(slot / PLAN.rows), row = slot % PLAN.rows;
+  const x0 = PLAN.x0 + col * PLAN.annexW, z0 = PLAN.z0 + row * PLAN.annexD;
+  return { x0, z0, x1: x0 + PLAN.annexW, z1: z0 + PLAN.annexD };
+};
+export const roomRect = (r: Pick<CustomRoom, 'slot' | 'x0' | 'z0' | 'x1' | 'z1'>): Rect =>
+  r.x0 != null && r.z0 != null && r.x1 != null && r.z1 != null ? { x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1 } : annexRect(r.slot);
+export const rectsOverlap = (a: Rect, b: Rect) => a.x0 < b.x1 - 1e-6 && a.x1 > b.x0 + 1e-6 && a.z0 < b.z1 - 1e-6 && a.z1 > b.z0 + 1e-6;
+/** Trecho em comum de duas bordas encostadas (onde cabe a porta), ou null. */
+export function sharedEdge(a: Rect, b: Rect): { vertical: boolean; line: number; from: number; to: number } | null {
+  const ov = (p0: number, p1: number, q0: number, q1: number) => [Math.max(p0, q0), Math.min(p1, q1)] as const;
+  if (Math.abs(a.x1 - b.x0) < 1e-6 || Math.abs(a.x0 - b.x1) < 1e-6) {
+    const [f, t] = ov(a.z0, a.z1, b.z0, b.z1);
+    if (t - f > 1e-6) return { vertical: true, line: Math.abs(a.x1 - b.x0) < 1e-6 ? a.x1 : a.x0, from: f, to: t };
+  }
+  if (Math.abs(a.z1 - b.z0) < 1e-6 || Math.abs(a.z0 - b.z1) < 1e-6) {
+    const [f, t] = ov(a.x0, a.x1, b.x0, b.x1);
+    if (t - f > 1e-6) return { vertical: false, line: Math.abs(a.z1 - b.z0) < 1e-6 ? a.z1 : a.z0, from: f, to: t };
+  }
+  return null;
+}
+/** Encostadas com espaço para porta (a porta mais um respiro de cada lado). */
+export const roomsJoin = (a: Rect, b: Rect) => { const e = sharedEdge(a, b); return !!e && e.to - e.from >= PLAN.door + 1; };
+const BUILDING: Rect = { x0: -27, z0: -18, x1: PLAN.x0, z1: 18 };
+/** Confere a planta inteira das salas novas: devolve o problema, em português, ou null se está tudo certo. */
+export function planProblem(rooms: { id: string; name: string; rect: Rect }[]): string | null {
+  const g = PLAN.grid;
+  for (const { name, rect: r } of rooms) {
+    if ([r.x0, r.z0, r.x1, r.z1].some((v) => !Number.isFinite(v) || Math.abs(v / g - Math.round(v / g)) > 1e-6)) return `${name}: medidas fora da grade de meio metro.`;
+    if (r.x0 < PLAN.x0 - 1e-6 || r.z0 < PLAN.z0 - 1e-6 || r.z1 > PLAN.z1 + 1e-6) return `${name} precisa ficar a leste do prédio, entre o fundo e a frente dele.`;
+    if (r.x1 - r.x0 < PLAN.minW || r.z1 - r.z0 < PLAN.minD) return `${name} ficou pequena demais (mínimo de ${PLAN.minW} × ${PLAN.minD} m).`;
+    if (r.x1 - r.x0 > PLAN.maxW || r.z1 - r.z0 > PLAN.maxD) return `${name} ficou grande demais (máximo de ${PLAN.maxW} × ${PLAN.maxD} m).`;
+  }
+  for (let i = 0; i < rooms.length; i++)
+    for (let j = i + 1; j < rooms.length; j++)
+      if (rectsOverlap(rooms[i].rect, rooms[j].rect)) return `${rooms[i].name} e ${rooms[j].name} ficariam uma em cima da outra.`;
+  // todas precisam ter caminho até o prédio: encostando nele ou numa sala que chegue lá
+  const reach = new Set<number>();
+  const queue = rooms.map((r, i) => (roomsJoin(r.rect, BUILDING) ? i : -1)).filter((i) => i >= 0);
+  queue.forEach((i) => reach.add(i));
+  while (queue.length) {
+    const i = queue.shift()!;
+    rooms.forEach((r, j) => { if (!reach.has(j) && roomsJoin(rooms[i].rect, r.rect)) { reach.add(j); queue.push(j); } });
+  }
+  const lost = rooms.find((_, i) => !reach.has(i));
+  return lost ? `${lost.name} ficaria sem porta: encoste no prédio ou em outra sala, com pelo menos ${PLAN.door + 1} m em comum.` : null;
+}
 
 export interface User {
   id: ID;
