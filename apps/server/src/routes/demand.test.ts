@@ -108,6 +108,10 @@ test('sessões do cliente: lista as do terminal e retoma uma delas', async () =>
     { type: 'user', timestamp: '2026-01-01T10:00:00Z', cwd, message: { role: 'user', content: 'pedido de outro dia' } },
   ].map((e) => JSON.stringify(e)).join(String.fromCharCode(10)));
   await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
+  // limite da assinatura: o Claude Code informa no stream; o daily mostra o limite, nunca custo em dólar
+  const { recordUsage } = await import('../agents/usage.ts');
+  recordUsage({ unifiedWindows: { five_hour: { utilization: 0.12, resetsAt: 1795223400 }, seven_day: { utilization: 0.38, resetsAt: 1795694400 } } });
+  assert.equal((await call('GET', `${O}/limite`)).json.sevenDay, 0.38);
   const daily = await call('POST', `${O}/daily`, {});
   assert.equal(daily.status, 200, JSON.stringify(daily.json));
   const djob = db.prepare('SELECT prompt, model, client_id FROM jobs WHERE id = ?').get(daily.json.id) as any;
@@ -117,6 +121,8 @@ test('sessões do cliente: lista as do terminal e retoma uma delas', async () =>
   assert.ok(djob.prompt.includes('> Legenda refeita e entregue.'));
   assert.ok(djob.prompt.includes('C:/x/legenda.srt'));
   assert.ok(!djob.prompt.includes('pedido de outro dia'), 'só o dia pedido');
+  assert.ok(djob.prompt.includes('Limite semanal da assinatura do Claude: 38% usado'), 'limite no levantamento');
+  assert.ok(!djob.prompt.includes('US$'), 'sem custo em dólar');
   assert.equal((await call('POST', `${O}/daily`, { dia: '2001-01-01' })).status, 409, 'dia sem nada');
 });
 

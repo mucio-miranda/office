@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { HelperRequests } from './HelperRequests';
 import { ArrowUp, ChevronDown, History, Reply, Square, Wrench } from 'lucide-react';
 import { desktop } from '../lib/desktop';
+import { LimitBadge } from './LimitBadge';
 import { canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { useDraft } from '../lib/draft';
@@ -126,7 +127,6 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
     return out;
   }, [msgs]);
 
-  const cost = mine.reduce((n, j) => n + (j.costUsd ?? 0), 0);
   const running = active?.status === 'rodando' || active?.status === 'fila';
   const workers = useStore((s) => s.workers);
   const worker = workers.find((w) => w.id === active?.workerId) ?? agents.find((a) => a.id === active?.agentId);
@@ -248,7 +248,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
             contexto {Math.round(active.contextTokens / 1000)} mil
           </span>
         )}
-        {cost > 0 && <span className={`muted small mono ${cost >= 10 ? 'ctx-high' : ''}`} title="Custo desta sessão">US$ {cost.toFixed(2)}</span>}
+        <LimitBadge />
       </div>
       {view && (
         <div className="session-banner">

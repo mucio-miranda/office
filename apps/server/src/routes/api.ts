@@ -44,6 +44,7 @@ import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { localDay, startDaily } from '../agents/daily.ts';
+import { latestUsage } from '../agents/usage.ts';
 import { addPreviews, mediaInDirs, mediaPaths, previewFileOf, previewsOf } from '../agents/previews.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
 import { EXPORT_FORMATS, probe } from '@office/video-engine';
@@ -1708,6 +1709,12 @@ export async function api(app: FastifyInstance) {
       } catch (e) {
         return reply.code(409).send({ error: (e as Error).message });
       }
+    });
+
+    // limite da assinatura do Claude (semana e janela de 5 h), como o Claude Code informou na última rodada
+    r.get('/api/offices/:officeId/limite', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return latestUsage() ?? {};
     });
 
     // daily report: o que a equipe fez com os funcionários no dia (Office e terminal desta máquina)

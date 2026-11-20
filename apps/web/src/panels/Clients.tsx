@@ -303,7 +303,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
               <div key={s.id} role="listitem" className={`session-item row ${view === s.id ? 'on' : ''}`}>
                 <button type="button" className="session-open" onClick={() => { setView(s.id); setTab('conversa'); }}>
                   <span className="row gap">{s.origin === 'terminal' ? <Terminal size={12} /> : <History size={12} />}<b className="truncate">{s.title}</b></span>
-                  <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)}{s.costUsd > 0 ? ` · US$ ${s.costUsd.toFixed(2)}` : ''}{s.people.length ? ` · ${s.people.join(', ')}` : ''}</span>
+                  <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)}{s.people.length ? ` · ${s.people.join(', ')}` : ''}</span>
                 </button>
                 <button type="button" className="ghost small" disabled={busy} title={busy ? 'Espere o trabalho atual terminar' : 'A próxima mensagem continua nesta sessão'} onClick={() => resume(s.id)}>Continuar</button>
                 {canWork(office!.role) && <button type="button" className="icon" title="Arquivar: sai da lista (nada é apagado)" aria-label={`Arquivar ${s.title}`} onClick={() => archive(s.id, true)}><ArchiveIcon size={13} /></button>}

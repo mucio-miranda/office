@@ -4,6 +4,7 @@ import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
 import { PathField } from '../lib/PathPicker';
 import { Sparkles } from 'lucide-react';
+import { pctOf, resetText } from './LimitBadge';
 
 interface Metrics {
   month: string;
@@ -22,7 +23,7 @@ interface Metrics {
 }
 
 export function Finance() {
-  const { office, clients, transactions, agents, open, notify } = useStore();
+  const { office, clients, transactions, agents, open, notify, limite } = useStore();
   const [m, setM] = useState<Metrics | null>(null);
   const [tab, setTab] = useState<'resumo' | 'clientes' | 'lancamentos'>('resumo');
   const base = `/api/offices/${office!.id}`;
@@ -60,7 +61,7 @@ export function Finance() {
             <Kpi label="Despesas do mês" value={brl(m.expenseMonth)} />
             <Kpi label="Resultado do mês" value={brl(m.profitMonth)} tone={m.profitMonth >= 0 ? 'good' : 'bad'} />
             <Kpi label="A receber" value={brl(m.receivablePending)} />
-            <Kpi label="Custo de IA no mês" value={`US$ ${m.aiCostMonth.toFixed(2)}`} hint="estimativa do Claude Code" />
+            <Kpi label="Limite semanal do Claude" value={pctOf(limite?.sevenDay)} hint={limite?.sevenDayResets ? `renova ${resetText(limite.sevenDayResets)}` : 'aparece depois da primeira tarefa'} tone={(limite?.sevenDay ?? 0) >= 0.8 ? 'bad' : undefined} />
             <Kpi label="Entregues no mês" value={String(m.deliveredThisMonth)} />
             <Kpi label="Demandas atrasadas" value={String(m.overdue)} tone={m.overdue ? 'bad' : 'good'} />
           </div>

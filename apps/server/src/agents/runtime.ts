@@ -11,6 +11,7 @@ import { broadcast, invalidate } from '../realtime.ts';
 import { houseRules } from './templates.ts';
 import { mcpConfig } from './tools.ts';
 import { openLiveForJob, releaseLiveForJob } from './live.ts';
+import { pct, recordUsage } from './usage.ts';
 import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
 import { availableDirs, deniedTools, mentionedDirs } from './permissions.ts';
 import { anexosDir, isOwner } from './attachments.ts';
@@ -79,8 +80,9 @@ const clientNameOf = (jobId: string) => one<{ name: string }>('SELECT c.name FRO
 
 /** Teto de contexto dos funcionários, em tokens. */
 export const COMPACT_WINDOW = 200_000;
-/** Custo de uma tarefa a partir do qual o chat avisa (uma vez). */
-export const COST_ALERT_USD = 10;
+/** Limite semanal da assinatura a partir do qual a conversa avisa (uma vez por semana e por faixa). */
+export const LIMIT_ALERTS = [0.8, 0.95];
+const limitAlerted = new Set<string>();
 
 // a vez do render: o gancho pede só quando o comando renderiza ou transcreve, e devolve quando ele termina
 const RENDER_LEASE = 3 * 3_600_000;
@@ -491,6 +493,15 @@ async function start(jobId: string, typed: string, resume: boolean) {
           if (block.type === 'text' && block.text?.trim()) addMessage(jobId, office.id, 'agente', block.text.replace(APPROVAL_MARKER, '').trim());
           if (block.type === 'tool_use') addMessage(jobId, office.id, 'ferramenta', describeTool(block.name, block.input ?? {}));
         }
+      } else if (ev.type === 'rate_limit_event') {
+        const u = recordUsage(ev.rate_limit_info);
+        const hit = u?.sevenDay != null ? LIMIT_ALERTS.filter((a) => u.sevenDay! >= a).at(-1) : undefined;
+        if (u && hit && !limitAlerted.has(`${u.sevenDayResets}:${hit}`)) {
+          limitAlerted.add(`${u.sevenDayResets}:${hit}`);
+          const renova = u.sevenDayResets ? new Date(u.sevenDayResets).toLocaleString('pt-BR', { weekday: 'long', hour: '2-digit', minute: '2-digit' }) : 'em breve';
+          addMessage(jobId, office.id, 'sistema', `O limite semanal da assinatura do Claude está em ${pct(u.sevenDay)} (renova ${renova}). Priorize o que é urgente; conversas longas e muitas imagens abertas gastam mais.`);
+        }
+        invalidate(office.id, 'limite');
       } else if (ev.type === 'result') {
         // rodada encerrada: fecha a entrada; o que chegar daqui em diante vai como continuação, quando ele sair
         closeLiveInput(jobId);
@@ -502,10 +513,6 @@ async function start(jobId: string, typed: string, resume: boolean) {
         const spent = sessionTotal < 0 ? 0 : turnCost(reported, sessionTotal);
         sessionTotal = reported;
         setJob(jobId, { costUsd: (prev?.costUsd ?? 0) + spent, sessionCost: reported, sessionId: ev.session_id ?? undefined });
-        const before = prev?.costUsd ?? 0;
-        if (before < COST_ALERT_USD && before + spent >= COST_ALERT_USD) {
-          addMessage(jobId, office.id, 'sistema', `Esta tarefa já custou US$ ${(before + spent).toFixed(2)}. Se ainda falta muito, vale começar uma conversa nova com um resumo do que foi feito, ou dividir em pedidos menores.`);
-        }
         if (ev.session_id) saveSession(ev.session_id);
         if (conversation) update('clients', conversation.id, { sessionCost: reported });
       }

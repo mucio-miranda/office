@@ -112,7 +112,7 @@ export function AgentPanel() {
           {myJobs.map((j) => (
             <button key={j.id} className={`job-item ${j.id === jobId ? 'active' : ''}`} onClick={() => setJobId(j.id)}>
               <span>{j.prompt.replace(/^## Demanda: /, '').replace(/^# Daily report (\d{4})-(\d{2})-(\d{2})/, 'Daily report $3/$2').split('\n')[0]}</span>
-              <small className={`st-${j.status}`}><span className="status-dot" />{STATUS_LABEL[j.status]}{j.costUsd ? <span className="mono">· US$ {j.costUsd.toFixed(2)}</span> : null}</small>
+              <small className={`st-${j.status}`}><span className="status-dot" />{STATUS_LABEL[j.status]}</small>
             </button>
           ))}
         </div>

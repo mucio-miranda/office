@@ -696,7 +696,7 @@ export type ServerMsg =
   | { t: 'dm'; message: DirectMessage }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'helpers' | 'workers' | 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' }
+  | { t: 'invalidate'; what: 'helpers' | 'workers' | 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' | 'limite' }
   /** Aviso para todo mundo do escritório (ex.: peça esperando aprovação). */
   | { t: 'notice'; text: string; demandId?: ID; agentId?: ID }
   | { t: 'job'; job: AgentJob }
@@ -780,3 +780,6 @@ export interface HelperRequest {
   createdAt: string;
   decidedBy: string | null;
 }
+
+/** Limite da assinatura do Claude (fração usada, 0 a 1), como o Claude Code informou na última rodada. */
+export interface ClaudeLimit { at?: string; fiveHour?: number | null; sevenDay?: number | null; fiveHourResets?: string | null; sevenDayResets?: string | null }

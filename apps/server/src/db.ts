@@ -178,6 +178,9 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE jobs ADD COLUMN context_tokens INTEGER;`,
   // modelo próprio da tarefa (o daily report roda no Sonnet); vazio = o padrão do Claude Code
   `ALTER TABLE jobs ADD COLUMN model TEXT;`,
+  // limite da assinatura do Claude (janela de 5 h e semana), como o Claude Code informa a cada rodada
+  `CREATE TABLE usage_snapshots (at TEXT NOT NULL, five_hour REAL, seven_day REAL, five_hour_resets TEXT, seven_day_resets TEXT);
+   CREATE INDEX usage_snapshots_at ON usage_snapshots(at);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

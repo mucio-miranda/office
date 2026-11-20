@@ -7,6 +7,7 @@ import { config } from '../config.ts';
 import { all, one } from '../db.ts';
 import { projectsRoot, SESSION_ID } from './sessions.ts';
 import { enqueueJob } from './runtime.ts';
+import { latestUsage, pct, usageBetween } from './usage.ts';
 
 /**
  * Daily report: o que a equipe fez com os funcionários de IA no dia, no Office e no terminal (Warp, Claude Code puro).
@@ -112,7 +113,7 @@ export async function dailyDigest(office: Office, day: string, root = projectsRo
   const name = (table: string, id?: string | null) => (id ? one<{ name: string }>(`SELECT name FROM ${table} WHERE id = ?`, id)?.name : undefined);
   const bySession = new Map<string, (AgentJob & { createdBy: string })[]>();
   for (const j of jobs) if (j.sessionId) bySession.set(j.sessionId, [...(bySession.get(j.sessionId) ?? []), j]);
-  const dailySessions = new Set(all<{ session_id: string }>('SELECT session_id FROM jobs WHERE office_id = ? AND prompt LIKE ? AND session_id IS NOT NULL', office.id, `${DAILY_MARK}%`).map((r) => r.session_id));
+  const dailySessions = new Set(all<{ sessionId: string }>('SELECT session_id FROM jobs WHERE office_id = ? AND prompt LIKE ? AND session_id IS NOT NULL', office.id, `${DAILY_MARK}%`).map((r) => r.sessionId));
   const sessions = (await sessionsOfDay(day, root)).filter((s) => !dailySessions.has(s.id));
   if (!sessions.length && !jobs.length) return null;
 
@@ -122,13 +123,19 @@ export async function dailyDigest(office: Office, day: string, root = projectsRo
 
   const lines: string[] = [];
   lines.push(`Dia: ${day} · ${sessions.length} sessões do Claude Code nesta máquina · ${jobs.length} tarefas no Office`);
-  const cost = jobs.reduce((n, j) => n + (j.costUsd ?? 0), 0);
-  if (cost) lines.push(`Custo das tarefas do Office no dia: US$ ${cost.toFixed(2)} (sessões do terminal não informam custo)`);
+  // assinatura, não API: o que importa é o limite consumido, não o custo em dólar
+  const reads = usageBetween(iso(start), iso(end));
+  const last = reads.at(-1) ?? latestUsage();
+  if (last) {
+    const renova = last.sevenDayResets ? new Date(last.sevenDayResets).toLocaleString('pt-BR', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : '?';
+    const subiu = reads.length > 1 && reads[0].sevenDayResets === last.sevenDayResets ? ` (no começo do dia estava em ${pct(reads[0].sevenDay)})` : '';
+    lines.push(`Limite semanal da assinatura do Claude: ${pct(last.sevenDay)} usado${subiu}, renova ${renova}. Janela de 5 h: ${pct(last.fiveHour)}.`);
+  }
 
   if (jobs.length) {
     lines.push('', '## Tarefas do Office');
     for (const j of jobs) {
-      lines.push(`- ${hhmm(Date.parse(j.createdAt))} · ${name('agents', j.agentId) ?? 'funcionário'} · ${name('clients', j.clientId) ?? 'sem cliente'} · ${j.status} · US$ ${(j.costUsd ?? 0).toFixed(2)} · pedido por ${name('users', j.createdBy.replace(/^user:/, '')) ?? j.createdBy}`);
+      lines.push(`- ${hhmm(Date.parse(j.createdAt))} · ${name('agents', j.agentId) ?? 'funcionário'} · ${name('clients', j.clientId) ?? 'sem cliente'} · ${j.status} · pedido por ${name('users', j.createdBy.replace(/^user:/, '')) ?? j.createdBy}`);
     }
   }
 
@@ -168,7 +175,7 @@ export function dailyPrompt(day: string, digest: string, file: string) {
   return `${DAILY_MARK} ${day}
 
 Monte o daily report de ${d}/${m}/${y}: o que a equipe fez com os funcionários de IA hoje, no Office e no terminal.
-O levantamento abaixo foi feito por script (pedidos, resposta final de cada um, arquivos mexidos, custos). Não abra as
+O levantamento abaixo foi feito por script (pedidos, resposta final de cada um, arquivos mexidos, limite consumido). Não abra as
 sessões nem varra pastas: trabalhe só com este material. Se algo estiver cortado, resuma pelo que há.
 
 Formato (Markdown, em português, direto, sem enfeite):
@@ -177,7 +184,8 @@ Formato (Markdown, em português, direto, sem enfeite):
   feito, entregue (com o caminho do arquivo quando houver), pendente ou aguardando aprovação.
 - **Decisões e regras novas** (o que mudou no jeito de trabalhar, skills alteradas).
 - **Pendências para amanhã**, em lista.
-- **Custo do dia** (o que o levantamento informar).
+- **Limite da assinatura**: quanto do limite semanal está usado, quanto subiu no dia e quando renova (o que o levantamento
+  informar). A equipe usa a assinatura do Claude, não a API: não fale em custo nem em dólar.
 Agrupe pedidos repetidos ou correções do mesmo trabalho num tópico só. Não invente o que não está no levantamento.
 
 Grave o relatório em \`${file}\` (Write) e responda com o mesmo texto.
@@ -220,8 +228,8 @@ export async function dailyTick() {
     if (tried.has(key)) continue;
     tried.add(key);
     if (one('SELECT id FROM jobs WHERE office_id = ? AND prompt LIKE ?', office.id, `${DAILY_MARK} ${day}%`)) continue;
-    const owner = one<{ user_id: string }>("SELECT user_id FROM office_members WHERE office_id = ? AND role = 'dono' LIMIT 1", office.id);
+    const owner = one<{ userId: string }>("SELECT user_id FROM office_members WHERE office_id = ? AND role = 'dono' LIMIT 1", office.id);
     if (!owner) continue;
-    await startDaily(office, day, `user:${owner.user_id}`).catch(() => { /* dia sem nada */ });
+    await startDaily(office, day, `user:${owner.userId}`).catch(() => { /* dia sem nada */ });
   }
 }
