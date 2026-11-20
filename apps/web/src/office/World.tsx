@@ -8,6 +8,7 @@ import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/the
 import { PixelRoom } from './pixel/Room';
 import { DecorLayer } from './decor/DecorLayer';
 import { useDecor } from './decor/state';
+import { seatWorkers } from './seats';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
@@ -348,16 +349,26 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
  * (viravam um amontoado): aparecem num contador só, em cima da mesa da copa, e na Equipe.
  */
 export function workerSpots(workers: Worker[]) {
+  const visible = workers.filter((w) => isWorkerVisible(w) && w.state !== 'copa');
+  // sempre numa mesa: a da sala ou uma mesa de trabalho do Decorar; a mesa de quem fica fixo (o gerente) não conta
+  const fixed = useStore.getState().agents.filter(isFixedAgent).map(agentSeat);
+  const seats = seatWorkers(visible, useDecor.getState().items, fixed);
   const count: Record<string, number> = {};
-  return workers.filter((w) => isWorkerVisible(w) && w.state !== 'copa').map((w) => [w, workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1))] as const);
+  return visible.map((w) => {
+    const s = seats.get(w.id);
+    const spot: Vec2 & { dir: number; seated: boolean } = s
+      ? { x: s.x, z: s.z, dir: s.dir, seated: true }
+      : { ...workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1)), dir: Math.PI, seated: false };
+    return [w, spot] as const;
+  });
 }
 const WORKER_RING: Record<Worker['state'], string | null> = { copa: null, trabalhando: '#2563eb', aguardando: '#f59e0b' };
 
-function WorkerNPC({ w, spot, p }: { w: Worker; spot: Vec2; p: ScenePalette }) {
+function WorkerNPC({ w, spot, p }: { w: Worker; spot: Vec2 & { dir: number; seated: boolean }; p: ScenePalette }) {
   const open = useStore((s) => s.open);
-  const state = useMemo(() => ({ x: spot.x, z: spot.z, dir: Math.PI, moving: false }), [spot.x, spot.z]);
+  const state = useMemo(() => ({ x: spot.x, z: spot.z, dir: spot.dir, moving: false }), [spot.x, spot.z, spot.dir]);
   return (
-    <Avatar anchorId={`worker:${w.id}`} seated={w.state !== 'copa'} typing={w.state === 'trabalhando'} color={w.color} p={p}
+    <Avatar anchorId={`worker:${w.id}`} seated={spot.seated} typing={w.state === 'trabalhando'} color={w.color} p={p}
       ring={WORKER_RING[w.state]} pulse={w.state === 'aguardando'} getState={() => state} onClick={() => { if (!droneBlocksClick()) open('clientes', w.clientId); }} />
   );
 }
@@ -530,6 +541,8 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
   const presences = useStore((s) => s.presences);
   const agents = useStore((s) => s.agents);
   const workers = useStore((s) => s.workers);
+  // mesa nova no Decorar: quem estava sem mesa senta nela
+  useDecor((s) => s.items);
   const p = useScene();
   const px = usePixel();
   const pixel = useWorldStyle((s) => s.style) === 'pixel';

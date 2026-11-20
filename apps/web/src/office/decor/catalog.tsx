@@ -14,9 +14,10 @@ import { FLOOR_MATERIALS, floorMaterialTexture } from '../pixel/floors';
  * Cada peça tem a frente para +z; `size` é a pegada no chão sem giro (itens de parede: largura e altura).
  */
 
-export type DecorCat = 'escritorio' | 'lounge' | 'plantas' | 'copa' | 'lazer' | 'estudio' | 'estrutura' | 'parede' | 'luz' | 'piso' | 'pisos';
+export type DecorCat = 'mesas' | 'escritorio' | 'lounge' | 'plantas' | 'copa' | 'lazer' | 'estudio' | 'estrutura' | 'parede' | 'luz' | 'piso' | 'pisos';
 
 export const CATEGORIES: { id: DecorCat; label: string; emoji: string }[] = [
+  { id: 'mesas', label: 'Mesas de trabalho', emoji: '🧑‍💻' },
   { id: 'escritorio', label: 'Escritório', emoji: '🖥️' },
   { id: 'lounge', label: 'Lounge', emoji: '🛋️' },
   { id: 'plantas', label: 'Plantas', emoji: '🌿' },
@@ -46,6 +47,11 @@ export interface DecorDef {
   cover?: boolean;
   /** Cores que o modo Decorar oferece (a primeira é a padrão). */
   colors?: string[];
+  /**
+   * Mesa de trabalho: onde os funcionários de IA sentam (posição da cadeira, com a peça sem girar). `back` = do
+   * outro lado da mesa, de costas para o fundo. Sem isso, a peça é só decoração.
+   */
+  seats?: { x: number; z: number; back?: boolean }[];
   render: (p: PixelPalette, color: string | undefined) => ReactNode;
 }
 
@@ -353,9 +359,11 @@ function HangingPlants({ p }: { p: PixelPalette }) {
 export const CATALOG: DecorDef[] = [
   // ------------------------------------------------ escritório
   {
-    kind: 'mesa-clara', name: 'Mesa de madeira clara', cat: 'escritorio', size: [1.8, 0.9], h: 1.1, place: 'chao', colors: WOODS,
+    kind: 'mesa-clara', name: 'Mesa de madeira clara', cat: 'mesas', size: [1.8, 0.9], h: 1.1, place: 'chao', colors: WOODS,
+    seats: [{ x: 0, z: 1.05 }],
     render: (p, c = WOODS[0]) => (
       <group>
+        <OfficeChair p={p} pos={[0, 0, 0.95]} color={p.fabricAlt} />
         <PBox p={p} pos={[0, 0.74, 0]} size={[1.8, 0.05, 0.9]} color={c} />
         {[[-0.82, -0.38], [0.82, -0.38], [-0.82, 0.38], [0.82, 0.38]].map(([x, z]) => <group key={`${x}${z}`}>{leg(p, [x, 0, z], 0.72, '#e9e9ea')}</group>)}
         <Laptop p={p} pos={[0, 0.765, 0]} />
@@ -367,9 +375,12 @@ export const CATALOG: DecorDef[] = [
     ),
   },
   {
-    kind: 'bancada', name: 'Bancada coletiva', cat: 'escritorio', size: [3.6, 1.2], h: 1.1, place: 'chao', colors: WOODS,
+    kind: 'bancada', name: 'Bancada coletiva (4 lugares)', cat: 'mesas', size: [3.6, 1.2], h: 1.1, place: 'chao', colors: WOODS,
+    seats: [{ x: -1.05, z: 1.2 }, { x: 0.35, z: 1.2 }, { x: -0.35, z: -1.2, back: true }, { x: 1.05, z: -1.2, back: true }],
     render: (p, c = WOODS[0]) => (
       <group>
+        {[-1.05, 0.35].map((x) => <OfficeChair key={`ca${x}`} p={p} pos={[x, 0, 1.05]} color={p.fabricAlt} />)}
+        {[-0.35, 1.05].map((x) => <OfficeChair key={`cb${x}`} p={p} pos={[x, 0, -1.05]} rot={Math.PI} color={p.fabricAlt} />)}
         <PBox p={p} pos={[0, 0.74, 0]} size={[3.6, 0.06, 1.2]} color={c} />
         {[-1.6, 1.6].map((x) => <PBox key={x} p={p} pos={[x, 0.36, 0]} size={[0.08, 0.72, 1]} color="#2b2b30" />)}
         <PBox p={p} pos={[0, 0.5, 0]} size={[3.1, 0.06, 0.06]} color="#2b2b30" outline={false} />
@@ -377,6 +388,98 @@ export const CATALOG: DecorDef[] = [
         {[-1.05, 0.35].map((x) => <Laptop key={`a${x}`} p={p} pos={[x, 0.77, 0.28]} />)}
         {[-0.35, 1.05].map((x) => <Laptop key={`b${x}`} p={p} pos={[x, 0.77, -0.28]} rotY={Math.PI} />)}
         <PCyl p={p} pos={[1.5, 0.82, 0.35]} r={0.05} h={0.1} color="#ffd166" sides={8} />
+      </group>
+    ),
+  },
+  {
+    kind: 'mesa-monitor', name: 'Mesa com monitor', cat: 'mesas', size: [2, 1], h: 1.4, place: 'chao', colors: WOODS,
+    seats: [{ x: 0, z: 1.1 }],
+    render: (p, c = WOODS[1]) => (
+      <group>
+        <PBox p={p} pos={[0, 0.72, 0]} size={[2, 0.07, 1]} color={c} />
+        {[-0.92, 0.92].map((x) => <PBox key={x} p={p} pos={[x, 0.34, 0]} size={[0.07, 0.68, 0.88]} color={shade(c, 0.75)} />)}
+        <PBox p={p} pos={[0, 0.79, -0.28]} size={[0.22, 0.03, 0.15]} color="#5a5d66" />
+        <PBox p={p} pos={[0, 0.9, -0.28]} size={[0.05, 0.2, 0.05]} color="#5a5d66" />
+        <PBox p={p} pos={[0, 1.08, -0.3]} size={[0.84, 0.5, 0.05]} color="#1c1f26" />
+        <PBox p={p} pos={[0, 1.08, -0.272]} size={[0.76, 0.42, 0.01]} color="#ffffff" map={screenTexture(p.screenGlow)} glow outline={false} cast={false} />
+        <PBox p={p} pos={[0, 0.77, 0.08]} size={[0.56, 0.03, 0.18]} color="#e8e4dc" />
+        <PCyl p={p} pos={[0.7, 0.81, 0.1]} r={0.06} h={0.11} color={p.fabric} sides={8} />
+        <OfficeChair p={p} pos={[0, 0, 0.98]} color={p.fabricAlt} />
+      </group>
+    ),
+  },
+  {
+    kind: 'mesa-l', name: 'Mesa em L com dois monitores', cat: 'mesas', size: [2.2, 1.8], h: 1.4, place: 'chao', colors: WOODS,
+    seats: [{ x: -0.2, z: 0.75 }],
+    render: (p, c = WOODS[3]) => (
+      <group>
+        <PBox p={p} pos={[0, 0.72, -0.45]} size={[2.2, 0.07, 0.9]} color={c} />
+        <PBox p={p} pos={[0.65, 0.72, 0.45]} size={[0.9, 0.07, 0.9]} color={c} />
+        {[[-1.04, -0.45], [1.04, -0.45], [1.04, 0.84]].map(([x, z]) => <PBox key={`${x}${z}`} p={p} pos={[x, 0.34, z]} size={[0.07, 0.68, 0.07]} color="#c9ccd1" />)}
+        {[-0.62, 0.22].map((x, i) => (
+          <group key={x} position={[x, 0, -0.62]} rotation={[0, i ? -0.25 : 0.25, 0]}>
+            <PBox p={p} pos={[0, 0.8, 0]} size={[0.2, 0.03, 0.14]} color="#5a5d66" />
+            <PBox p={p} pos={[0, 1.06, -0.02]} size={[0.74, 0.44, 0.05]} color="#1c1f26" />
+            <PBox p={p} pos={[0, 1.06, 0.006]} size={[0.68, 0.38, 0.01]} color="#ffffff" map={screenTexture(p.screenGlow)} glow outline={false} cast={false} />
+          </group>
+        ))}
+        <PBox p={p} pos={[-0.2, 0.77, -0.15]} size={[0.56, 0.03, 0.18]} color="#e8e4dc" />
+        <PCyl p={p} pos={[0.75, 0.8, 0.55]} r={0.12} h={0.06} color="#f4f4f2" sides={10} />
+        <OfficeChair p={p} pos={[-0.2, 0, 0.62]} color={p.fabric} />
+      </group>
+    ),
+  },
+  {
+    kind: 'ilha-edicao', name: 'Ilha de edição de vídeo', cat: 'mesas', size: [2.4, 1.1], h: 1.5, place: 'chao', colors: ['#2b2b30', '#3d3d46', '#e8cfa0'],
+    seats: [{ x: 0, z: 1.15 }],
+    render: (p, c = '#2b2b30') => (
+      <group>
+        <PBox p={p} pos={[0, 0.72, 0]} size={[2.4, 0.07, 1.1]} color={c} />
+        {[-1.12, 1.12].map((x) => <PBox key={x} p={p} pos={[x, 0.34, 0]} size={[0.08, 0.68, 1]} color="#1c1f26" />)}
+        {[-0.48, 0.48].map((x, i) => (
+          <group key={x} position={[x, 0, -0.32]} rotation={[0, i ? -0.18 : 0.18, 0]}>
+            <PBox p={p} pos={[0, 0.8, 0]} size={[0.22, 0.03, 0.15]} color="#5a5d66" />
+            <PBox p={p} pos={[0, 1.12, -0.02]} size={[0.94, 0.56, 0.05]} color="#111216" />
+            <PBox p={p} pos={[0, 1.12, 0.006]} size={[0.88, 0.5, 0.01]} color="#ffffff" map={screenTexture(p.screenGlow)} glow outline={false} cast={false} />
+          </group>
+        ))}
+        {[-1.02, 1.02].map((x) => <PBox key={`s${x}`} p={p} pos={[x, 0.93, -0.3]} size={[0.2, 0.36, 0.22]} color="#1c1f26" />)}
+        <PBox p={p} pos={[0, 0.77, 0.1]} size={[0.5, 0.03, 0.17]} color="#3d3d46" />
+        <PCyl p={p} pos={[0.45, 0.78, 0.12]} r={0.09} h={0.03} color="#5a5d66" sides={10} />
+        <OfficeChair p={p} pos={[0, 0, 1.02]} color="#3d3d46" />
+      </group>
+    ),
+  },
+  {
+    kind: 'mesa-executiva', name: 'Mesa executiva', cat: 'mesas', size: [2.4, 1.1], h: 1.3, place: 'chao', colors: ['#5b3a24', '#2b2b30', '#f4f4f2'],
+    seats: [{ x: 0, z: 1.15 }],
+    render: (p, c = '#5b3a24') => (
+      <group>
+        <PBox p={p} pos={[0, 0.72, 0]} size={[2.4, 0.09, 1.1]} color={c} />
+        <PBox p={p} pos={[0, 0.36, -0.42]} size={[2.2, 0.66, 0.08]} color={shade(c, 0.8)} />
+        {[-1.05, 1.05].map((x) => <PBox key={x} p={p} pos={[x, 0.36, 0]} size={[0.24, 0.68, 1]} color={shade(c, 0.88)} />)}
+        <PBox p={p} pos={[-0.25, 0.82, -0.3]} size={[0.16, 0.12, 0.12]} color="#c9ccd1" />
+        <PBox p={p} pos={[-0.25, 1.06, -0.32]} size={[0.72, 0.44, 0.04]} color="#e8e8ea" />
+        <PBox p={p} pos={[-0.25, 1.08, -0.298]} size={[0.66, 0.34, 0.01]} color="#ffffff" map={screenTexture(p.screenGlow)} glow outline={false} cast={false} />
+        <PBox p={p} pos={[0.65, 0.78, 0.05]} size={[0.32, 0.02, 0.24]} color={p.paper} rot={[0, 0.2, 0]} />
+        <PCyl p={p} pos={[0.85, 0.83, -0.3]} r={0.05} h={0.14} color="#c8a24a" sides={8} />
+        <OfficeChair p={p} pos={[0, 0, 1.02]} color="#2b2b30" />
+      </group>
+    ),
+  },
+  {
+    kind: 'baia-4', name: 'Estação com divisórias (4 lugares)', cat: 'mesas', size: [3.2, 1.8], h: 1.4, place: 'chao', colors: ['#8aa67a', '#3f7fd6', '#c9b79c', '#3d3d46'],
+    seats: [{ x: -0.8, z: 1.45 }, { x: 0.8, z: 1.45 }, { x: -0.8, z: -1.45, back: true }, { x: 0.8, z: -1.45, back: true }],
+    render: (p, c = '#8aa67a') => (
+      <group>
+        <PBox p={p} pos={[0, 0.72, 0]} size={[3.2, 0.06, 1.8]} color="#f4f4f2" />
+        <PBox p={p} pos={[0, 0.98, 0]} size={[3.2, 0.5, 0.06]} color={c} />
+        <PBox p={p} pos={[0, 0.98, 0]} size={[0.06, 0.5, 1.8]} color={c} />
+        {[-1.55, 1.55].map((x) => <PBox key={x} p={p} pos={[x, 0.34, 0]} size={[0.07, 0.68, 1.7]} color="#c9ccd1" />)}
+        {[-0.8, 0.8].map((x) => <Laptop key={`f${x}`} p={p} pos={[x, 0.76, 0.42]} />)}
+        {[-0.8, 0.8].map((x) => <Laptop key={`t${x}`} p={p} pos={[x, 0.76, -0.42]} rotY={Math.PI} />)}
+        {[-0.8, 0.8].map((x) => <OfficeChair key={`cf${x}`} p={p} pos={[x, 0, 1.3]} color={p.fabricAlt} />)}
+        {[-0.8, 0.8].map((x) => <OfficeChair key={`ct${x}`} p={p} pos={[x, 0, -1.3]} rot={Math.PI} color={p.fabricAlt} />)}
       </group>
     ),
   },
