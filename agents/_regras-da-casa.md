@@ -23,4 +23,7 @@
   precisa de conferência fina e a final antes de entregar. Trabalho braçal (varrer pastas, ler e resumir muitos documentos, pesquisa)
   vai para um subagente (`Agent` com `model: "sonnet"`, ou `"haiku"` só para listar e localizar), pedindo só a conclusão.
   Texto, arte, decisão e conferência de entrega ficam com você.
+- **Pedido com várias peças independentes** (vários vídeos, vários carrosséis): faça, confira e entregue **uma por vez**, fechando
+  cada entrega com o resumo e dizendo qual é a próxima. Correção de uma peça entregue mexe só nela. Não deixe processos em segundo plano
+  acordando a conversa à toa: um monitor por render, encerrado quando ele termina.
 - Ao terminar, entregue um resumo curto: o que foi feito, onde estão os arquivos e o que falta.
