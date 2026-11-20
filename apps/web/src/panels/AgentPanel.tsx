@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, ChevronDown, Navigation, Plus, Square, Wrench } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, ClipboardList, Navigation, Plus, Square, Wrench } from 'lucide-react';
 import type { AgentJob } from '@office/shared';
 import { useStore } from '../lib/store';
 import { useDraft } from '../lib/draft';
@@ -24,6 +24,7 @@ export function AgentPanel() {
   const [text, setText] = useDraft(`agente:${panelArg ?? ''}`);
   const [demandId, setDemandId] = useState('');
   const [err, setErr] = useState('');
+  const [dailyBusy, setDailyBusy] = useState(false);
   const list = useRef<HTMLDivElement>(null);
   // skills e ferramentas ficam recolhidas para a lista de conversas ter espaço; a escolha fica lembrada neste navegador
   const [details, setDetails] = useState(() => { try { return localStorage.getItem('office.agentDetails') === '1'; } catch { return false; } });
@@ -97,9 +98,20 @@ export function AgentPanel() {
           <button className={`job-item ${job === null ? 'active' : ''}`} onClick={() => setJobId(null)}>
             <span className="row gap"><Plus size={14} /> Nova tarefa</span>
           </button>
+          {agent.slug === 'gerente' && (
+            <button className="job-item" disabled={dailyBusy} title="Resumo em tópicos do que a equipe fez hoje com os funcionários, no Office e no terminal desta máquina. Sai sozinho todo dia às 19h."
+              onClick={async () => {
+                setDailyBusy(true);
+                try { const j = await api<AgentJob>(`${base}/daily`, { body: {} }); setJobId(j.id); }
+                catch (x) { useStore.getState().notify((x as Error).message); }
+                setDailyBusy(false);
+              }}>
+              <span className="row gap"><ClipboardList size={14} /> {dailyBusy ? 'Levantando o dia…' : 'Daily de hoje'}</span>
+            </button>
+          )}
           {myJobs.map((j) => (
             <button key={j.id} className={`job-item ${j.id === jobId ? 'active' : ''}`} onClick={() => setJobId(j.id)}>
-              <span>{j.prompt.replace(/^## Demanda: /, '').split('\n')[0]}</span>
+              <span>{j.prompt.replace(/^## Demanda: /, '').replace(/^# Daily report (\d{4})-(\d{2})-(\d{2})/, 'Daily report $3/$2').split('\n')[0]}</span>
               <small className={`st-${j.status}`}><span className="status-dot" />{STATUS_LABEL[j.status]}{j.costUsd ? <span className="mono">· US$ {j.costUsd.toFixed(2)}</span> : null}</small>
             </button>
           ))}

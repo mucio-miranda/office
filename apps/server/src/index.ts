@@ -10,6 +10,7 @@ import { handleSocket } from './realtime.ts';
 import { recoverJobs } from './agents/runtime.ts';
 import { migrateWorkers } from './agents/workers.ts';
 import { monthlyTurnover } from './agents/pipeline.ts';
+import { dailyTick } from './agents/daily.ts';
 import { publishReminders } from './agents/pipeline.ts';
 import { closeAllLive } from './agents/live.ts';
 import { guardHost, purgeSessions } from './auth.ts';
@@ -38,6 +39,8 @@ recoverJobs();
 // virada de mês: a cada hora, titulares parados que começaram antes deste mês passam o bastão
 setTimeout(monthlyTurnover, 120_000).unref();
 setInterval(monthlyTurnover, 3_600_000).unref();
+// daily report: confere a cada 5 minutos se já passou da hora e o do dia ainda não saiu
+setInterval(() => { dailyTick().catch(() => {}); }, 300_000).unref();
 // lembrete de "hora de publicar" das publicações agendadas
 setInterval(publishReminders, 60_000).unref();
 purgeSessions();

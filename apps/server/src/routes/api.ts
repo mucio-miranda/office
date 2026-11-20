@@ -43,6 +43,7 @@ import { decideHelper, requestHelper } from '../agents/helpers.ts';
 import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
+import { localDay, startDaily } from '../agents/daily.ts';
 import { addPreviews, mediaInDirs, mediaPaths, previewFileOf, previewsOf } from '../agents/previews.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
 import { EXPORT_FORMATS, probe } from '@office/video-engine';
@@ -1707,6 +1708,16 @@ export async function api(app: FastifyInstance) {
       } catch (e) {
         return reply.code(409).send({ error: (e as Error).message });
       }
+    });
+
+    // daily report: o que a equipe fez com os funcionários no dia (Office e terminal desta máquina)
+    r.post('/api/offices/:officeId/daily', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ dia: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }), req, reply);
+      if (!b) return;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', (req.params as any).officeId)!;
+      try { return await startDaily(office, b.dia ?? localDay(), `user:${req.user.id}`); }
+      catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
     });
 
     // prévia ao vivo do estúdio: o que a tarefa gerou ou abriu, do mais novo para o mais velho

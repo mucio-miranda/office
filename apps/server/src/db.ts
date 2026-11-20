@@ -176,6 +176,8 @@ const MIGRATIONS: string[] = [
      archived_at TEXT NOT NULL, archived_by TEXT, PRIMARY KEY (client_id, session_id));`,
   // medidor de consumo: tamanho da conversa (tokens) no último passo
   `ALTER TABLE jobs ADD COLUMN context_tokens INTEGER;`,
+  // modelo próprio da tarefa (o daily report roda no Sonnet); vazio = o padrão do Claude Code
+  `ALTER TABLE jobs ADD COLUMN model TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

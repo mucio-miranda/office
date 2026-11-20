@@ -193,13 +193,13 @@ function describeTool(name: string, input: Record<string, unknown>) {
   return name;
 }
 
-export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string; stage?: Stage; cwd?: string | null; clientId?: string | null; display?: string; workerId?: string | null }) {
+export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string; stage?: Stage; cwd?: string | null; clientId?: string | null; display?: string; workerId?: string | null; model?: string | null }) {
   // a conversa do cliente é a do titular dele; a revisão pela IA é função do sistema, sem funcionário
   const workerId = params.workerId !== undefined ? params.workerId
     : params.clientId && params.stage !== 'aprovacao' ? ensureTitular(params.officeId, params.clientId, params.createdBy).id : null;
   const job: AgentJob & { createdBy: string } = {
     id: uid(), officeId: params.officeId, agentId: params.agentId, demandId: params.demandId, stage: params.stage ?? null, clientId: params.clientId ?? null, workerId,
-    prompt: params.prompt, status: 'fila', sessionId: null, costUsd: 0, cwd: params.cwd ?? null,
+    prompt: params.prompt, status: 'fila', sessionId: null, costUsd: 0, cwd: params.cwd ?? null, model: params.model ?? null,
     createdBy: params.createdBy, createdAt: now(), updatedAt: now(),
   };
   insert('jobs', job as never);
@@ -372,11 +372,14 @@ async function start(jobId: string, typed: string, resume: boolean) {
     }
   }
   // ferramentas criativas instaladas: um servidor MCP por ferramenta, com as pastas do escritório
-  const mcp = mcpConfig(isProcess ? [] : agent.mcp ?? [], office, bridges);
+  // daily report: só lê o levantamento e grava o relatório. Sem integrações nem servidores MCP, que somam centenas de
+  // milhares de tokens de definição de ferramenta a cada passo
+  const lean = job.prompt.startsWith('# Daily report');
+  const mcp = mcpConfig(isProcess || lean ? [] : agent.mcp ?? [], office, bridges);
   // funcionário que assumiu na virada do mês: a primeira conversa começa pela passagem do anterior
   const handoff = !isHelper && !session && job.workerId ? one<{ handoff: string | null }>('SELECT handoff FROM workers WHERE id = ?', job.workerId)?.handoff : null;
   if (handoff && existsSync(handoff)) mcp.hints.push(`- **Passagem de bastão**: antes de começar, leia \`${handoff}\`, escrita pelo funcionário que cuidou deste cliente antes de você.`);
-  const usesChrome = !reviewer && agent.allowedTools.includes('mcp__claude-in-chrome');
+  const usesChrome = !reviewer && !lean && agent.allowedTools.includes('mcp__claude-in-chrome');
   const token = (job.clientId && !reviewer) || usesChrome ? issueJobToken(jobId) : null;
   // calendário de conteúdo: toda tarefa de cliente pode ler e atualizar o dele
   if (job.clientId && !reviewer && token && existsSync(config.officeMcp)) {
@@ -399,6 +402,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
     '--allowedTools', ...(reviewer ? ['Read', 'Glob', 'Grep'] : agent.allowedTools), ...mcpIds.map((id) => `mcp__${id}`),
     '--disallowedTools', ...deniedTools(office.rootPath),
   ];
+  if (job.model) args.push('--model', job.model);
+  if (lean) args.push('--strict-mcp-config', '--tools', 'Read', 'Write');
   if (mcpIds.length) {
     const mcpFile = path.join(dir, 'mcp.json');
     writeFileSync(mcpFile, JSON.stringify({ mcpServers: mcp.servers }, null, 2), 'utf8');

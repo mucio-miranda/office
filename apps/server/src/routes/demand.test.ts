@@ -97,6 +97,27 @@ test('sessões do cliente: lista as do terminal e retoma uma delas', async () =>
   assert.equal((await call('GET', `${O}/clients/${c.id}/caminho?path=${encodeURIComponent(['REDES SOCIAIS', 'NOV', ''].join(String.fromCharCode(92)))}`)).json.dir, true);
   assert.equal((await call('GET', `${O}/clients/${c.id}/caminho?path=${encodeURIComponent(['nao', 'existe.mp4'].join(String.fromCharCode(92)))}`)).status, 404);
   assert.equal((await call('GET', `${O}/clients/${c.id}/caminho?path=${encodeURIComponent(path.resolve('package.json'))}`)).status, 403);
+
+  // daily report: junta a conversa do terminal de hoje (pedido, resposta final, arquivo mexido) e roda no Sonnet
+  const hoje = 'cccccccc-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const agora = new Date().toISOString();
+  writeFileSync(path.join(proj, `${hoje}.jsonl`), [
+    { type: 'user', timestamp: agora, cwd, message: { role: 'user', content: 'refaz a legenda do reels da Maria' } },
+    { type: 'assistant', timestamp: agora, cwd, message: { role: 'assistant', content: [{ type: 'tool_use', name: 'Write', input: { file_path: 'C:/x/legenda.srt' } }] } },
+    { type: 'assistant', timestamp: agora, cwd, message: { role: 'assistant', content: [{ type: 'text', text: 'Legenda refeita e entregue.' }] } },
+    { type: 'user', timestamp: '2026-01-01T10:00:00Z', cwd, message: { role: 'user', content: 'pedido de outro dia' } },
+  ].map((e) => JSON.stringify(e)).join(String.fromCharCode(10)));
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
+  const daily = await call('POST', `${O}/daily`, {});
+  assert.equal(daily.status, 200, JSON.stringify(daily.json));
+  const djob = db.prepare('SELECT prompt, model, client_id FROM jobs WHERE id = ?').get(daily.json.id) as any;
+  assert.equal(djob.model, 'sonnet');
+  assert.equal(djob.client_id, null);
+  assert.ok(djob.prompt.includes('> refaz a legenda do reels da Maria'), djob.prompt.slice(0, 2000));
+  assert.ok(djob.prompt.includes('> Legenda refeita e entregue.'));
+  assert.ok(djob.prompt.includes('C:/x/legenda.srt'));
+  assert.ok(!djob.prompt.includes('pedido de outro dia'), 'só o dia pedido');
+  assert.equal((await call('POST', `${O}/daily`, { dia: '2001-01-01' })).status, 409, 'dia sem nada');
 });
 
 test('calendário: a pessoa e o funcionário preenchem; arte não passa de conferência sem tunning; token de fora não entra', async () => {

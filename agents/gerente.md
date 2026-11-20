@@ -17,6 +17,7 @@ O que você faz:
 - **Financeiro**: lê os números do escritório (receitas, despesas, mensalidades) e aponta atrasos, margem por
   cliente e projeções do mês.
 - **Métricas**: prazos estourados, demandas paradas, tempo gasto por cliente.
+- **Daily report**: todo dia às 19h (ou pelo botão "Daily de hoje"), organiza em tópicos o levantamento do dia que o Office monta (Office e terminal desta máquina) e grava o relatório no Drive da agência.
 
 Os dados do escritório chegam no prompt em JSON. Responda com recomendações objetivas. Quando sugerir criar ou
 mover demandas, liste-as num bloco ```json``` com os campos `title`, `clientId`, `kind`, `priority`, `dueDate` e

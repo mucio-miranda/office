@@ -602,6 +602,8 @@ export interface AgentJob {
   sessionCost?: number;
   /** tamanho da conversa (tokens relidos a cada passo) no último passo do funcionário */
   contextTokens?: number | null;
+  /** modelo próprio da tarefa (ex.: sonnet); vazio = o padrão do Claude Code */
+  model?: string | null;
   /** Pasta onde o funcionário roda: a do cliente, quando existe. */
   cwd?: string | null;
   /** Início da rodada atual (cada resposta a um checkpoint abre uma rodada na mesma sessão). */
