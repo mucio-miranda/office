@@ -33,6 +33,24 @@ const queue: { jobId: string; input: string; resume: boolean }[] = [];
 const interrupts = new Map<string, string>();
 /** Mensagens que chegaram com o funcionário trabalhando: ele termina o que está fazendo e recebe todas juntas. */
 const followups = new Map<string, string>();
+/**
+ * Entrada aberta de quem está trabalhando: a mensagem enviada no meio do trabalho entra no próximo passo do funcionário,
+ * como no terminal (Warp, Claude Code), sem esperar a tarefa acabar. Fecha quando ele termina a rodada.
+ */
+const liveInput = new Map<string, ChildProcess>();
+const userLine = (text: string) => `${JSON.stringify({ type: 'user', message: { role: 'user', content: [{ type: 'text', text }] }, parent_tool_use_id: null, session_id: '' })}\n`;
+
+/** Entrega a mensagem para o funcionário que está trabalhando. Devolve false se a entrada já fechou (vai depois, como continuação). */
+function injectLive(jobId: string, text: string) {
+  const child = liveInput.get(jobId);
+  if (!child?.stdin || child.stdin.destroyed || child.stdin.writableEnded) return false;
+  try { child.stdin.write(userLine(text)); return true; } catch { return false; }
+}
+function closeLiveInput(jobId: string) {
+  const child = liveInput.get(jobId);
+  liveInput.delete(jobId);
+  try { child?.stdin?.end(); } catch { /* já fechou */ }
+}
 /** Novidade que chegou com o funcionário esperando você (ex.: o ajudante terminou): entra junto com a sua resposta. */
 const notes = new Map<string, string>();
 
@@ -216,7 +234,10 @@ export function deliverToJob(jobId: string, text: string, display: string, _by?:
   addMessage(jobId, job.officeId, 'sistema', display);
   const waiting = queue.find((q) => q.jobId === jobId);
   if (waiting) { waiting.input += `\n\n${text}`; return; }
-  if (running.has(jobId)) { followups.set(jobId, followups.has(jobId) ? `${followups.get(jobId)}\n\n${text}` : text); return; }
+  if (running.has(jobId)) {
+    if (!injectLive(jobId, text)) followups.set(jobId, followups.has(jobId) ? `${followups.get(jobId)}\n\n${text}` : text);
+    return;
+  }
   if (job.status === 'aguardando') { notes.set(jobId, notes.has(jobId) ? `${notes.get(jobId)}\n\n${text}` : text); return; }
   setJob(jobId, { status: 'fila' });
   queue.push({ jobId, input: text, resume: !!job.sessionId });
@@ -262,6 +283,8 @@ export function followUpJob(jobId: string, text: string, display?: string, by?: 
   }
   if (!running.has(jobId)) return replyToJob(jobId, text, display, by);
   addMessage(jobId, job.officeId, 'usuario', display ?? text, authorName(by));
+  // como no terminal: entra no próximo passo dele, sem interromper o que está fazendo
+  if (injectLive(jobId, text)) return;
   followups.set(jobId, followups.has(jobId) ? `${followups.get(jobId)}\n\n${text}` : text);
 }
 
@@ -370,7 +393,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   writeFileSync(sysFile, systemPrompt(agent, office, mcp.hints), 'utf8');
 
   const args = [
-    '-p', '--output-format', 'stream-json', '--verbose',
+    '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
     '--append-system-prompt-file', sysFile,
     '--permission-mode', 'acceptEdits',
     '--allowedTools', ...(reviewer ? ['Read', 'Glob', 'Grep'] : agent.allowedTools), ...mcpIds.map((id) => `mcp__${id}`),
@@ -430,8 +453,11 @@ async function start(jobId: string, typed: string, resume: boolean) {
     return;
   }
   running.set(jobId, child);
-  // o prompt vai pelo stdin: evita limite de linha de comando e problemas de aspas no Windows
-  child.stdin?.end(input);
+  // o prompt vai pelo stdin (sem limite de linha de comando nem problema de aspas no Windows), e a entrada fica aberta
+  // para as mensagens que chegarem durante o trabalho
+  child.stdin?.on('error', () => liveInput.delete(jobId));
+  child.stdin?.write(userLine(input));
+  liveInput.set(jobId, child);
 
   let buf = '';
   let lastCtx = 0;
@@ -461,6 +487,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
           if (block.type === 'tool_use') addMessage(jobId, office.id, 'ferramenta', describeTool(block.name, block.input ?? {}));
         }
       } else if (ev.type === 'result') {
+        // rodada encerrada: fecha a entrada; o que chegar daqui em diante vai como continuação, quando ele sair
+        closeLiveInput(jobId);
         finalText = String(ev.result ?? '');
         isError = !!ev.is_error;
         const prev = one<AgentJob>('SELECT cost_usd FROM jobs WHERE id = ?', jobId);
@@ -481,6 +509,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   child.stderr?.on('data', (d) => { stderr = (stderr + d.toString()).slice(-4000); });
 
   child.on('close', (code) => {
+    liveInput.delete(jobId);
     running.delete(jobId);
     jobTokens.delete(jobId);
     releaseBrowser(jobId);

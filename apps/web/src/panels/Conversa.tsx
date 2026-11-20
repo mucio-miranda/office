@@ -249,11 +249,11 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
               onChange={(e) => setText(e.target.value)} onPaste={attach.onPaste}
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
             <div className="row gap conversa-actions">
-              <span className="muted small">{attach.sending ? `Anexando ${attach.sending} arquivo${attach.sending > 1 ? 's' : ''}…` : newRequest ? 'Vai como pedido novo, em outro cartão' : 'Enter envia · / mostra os comandos · arraste ou cole arquivos'}</span>
+              <span className="muted small">{attach.sending ? `Anexando ${attach.sending} arquivo${attach.sending > 1 ? 's' : ''}…` : newRequest ? 'Vai como pedido novo, em outro cartão' : running ? 'Enter envia: ele lê no próximo passo, sem parar o que está fazendo' : 'Enter envia · / mostra os comandos · arraste ou cole arquivos'}</span>
               <span className="spacer" />
               {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
               <div className="send-group">
-                <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> {running && !newRequest ? 'Enviar na fila' : 'Enviar'}</button>
+                <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> Enviar</button>
                 <button type="button" className="primary small icon-only" aria-label="Mais opções de envio" aria-expanded={sendMenu} onClick={() => setSendMenu((v) => !v)}><ChevronDown size={14} /></button>
                 {sendMenu && (
                   <div className="send-menu" role="menu">
