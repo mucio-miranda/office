@@ -1401,6 +1401,15 @@ label.check input { width: auto; height: auto; }
 .helper-text span { white-space: pre-wrap; }
 .helper-text button.link { font-size: 13px; }
 
+.emoji-picker { position: relative; display: inline-block; }
+.emoji-current { width: 40px; height: 34px; padding: 0; font-size: 20px; line-height: 1; justify-content: center; }
+.emoji-pop { position: absolute; z-index: 60; top: calc(100% + 6px); left: 0; width: 292px; padding: 8px; border-radius: 10px;
+  background: var(--popover, var(--card, #fff)); border: 1px solid var(--border); box-shadow: 0 10px 28px rgba(0,0,0,.18); }
+.emoji-grid { display: grid; grid-template-columns: repeat(8, 1fr); gap: 2px; }
+.emoji-grid button { height: 32px; padding: 0; font-size: 19px; border: none; background: none; justify-content: center; border-radius: 6px; }
+.emoji-grid button:hover, .emoji-grid button.on { background: var(--accent); }
+.emoji-custom { margin-top: 8px; }
+.emoji-custom input { flex: 1; min-width: 0; }
 .ctx-high { color: var(--warning, #c98a00); }
 .team-idle { padding: 4px 10px 0; font-size: 11px; }
 

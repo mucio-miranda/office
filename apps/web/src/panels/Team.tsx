@@ -11,6 +11,7 @@ import { desktop } from '../lib/desktop';
 import { FolderOpen } from 'lucide-react';
 import { HUMAN_DESKS, ROOMS } from '../office/layout';
 import { ToolsCard } from './Tools';
+import { EmojiPicker } from '../lib/EmojiPicker';
 
 /** "mesa na Redação" (ou "sem mesa"). */
 function deskLabel(desk: string | null) {
@@ -251,7 +252,10 @@ function RoomsCard() {
       </div>
       {rooms.map((r) => (
         <div key={r.id} className="member">
-          <span className="avatar" style={{ background: r.floor, color: '#111' }}>{r.emoji}</span>
+          <EmojiPicker value={r.emoji} label={`Ícone de ${r.name}`} onChange={async (v) => {
+            if (v === r.emoji) return;
+            try { await api(`${url}/${r.id}`, { method: 'PATCH', body: { emoji: v } }); await reload(); } catch (x) { notify((x as Error).message); }
+          }} />
           <input aria-label="Nome da sala" defaultValue={r.name} maxLength={40} onBlur={async (e) => {
             const v = e.target.value.trim();
             if (v.length < 2 || v === r.name) return;
@@ -280,7 +284,7 @@ function RoomsCard() {
           } catch (x) { notify((x as Error).message); }
         }}>
           <div className="row gap">
-            <label style={{ width: 70 }}>Ícone<input value={emoji} maxLength={4} onChange={(e) => setEmoji(e.target.value)} /></label>
+            <label>Ícone<EmojiPicker value={emoji} onChange={setEmoji} /></label>
             <label style={{ flex: 1 }}>Nova sala<input value={name} minLength={2} maxLength={40} placeholder="Estúdio de podcast" onChange={(e) => setName(e.target.value)} /></label>
             <label>Paredes<select value={wall} onChange={(e) => setWall(e.target.value as WallType)}>{WALL_TYPES.map((t) => <option key={t} value={t}>{WALL_LABEL[t]}</option>)}</select></label>
           </div>
