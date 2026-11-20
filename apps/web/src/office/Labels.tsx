@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { useStore } from '../lib/store';
 import { useWorldStyle } from '../lib/theme';
 import { isWorkerVisible } from '@office/shared';
-import { DESKS, ROOMS } from './layout';
+import { DESKS, ROOMS, isFixedAgent } from './layout';
 
 /**
  * Rótulos (nomes, balões de status e nomes das salas) em DOM puro, fora do Canvas.
@@ -55,6 +55,7 @@ export function LabelLayer() {
   const open = useStore((s) => s.open);
 
   const members = useStore((s) => s.members);
+  const agents = useStore((s) => s.agents);
   useStore((s) => s.mapRev);
   // salas: âncora fixa no chão, perto da parede do fundo
   for (const r of ROOMS) anchors.set(`room:${r.id}`, () => ({ x: (r.x0 + r.x1) / 2, z: r.z0 + 1.2, y: 0.02 }));
@@ -70,6 +71,10 @@ export function LabelLayer() {
     if (!isWorkerVisible(w) || w.state === 'copa') continue;
     const st = w.state;
     items.push({ id: `worker:${w.id}`, name: `${w.name} · IA`, sub: clients.find((c) => c.id === w.clientId)?.name, color: w.color, status: AGENT_STATUS[st], statusClass: `st-${st}`, onClick: () => open('clientes', w.clientId) });
+  }
+  // quem fica sempre na mesa (o gerente): nome, função e status em cima dele
+  for (const a of agents.filter(isFixedAgent)) {
+    items.push({ id: `agent:${a.id}`, name: `${a.name} · IA`, sub: a.role.split(/ e |,/)[0], color: a.color, status: AGENT_STATUS[a.status], statusClass: `st-${a.status}`, onClick: () => open('agente', a.id) });
   }
   // parados na copa: um contador só, em vez de um amontoado de avatares
   const idle = workers.filter((w) => isWorkerVisible(w) && w.state === 'copa');

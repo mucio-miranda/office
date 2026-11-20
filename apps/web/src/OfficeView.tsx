@@ -12,7 +12,7 @@ import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { Tour, startTour, tourSeen } from './office/Tour';
-import { HUMAN_DESKS, ROOMS, BOUNDS, roomCenter } from './office/layout';
+import { HUMAN_DESKS, ROOMS, BOUNDS, isFixedAgent, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
 import { ThemeToggle } from './lib/ui';
 import { DecorUI, enterDecorate } from './office/decor/DecorUI';
@@ -272,7 +272,8 @@ function UpdateCard() {
  * direta com ela. IA: selo IA e o cliente ou projeto dele; clicar abre a conversa daquele cliente.
  */
 function TeamList({ onNavigate }: { onNavigate: () => void }) {
-  const { members, workers, clients, presences, user, open, panel, panelArg, dmUnread } = useStore();
+  const { members, workers, clients, presences, user, open, panel, panelArg, dmUnread, agents } = useStore();
+  const fixed = agents.filter(isFixedAgent);
   const people = members.filter((m) => m.id !== user?.id);
   const active = workers.filter((w) => !w.archivedAt);
   const shown = active.filter((w) => isWorkerVisible(w));
@@ -293,6 +294,14 @@ function TeamList({ onNavigate }: { onNavigate: () => void }) {
           </button>
         );
       })}
+      {fixed.map((a) => (
+        <button key={a.id} className={`nav-item agent-row st-${a.status} ${panel === 'agente' && panelArg === a.id ? 'active' : ''}`} onClick={() => { open('agente', a.id); onNavigate(); }} title={`${a.name} · IA · ${a.role}`}>
+          <span className="avatar" style={{ background: a.color }}>{a.name[0]}<span className="status-dot" /></span>
+          <div className="truncate"><span className="truncate">{a.name} <span className="who-badge">IA</span></span><small className="truncate">{a.role}</small></div>
+          {a.status === 'trabalhando' && <span className="count">trabalhando</span>}
+          {a.status === 'aguardando' && <span className="count alert">precisa de você</span>}
+        </button>
+      ))}
       {ai.map((w) => {
         const c = clients.find((x) => x.id === w.clientId);
         const st = w.state === 'copa' ? 'livre' : w.state;
@@ -305,7 +314,7 @@ function TeamList({ onNavigate }: { onNavigate: () => void }) {
         );
       })}
       {idle > 0 && <p className="muted small team-idle" title="Continuam com a memória do cliente e voltam quando ele tiver trabalho; a lista completa fica na aba Equipe de cada cliente">+{idle} sem trabalho há mais de {WORKER_IDLE_HOURS} h</p>}
-      {people.length + ai.length === 0 && <p className="muted small" style={{ padding: '0 8px' }}>Os funcionários de IA aparecem quando um cliente começa uma conversa.</p>}
+      {people.length + ai.length + fixed.length === 0 && <p className="muted small" style={{ padding: '0 8px' }}>Os funcionários de IA aparecem quando um cliente começa uma conversa.</p>}
     </div>
   );
 }

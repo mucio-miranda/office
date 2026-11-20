@@ -358,6 +358,13 @@ export const DESKS: Record<string, Vec2> = {
 export const SPAWN: Vec2 = { x: 0, z: 10.5 };
 
 /** Onde o funcionário senta: o lugar dele, a mesa padrão da sala ou, sem nenhum dos dois, o meio da sala. */
+/**
+ * Funcionários de IA que ficam sempre na mesa, mesmo sem conversa de cliente: o gerente (daily report, triagem,
+ * financeiro) trabalha para o escritório, não para um cliente, então não nasce como funcionário de cliente.
+ */
+export const FIXED_AGENT_SLUGS = ['gerente'];
+export const isFixedAgent = (a: { slug: string }) => FIXED_AGENT_SLUGS.includes(a.slug);
+
 export const agentSeat = (a: { room: string; seat?: Vec2 | null }): Vec2 => {
   if (a.seat) return a.seat;
   if (DESKS[a.room]) return DESKS[a.room];
