@@ -25,6 +25,8 @@ const call = async (method: string, url: string, body?: unknown) => {
   const res = await app.inject({ method: method as 'GET', url, remoteAddress: '127.0.0.1', headers: { host: 'localhost', ...(token ? { authorization: `Bearer ${token}` } : {}) }, ...(body ? { payload: body as object } : {}) });
   return { status: res.statusCode, json: res.body ? JSON.parse(res.body) : {} };
 };
+/** GET cru (mídia), com a sessão da pessoa */
+const rawGet = (url: string) => app.inject({ method: 'GET', url, remoteAddress: '127.0.0.1', headers: { host: 'localhost', authorization: `Bearer ${token}` } });
 const wait = async (ok: () => boolean) => { for (let i = 0; i < 100 && !ok(); i++) await new Promise((r) => setTimeout(r, 50)); };
 
 before(async () => {
@@ -171,6 +173,22 @@ test('calendário: a pessoa e o funcionário preenchem; arte não passa de confe
   await wait(() => fim.code !== null);
   assert.equal(takeRender({ id: 'outro-cliente', officeId: job.officeId } as any), true, 'a vez voltou');
   releaseRender('outro-cliente');
+
+  // prévia ao vivo: o render que terminou aparece no estúdio; o arquivo só sai para quem é do escritório
+  const { mkdtempSync, writeFileSync: wf } = await import('node:fs');
+  const { tmpdir } = await import('node:os');
+  const pasta = mkdtempSync(path.join(tmpdir(), 'tv-'));
+  wf(path.join(pasta, 'previa.mp4'), 'x');
+  const tv = runHook({ hook_event_name: 'PostToolUse', tool_name: 'Bash', cwd: pasta, tool_input: { command: 'ffmpeg -i "H:/bruto.mp4" previa.mp4' }, tool_response: { stdout: '' } });
+  await wait(() => tv.code !== null);
+  const previas = await call('GET', `${O}/jobs/${job.id}/previas`);
+  assert.equal(previas.json.length, 1, JSON.stringify(previas.json));
+  assert.equal(path.basename(previas.json[0].path), 'previa.mp4');
+  const raw = (file: string) => rawGet(`${O}/jobs/${job.id}/previas/arquivo?path=${encodeURIComponent(file)}`);
+  const arq = await raw(previas.json[0].path);
+  assert.equal(arq.statusCode, 200);
+  assert.equal(arq.headers['content-type'], 'video/mp4');
+  assert.equal((await raw(path.resolve('package.json'))).statusCode, 404, 'arquivo que a tarefa não gerou não sai');
 
   // token errado ou de fora da máquina não entra
   const bad = await app.inject({ method: 'POST', url: '/api/agente/calendario_listar', remoteAddress: '127.0.0.1', headers: { host: 'localhost', authorization: 'Bearer x' }, payload: {} });

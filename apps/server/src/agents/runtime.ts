@@ -424,7 +424,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
     const q = (p: string) => `"${p.replace(/\\/g, '/')}"`;
     const hook = { type: 'command', command: `${q(process.execPath)} ${q(config.officeHook)}`, timeout: 4 * 3600 };
     const pre = [{ matcher: 'Bash', hooks: [hook] }, ...(usesChrome ? [{ matcher: 'mcp__claude-in-chrome__.*', hooks: [hook] }] : [])];
-    writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: pre, PostToolUse: [{ matcher: 'Bash', hooks: [hook] }] } }, null, 2), 'utf8');
+    writeFileSync(settingsFile, JSON.stringify({ hooks: { PreToolUse: pre, PostToolUse: [{ matcher: 'Bash|Read', hooks: [hook] }] } }, null, 2), 'utf8');
     args.push('--settings', settingsFile);
   }
   if (session) args.push('--resume', session);

@@ -6,6 +6,7 @@ import { BrowseDialog } from '../lib/PathPicker';
 import { desktop } from '../lib/desktop';
 import { Captions, Clapperboard, FileJson, Film, Image, Music, Plus, Radio, Type, X, Zap } from 'lucide-react';
 import { LiveMirror } from './Tools';
+import { StudioWatch } from './StudioWatch';
 
 /** Formatos de exportação da engine (mesmos ids de EXPORT_FORMATS). */
 const EXPORTS = [
@@ -27,7 +28,12 @@ const rid = () => Math.random().toString(36).slice(2, 8);
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
 export function VideoStudio() {
-  const { office, timelines, live, agents, panelArg } = useStore();
+  const { office, timelines, live, agents, jobs, clients, panelArg } = useStore();
+  // quem está editando vídeo agora: a TV mostra cada prévia que sai e deixa comentar no minuto
+  const editors = new Set(agents.filter((a) => a.slug === 'editor-de-video').map((a) => a.id));
+  const editing = jobs.filter((j) => editors.has(j.agentId) && ['rodando', 'fila', 'aguardando'].includes(j.status));
+  const [watchId, setWatchId] = useState<string | null>(null);
+  const watchJob = jobs.find((j) => j.id === watchId);
   const [openId, setOpenId] = useState<string | null>(timelines[0]?.id ?? null);
   // a TV da ilha no mapa abre o estúdio já no app ao vivo (panelArg = live:<id>)
   const [liveId, setLiveId] = useState<string | null>(panelArg?.startsWith('live:') ? panelArg.slice(5) : null);
@@ -41,22 +47,30 @@ export function VideoStudio() {
       <aside className="studio-list">
         <button className="primary" onClick={() => setCreating(true)}><Plus size={14} /> Nova timeline</button>
         <button className="ghost" onClick={() => setImporting(true)}><FileJson size={14} /> Importar timeline.json</button>
+        {editing.length > 0 && <div className="section-label" style={{ marginTop: 12 }}>Editando agora</div>}
+        {editing.map((j) => (
+          <button key={j.id} className={`tl-item ${j.id === watchId ? 'active' : ''}`} onClick={() => { setWatchId(j.id); setLiveId(null); }}>
+            <b className="row gap"><Radio size={13} /> {agents.find((a) => a.id === j.agentId)?.name}</b>
+            <small className={j.status === 'rodando' ? 'st-rodando' : 'st-aguardando'}><span className="status-dot" />{clients.find((c) => c.id === j.clientId)?.name ?? 'tarefa avulsa'} · {j.status === 'rodando' ? 'ao vivo' : j.status === 'fila' ? 'na fila' : 'esperando resposta'}</small>
+          </button>
+        ))}
         {island.length > 0 && <div className="section-label" style={{ marginTop: 12 }}>Na ilha agora</div>}
         {island.map((s) => (
-          <button key={s.id} className={`tl-item ${s.id === liveId ? 'active' : ''}`} onClick={() => setLiveId(s.id)}>
+          <button key={s.id} className={`tl-item ${s.id === liveId ? 'active' : ''}`} onClick={() => { setLiveId(s.id); setWatchId(null); }}>
             <b className="row gap"><Radio size={13} /> {s.toolName}</b>
             <small className={s.status === 'ativa' ? 'st-rodando' : 'st-aguardando'}><span className="status-dot" />{agents.find((a) => a.id === s.agentId)?.name} · {s.status === 'ativa' ? 'editando ao vivo' : s.status === 'abrindo' ? 'abrindo' : 'esperando revisão'}</small>
           </button>
         ))}
         <div className="section-label" style={{ marginTop: 12 }}>Timelines</div>
         {timelines.map((t) => (
-          <button key={t.id} className={`tl-item ${t.id === openId && !watching ? 'active' : ''}`} onClick={() => { setOpenId(t.id); setLiveId(null); }}>
+          <button key={t.id} className={`tl-item ${t.id === openId && !watching && !watchJob ? 'active' : ''}`} onClick={() => { setOpenId(t.id); setLiveId(null); setWatchId(null); }}>
             <b>{t.name}</b>
             <small className={`st-${t.renderStatus === 'concluido' ? 'concluido' : t.renderStatus === 'rodando' ? 'rodando' : t.renderStatus === 'erro' ? 'erro' : 'livre'}`}><span className="status-dot" />{t.renderStatus === 'concluido' ? 'renderizado' : t.renderStatus === 'rodando' ? 'renderizando' : t.renderStatus === 'erro' ? 'erro' : 'rascunho'}</small>
           </button>
         ))}
       </aside>
-      {watching ? <div className="studio-live"><LiveMirror s={watching} big /></div>
+      {watchJob ? <div className="studio-live"><StudioWatch key={watchJob.id} job={watchJob} /></div>
+        : watching ? <div className="studio-live"><LiveMirror s={watching} big /></div>
         : openId ? <Editor key={openId} id={openId} /> : <div className="studio-empty"><div className="stack" style={{ alignItems: 'center' }}><Clapperboard size={28} /><span>Crie uma timeline ou importe o <code>timeline.json</code> que a Vic deixou na pasta do cliente.</span></div></div>}
       {creating && (
         <NewTimeline onClose={() => setCreating(false)}

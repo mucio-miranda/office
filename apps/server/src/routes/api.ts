@@ -17,7 +17,7 @@ import { disconnectUser, invalidate, onlineUsers, refreshPresence, sendToUsers }
 import { backupDir, lastBackupError, listBackups, runBackup } from '../backup.ts';
 import { config } from '../config.ts';
 import { loadTemplates } from '../agents/templates.ts';
-import { authorName, cancelJob, enqueueJob, jobForToken, releaseBrowser, releaseRender, replyToJob, takeBrowser, takeRender } from '../agents/runtime.ts';
+import { authorName, cancelJob, enqueueJob, followUpJob, jobForToken, releaseBrowser, releaseRender, replyToJob, takeBrowser, takeRender } from '../agents/runtime.ts';
 import { approveAndDeliver, deliverApproved, postPieces, postsOf, progress, refreshLinks, savePosts, type PostInput } from '../agents/calendar.ts';
 import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
 import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '../agents/skillsRepo.ts';
@@ -43,6 +43,7 @@ import { decideHelper, requestHelper } from '../agents/helpers.ts';
 import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
+import { addPreviews, mediaInDirs, mediaPaths, previewFileOf, previewsOf } from '../agents/previews.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
 import { EXPORT_FORMATS, probe } from '@office/video-engine';
 
@@ -155,6 +156,16 @@ export async function api(app: FastifyInstance) {
     if (job && tool === 'navegador_liberar') { releaseBrowser(job.id); return { ok: true, texto: 'Navegador liberado para os outros clientes.' }; }
     if (job && tool === 'render_pegar') return { ok: takeRender(job) };
     if (job && tool === 'render_liberar') { releaseRender(job.id); return { ok: true }; }
+    // prévia ao vivo: o que o comando gerou (só arquivo mexido nesta rodada, para não puxar o bruto) ou o que ele abriu
+    if (job && tool === 'previa') {
+      const q = (req.body ?? {}) as { texto?: string; cwd?: string };
+      const texto = String(q.texto ?? '').slice(0, 30000);
+      const opened = /^"[^"]+"$/.test(texto);
+      const since = opened ? 0 : Date.parse(job.turnStartedAt ?? job.createdAt) - 60_000;
+      const cwd = q.cwd || job.cwd || undefined;
+      const files = [...mediaPaths(texto, cwd), ...(opened ? [] : mediaInDirs(texto, cwd, since))];
+      return { ok: true, n: addPreviews(job.id, files, since) };
+    }
     if (!job?.clientId) return reply.code(401).send({ error: 'Tarefa encerrada ou sem cliente.' });
     if (tool === 'pedir_ajudante') {
       const q = (req.body ?? {}) as { tarefa?: string; motivo?: string };
@@ -1672,6 +1683,37 @@ export async function api(app: FastifyInstance) {
       } catch (e) {
         return reply.code(409).send({ error: (e as Error).message });
       }
+    });
+
+    // prévia ao vivo do estúdio: o que a tarefa gerou ou abriu, do mais novo para o mais velho
+    r.get('/api/offices/:officeId/jobs/:id/previas', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
+      return previewsOf(id);
+    });
+    r.get('/api/offices/:officeId/jobs/:id/previas/arquivo', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
+      const file = previewFileOf(id, String((req.query as any).path ?? ''));
+      if (!file) return reply.code(404).send({ error: 'Arquivo não encontrado' });
+      return sendMedia(req, reply, file);
+    });
+    // comentário de quem assiste: entra no próximo passo do funcionário, sem parar o que ele está fazendo
+    r.post('/api/offices/:officeId/jobs/:id/comentar', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ text: z.string().min(1).max(4000) }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      const job = one<AgentJob>('SELECT * FROM jobs WHERE id = ? AND office_id = ?', id, officeId);
+      if (!job) return reply.code(404).send({ error: 'Tarefa não encontrada' });
+      try {
+        if (job.status === 'aguardando') replyToJob(id, b.text, b.text, `user:${req.user.id}`);
+        else if (['rodando', 'fila'].includes(job.status)) followUpJob(id, b.text, b.text, `user:${req.user.id}`);
+        else return reply.code(409).send({ error: 'Essa tarefa já terminou. Fale pela conversa do cliente.' });
+        return { ok: true };
+      } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
     });
 
     r.post('/api/offices/:officeId/jobs/:id/cancel', async (req, reply) => {

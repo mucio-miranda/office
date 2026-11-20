@@ -1,5 +1,6 @@
 // Gancho do Claude Code para os recursos que a máquina tem um só: o Chrome e o render de vídeo.
 // - Chrome (PreToolUse nas ferramentas do navegador): pede a vez ao Office antes de cada uso.
+// - Prévia (PostToolUse no Bash e no Read): o vídeo ou a imagem que saiu ou foi aberto aparece no estúdio na hora.
 // - Render (PreToolUse no Bash): só quando o comando renderiza ou transcreve (ffmpeg, Whisper, motor de vídeo);
 //   devolve a vez no PostToolUse do mesmo comando. Roteiro, decupagem e leitura de arquivos seguem em paralelo.
 // Enquanto outro cliente usa, espera. Se o Office não responder, libera o uso: sem o gancho o trabalho segue como
@@ -12,11 +13,14 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 /** Comandos que disputam a máquina inteira (CPU/GPU): render e transcrição. */
 export const RENDER_RE = /\b(ffmpeg|whisper|faster[-_]whisper|remotion|hyperframes|video-engine|render\w*|editar[-_ ]?video|story[-_ ]?(reuniao|broll))\b/i;
 
-async function call(tool) {
+/** Vídeo ou imagem citado no comando, na saída dele ou no arquivo aberto: vai para a prévia ao vivo do estúdio. */
+export const MEDIA_RE = /\.(mp4|mov|m4v|webm|png|jpe?g|webp)(?![a-z])/i;
+
+async function call(tool, body = {}) {
   const res = await fetch(`${API}/api/agente/${tool}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${TOKEN}` },
-    body: '{}',
+    body: JSON.stringify(body),
   });
   if (!res.ok) return true;
   return (await res.json()).ok === true;
@@ -45,9 +49,21 @@ if (!process.env.OFFICE_HOOK_TEST) {
     const tool = String(ev.tool_name ?? '');
     const post = ev.hook_event_name === 'PostToolUse';
     if (tool.startsWith('mcp__claude-in-chrome')) { if (!post) await wait('navegador_pegar'); }
-    else if (tool === 'Bash' && RENDER_RE.test(String(ev.tool_input?.command ?? ''))) {
-      if (post) { try { await call('render_liberar'); } catch { /* o fim da tarefa libera */ } }
-      else await wait('render_pegar');
+    else if (tool === 'Bash') {
+      const command = String(ev.tool_input?.command ?? '');
+      if (RENDER_RE.test(command)) {
+        if (post) { try { await call('render_liberar'); } catch { /* o fim da tarefa libera */ } }
+        else await wait('render_pegar');
+      }
+      if (post) {
+        const r = ev.tool_response;
+        const out = typeof r === 'string' ? r : [r?.stdout, r?.stderr].filter(Boolean).join(' ');
+        const texto = `${command} ${String(out ?? '').slice(-20000)}`;
+        if (MEDIA_RE.test(texto) || RENDER_RE.test(command)) { try { await call('previa', { texto, cwd: ev.cwd }); } catch { /* prévia é extra */ } }
+      }
+    } else if (tool === 'Read' && post) {
+      const file = String(ev.tool_input?.file_path ?? '');
+      if (MEDIA_RE.test(file)) { try { await call('previa', { texto: `"${file}"`, cwd: ev.cwd }); } catch { /* prévia é extra */ } }
     }
   }
   process.exit(0);
