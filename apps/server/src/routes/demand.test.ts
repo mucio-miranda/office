@@ -88,6 +88,15 @@ test('sessões do cliente: lista as do terminal e retoma uma delas', async () =>
   assert.ok(existsSync(path.join(proj, `${other}.jsonl`)), 'nada é apagado');
   assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/${other}/arquivar`, { archived: false })).status, 200);
   assert.equal((await call('GET', `${O}/clients/${c.id}/sessoes`)).json.find((s: any) => s.id === other).archivedAt, null);
+
+  // caminho citado na conversa: relativo à pasta em que o funcionário trabalha; fora das pastas do escritório não abre
+  mkdirSync(path.join(cwd, 'REDES SOCIAIS', 'NOV'), { recursive: true });
+  writeFileSync(path.join(cwd, 'REDES SOCIAIS', 'NOV', 'final.mp4'), 'x');
+  const achou = await call('GET', `${O}/clients/${c.id}/caminho?path=${encodeURIComponent(['REDES SOCIAIS', 'NOV', 'final.mp4'].join(String.fromCharCode(92)))}`);
+  assert.deepEqual([achou.status, achou.json.abs, achou.json.dir], [200, path.join(cwd, 'REDES SOCIAIS', 'NOV', 'final.mp4'), false]);
+  assert.equal((await call('GET', `${O}/clients/${c.id}/caminho?path=${encodeURIComponent(['REDES SOCIAIS', 'NOV', ''].join(String.fromCharCode(92)))}`)).json.dir, true);
+  assert.equal((await call('GET', `${O}/clients/${c.id}/caminho?path=${encodeURIComponent(['nao', 'existe.mp4'].join(String.fromCharCode(92)))}`)).status, 404);
+  assert.equal((await call('GET', `${O}/clients/${c.id}/caminho?path=${encodeURIComponent(path.resolve('package.json'))}`)).status, 403);
 });
 
 test('calendário: a pessoa e o funcionário preenchem; arte não passa de conferência sem tunning; token de fora não entra', async () => {

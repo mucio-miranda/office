@@ -438,6 +438,11 @@ input.inline { width: 120px; height: 28px; }
 .msg-text { white-space: pre-wrap; line-height: 21px; overflow-wrap: anywhere; }
 .msg.usuario { align-self: flex-end; width: auto; max-width: 75%; }
 .msg.usuario .msg-text { background: var(--running); color: #fff; padding: 8px 12px; border-radius: 12px 12px 4px 12px; }
+.msg-quote { border-left: 3px solid rgba(255,255,255,.55); padding: 2px 0 2px 8px; margin-bottom: 6px; opacity: .85; font-size: 12.5px; max-height: 6.5em; overflow: hidden; }
+.quote-reply { position: fixed; z-index: 50; transform: translate(-50%, calc(-100% - 8px)); height: 34px; padding: 0 14px; gap: 8px; border-radius: 10px;
+  background: var(--popover, #2a2a2a); color: var(--popover-foreground, #fff); border: 1px solid var(--border); box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+.msg-text.md code.path { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
+.msg-text.md code.path:hover { background: var(--accent); }
 .msg .who { font-size: 12px; font-weight: 600; margin-bottom: 4px; display: flex; align-items: center; gap: 6px; }
 .msg.ferramenta { display: flex; align-items: center; gap: 8px; font: 12px var(--mono); color: var(--muted-foreground); padding-left: 2px; }
 .msg.ferramenta svg { flex: none; }
@@ -569,7 +574,6 @@ button.link.muted { color: var(--muted-foreground); text-decoration: none; }
 .msg-text.md tr:last-child td { border-bottom: none; }
 .msg-text.md td:first-child { font-weight: 600; white-space: nowrap; }
 .msg-text.md pre { margin: 0 0 10px; }
-.msg-text.md code.path { cursor: default; }
 .is-desktop .msg-text.md code.path { cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px; }
 .is-desktop .msg-text.md code.path:hover { background: var(--accent); }
 

@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { HelperRequests } from './HelperRequests';
-import { ArrowUp, ChevronDown, History, Square, Wrench } from 'lucide-react';
+import { ArrowUp, ChevronDown, History, Reply, Square, Wrench } from 'lucide-react';
+import { desktop } from '../lib/desktop';
 import { canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { useDraft } from '../lib/draft';
@@ -91,6 +92,8 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   const [tail, setTail] = useState<Line[] | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const input = useRef<HTMLTextAreaElement>(null);
+  // trecho selecionado numa mensagem: o botão "Responder" aparece em cima dele (como no Claude)
+  const [quote, setQuote] = useState<{ text: string; x: number; y: number } | null>(null);
   const attach = useAttach(office!.id, (paths) => { setText((t) => withPaths(t, paths)); input.current?.focus(); }, notify);
 
   // a conversa é a do titular: o trabalho dos ajudantes (sessão própria) não entra aqui; o resumo deles chega como aviso
@@ -150,6 +153,41 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
     } catch (x) { notify((x as Error).message); }
     setBusy(false);
   };
+  // caminho citado (código com data-path): no app de Windows abre direto (Ctrl+clique mostra na pasta);
+  // no navegador, imagem/vídeo/PDF abre numa aba e o resto copia o caminho completo
+  const openCited = async (e: React.MouseEvent) => {
+    const el = (e.target as HTMLElement).closest('code[data-path]') as HTMLElement | null;
+    if (!el || window.getSelection()?.toString()) return;
+    try {
+      const r = await api<{ abs: string; dir: boolean }>(`${base}/clients/${c.id}/caminho?path=${encodeURIComponent(el.dataset.path!)}`);
+      if (desktop) {
+        if (e.ctrlKey || e.metaKey) await desktop.showInFolder(r.abs);
+        else { const err = await desktop.openPath(r.abs); if (err) notify(err); }
+      } else if (!r.dir && /\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm|pdf|mp3|wav|m4a|txt|md|srt)$/i.test(r.abs)) {
+        window.open(mediaUrl(office!.id, r.abs), '_blank', 'noreferrer');
+      } else {
+        await navigator.clipboard?.writeText(r.abs).catch(() => {});
+        notify(`Caminho copiado: ${r.abs}`);
+      }
+    } catch (x) { notify((x as Error).message); }
+  };
+  const pickQuote = () => {
+    requestAnimationFrame(() => {
+      const sel = window.getSelection();
+      const text = sel?.toString().trim() ?? '';
+      if (!sel || !text || sel.rangeCount === 0 || !list.current?.contains(sel.anchorNode)) { setQuote(null); return; }
+      const rect = sel.getRangeAt(0).getBoundingClientRect();
+      setQuote({ text, x: rect.left + rect.width / 2, y: rect.top });
+    });
+  };
+  const replyTo = () => {
+    if (!quote) return;
+    const quoted = quote.text.split(/\r?\n/).map((l) => `> ${l}`).join('\n');
+    setText((t) => `${quoted}\n\n${t.replace(/^\s+/, '')}`);
+    setQuote(null);
+    window.getSelection()?.removeAllRanges();
+    requestAnimationFrame(() => { const el = input.current; if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } });
+  };
   const shortcut = (t: string) => { setText(t); requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(t.length, t.length); }); };
 
   const agentLine = (m: Msg) => {
@@ -179,7 +217,19 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
         </details>
       );
     }
-    if (b.role === 'usuario') return <div key={b.id} className="msg usuario">{b.author && <div className="who">{b.author}</div>}<div className="msg-text">{b.text}</div></div>;
+    if (b.role === 'usuario') {
+      // o trecho respondido (linhas com "> " no começo) aparece como citação em cima do texto
+      const lines = b.text.split('\n');
+      const n = lines.findIndex((l) => !l.startsWith('>'));
+      const q = n > 0 ? lines.slice(0, n).map((l) => l.replace(/^> ?/, '')).join('\n') : '';
+      const body = n > 0 ? lines.slice(n).join('\n').trim() : b.text;
+      return (
+        <div key={b.id} className="msg usuario">
+          {b.author && <div className="who">{b.author}</div>}
+          <div className="msg-text">{q && <div className="msg-quote">{q}</div>}{body}</div>
+        </div>
+      );
+    }
     if (b.role === 'sistema') return <div key={b.id} className="msg sistema">{b.text}</div>;
     return agentLine(b);
   };
@@ -208,7 +258,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
         </div>
       )}
       <HelperRequests clientId={c.id} />
-      <div className="messages" ref={list} aria-live="polite">
+      <div className="messages" ref={list} aria-live="polite" onClick={openCited} onMouseUp={pickQuote} onScroll={() => quote && setQuote(null)}>
         {tail && tail.map((l, i) => l.role === 'usuario'
           ? <div key={i} className="msg usuario"><div className="msg-text">{l.text}</div></div>
           : <div key={i} className="msg"><div className="msg-text md" dangerouslySetInnerHTML={{ __html: renderMarkdown(l.text) }} /></div>)}
@@ -221,6 +271,11 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
         {blocks.map((b, i) => <Fragment key={i}>{block(b, i)}</Fragment>)}
         {running && <div className="typing st-trabalhando"><span className="status-dot" />{worker?.name ?? 'O funcionário'} {active?.status === 'fila' ? 'está na fila' : 'está trabalhando'}…</div>}
       </div>
+      {quote && !view && !guest && (
+        <button type="button" className="quote-reply" style={{ left: quote.x, top: quote.y }} onMouseDown={(e) => e.preventDefault()} onClick={replyTo}>
+          Responder <Reply size={14} />
+        </button>
+      )}
       {pieces && pieces.files.length > 0 && (
         <button type="button" className="conversa-pieces" title={`Abrir ${pieces.demand.title} na mesa`} onClick={() => setOpenDemand(pieces.demand.id)}>
           {pieces.files.map((f) => <img key={f} src={mediaUrl(office!.id, f)} alt="" loading="lazy" />)}

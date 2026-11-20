@@ -1042,6 +1042,30 @@ export async function api(app: FastifyInstance) {
         archivedAt: s.id === found.c.sessionId ? null : archived.get(s.id) ?? null,
       }));
     });
+    // caminho citado na conversa (absoluto ou relativo à pasta em que o funcionário trabalha): onde está de verdade
+    r.get('/api/offices/:officeId/clients/:id/caminho', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const raw = String((req.query as any).path ?? '').trim().replace(/^["'`]|["'`]$/g, '').replace(/[\\/]+$/, '');
+      if (!raw) return reply.code(400).send({ error: 'Caminho vazio' });
+      const bases = path.isAbsolute(raw) ? [''] : [
+        ...all<{ cwd: string }>("SELECT DISTINCT cwd FROM jobs WHERE client_id = ? AND cwd IS NOT NULL ORDER BY created_at DESC LIMIT 5", id).map((j) => j.cwd),
+        clientDir(office, c), office.rootPath,
+      ].filter(Boolean) as string[];
+      for (const b of bases) {
+        const abs = b ? path.resolve(b, raw) : path.resolve(raw);
+        if (!existsSync(abs)) continue;
+        if (!inside(officeId, abs) && !bases.some((x) => x && abs.toLowerCase().startsWith(path.resolve(x).toLowerCase() + path.sep))) {
+          return reply.code(403).send({ error: 'Fora das pastas do escritório' });
+        }
+        return { abs, dir: statSync(abs).isDirectory() };
+      }
+      return reply.code(404).send({ error: `Não achei ${raw}` });
+    });
+
     r.post('/api/offices/:officeId/clients/:id/sessoes/:sid/arquivar', async (req, reply) => {
       if (!requireWorker(req, reply)) return;
       const b = body(z.object({ archived: z.boolean() }), req, reply);
