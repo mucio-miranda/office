@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { PLAN, basePlanProblem, planProblem, type Rect, type Vec2, type WallType } from '@office/shared';
 import { useStore } from '../../lib/store';
 import { api } from '../../lib/api';
-import { BASE_ROOM_IDS, ROOMS, customRects, isPieceKey, normalizeWalls, pieceKey, relocate } from '../layout';
+import { BASE_ROOM_IDS, ROOMS, buildingRect, customRects, isPieceKey, normalizeWalls, pieceKey, relocate } from '../layout';
 import { commit, useDecor } from './state';
 import { saveWalls } from './walls';
 
@@ -77,9 +77,12 @@ export function rectOf(id: string): Rect | undefined {
 
 /** O problema da planta com essa mudança (null = pode). `id` null é a sala nova. */
 export function problemWith(id: string | null, rect: Rect) {
-  if (isBase(id)) return basePlanProblem(BASE_ROOM_IDS.map((b) => ({ id: b, name: nameOf(b), rect: b === id ? rect : rectOf(b)! })));
+  if (isBase(id)) {
+    const annexes = customRooms().map((r) => ({ name: r.name, rect: customRects.get(r.id)! })).filter((r) => r.rect);
+    return basePlanProblem(BASE_ROOM_IDS.map((b) => ({ id: b, name: nameOf(b), rect: b === id ? rect : rectOf(b)! })), annexes);
+  }
   const rooms = customRooms().filter((r) => r.id !== id).map((r) => ({ id: r.id, name: r.name, rect: customRects.get(r.id)! })).filter((r) => r.rect);
-  return planProblem([...rooms, { id: id ?? 'nova', name: id ? nameOf(id) : 'A sala nova', rect }]);
+  return planProblem([...rooms, { id: id ?? 'nova', name: id ? nameOf(id) : 'A sala nova', rect }], buildingRect());
 }
 
 /** Sala nova da Planta (ou a de baixo do ponto) e a borda perto dele. */

@@ -142,7 +142,11 @@ test('planta das salas originais: salva as sete, confere e volta à de sempre', 
   assert.equal(r1.status, 400);
   assert.match(r1.json.error, /uma em cima da outra/);
   const fora = base.map((r) => (r.roomId === 'copa' ? { ...r, x1: 30 } : r));
-  assert.match((await call('PUT', `${O}/baseRooms`, owner, { rooms: fora })).json.error, /dentro do prédio/);
+  assert.match((await call('PUT', `${O}/baseRooms`, owner, { rooms: fora })).json.error, /cresceria por cima/, 'crescer para a direita esbarra nas salas novas');
+  const fundo = base.map((r) => (r.roomId === 'copa' ? { ...r, z0: -20 } : r));
+  assert.match((await call('PUT', `${O}/baseRooms`, owner, { rooms: fundo })).json.error, /fundo nem da esquerda/);
+  const frente = base.map((r) => (r.roomId === 'design' ? { ...r, z1: 24 } : r));
+  assert.equal((await call('PUT', `${O}/baseRooms`, owner, { rooms: frente })).status, 200, 'cresce para a frente');
   assert.equal((await call('PUT', `${O}/baseRooms`, owner, { rooms: base.slice(1) })).status, 400, 'as sete juntas');
   assert.equal((await call('PUT', `${O}/baseRooms`, owner, { rooms: [] })).status, 200, 'volta à planta original');
   assert.equal((await call('GET', `${O}/baseRooms`, owner)).json.length, 0);

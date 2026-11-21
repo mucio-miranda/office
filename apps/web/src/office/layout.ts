@@ -1,4 +1,4 @@
-import { PLAN, roomRect, sharedEdge, type CustomRoom, type Rect, type RoomId, type Vec2, type WallType } from '@office/shared';
+import { FOOTPRINT, PLAN, buildingOf, roomRect, sharedEdge, type CustomRoom, type Rect, type RoomId, type Vec2, type WallType } from '@office/shared';
 import type { PanelId } from '../lib/store';
 
 /**
@@ -518,6 +518,10 @@ export function setBaseRooms(list: { roomId: string; x0: number; z0: number; x1:
   baseCustomized = ORIG.rooms.every((r) => over.has(r.id));
   const target = (id: string) => (baseCustomized ? over.get(id)! : rectOf(ORIG.rooms.find((r) => r.id === id)!));
   MAIN.rooms = ORIG.rooms.map((r) => ({ ...r, ...target(r.id) }));
+  // o prédio cresce para a frente e para a direita até onde as salas originais chegam
+  const box = baseCustomized ? buildingOf(MAIN.rooms.map(rectOf)) : { ...FOOTPRINT };
+  MAIN.x1 = box.x1;
+  BOUNDS.z1 = box.z1;
   const move = (p: Vec2): Vec2 => {
     const o = origRoomOf(p);
     return o && baseCustomized ? relocate(p, rectOf(o), target(o.id)) : { x: p.x, z: p.z };
@@ -560,6 +564,9 @@ export function setAgentDesks(agents: { seat?: Vec2 | null }[]) {
   agentDesks = agents.filter((a) => a.seat).map((a) => FURN_BOX({ kind: 'mesa', x: a.seat!.x, z: a.seat!.z - 1.1 }));
   rebuildSolids();
 }
+
+/** O prédio de agora (o contorno original, aumentado para a frente e para a direita pela Planta). */
+export const buildingRect = (): Rect => ({ x0: BOUNDS.x0, z0: BOUNDS.z0, x1: MAIN.x1, z1: BOUNDS.z1 });
 
 /** Retângulo de cada sala nova (o próprio, da Planta, ou o do slot). */
 export const customRects = new Map<string, Rect>();
@@ -608,6 +615,7 @@ export function setCustomRooms(list: CustomRoom[]) {
   FURNITURE.push(...MAIN.furniture, ...desks.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true })));
   BOUNDS.x1 = rects.reduce((m, { rect }) => Math.max(m, rect.x1), MAIN.x1);
   COLS = Math.round((BOUNDS.x1 - BOUNDS.x0) / CELL);
+  ROWS = Math.round((BOUNDS.z1 - BOUNDS.z0) / CELL);
   rebuildSolids();
 }
 
@@ -674,7 +682,7 @@ function clearLine(a: Vec2, b: Vec2, pad = CLEARANCE) {
 
 const CELL = 0.25;
 let COLS = Math.round((BOUNDS.x1 - BOUNDS.x0) / CELL);
-const ROWS = Math.round((BOUNDS.z1 - BOUNDS.z0) / CELL);
+let ROWS = Math.round((BOUNDS.z1 - BOUNDS.z0) / CELL);
 const cellOf = (p: Vec2) => [Math.floor((p.x - BOUNDS.x0) / CELL), Math.floor((p.z - BOUNDS.z0) / CELL)] as const;
 const cellCenter = (c: number, r: number): Vec2 => ({ x: BOUNDS.x0 + (c + 0.5) * CELL, z: BOUNDS.z0 + (r + 0.5) * CELL });
 /** Células livres (0 = não testada, 1 = livre, 2 = bloqueada); refeita quando a decoração muda. */

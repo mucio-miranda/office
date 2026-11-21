@@ -72,34 +72,43 @@ export function sharedEdge(a: Rect, b: Rect): { vertical: boolean; line: number;
 /** Encostadas com espaço para porta (a porta mais um respiro de cada lado). */
 export const roomsJoin = (a: Rect, b: Rect) => { const e = sharedEdge(a, b); return !!e && e.to - e.from >= PLAN.door + 1; };
 const BUILDING: Rect = { x0: -27, z0: -18, x1: PLAN.x0, z1: 18 };
-/** Confere a planta inteira das salas novas: devolve o problema, em português, ou null se está tudo certo. */
 /**
  * Salas originais (Recepção, Gerência, Vídeo…): mudam de lugar e de tamanho dentro do contorno do prédio, que fica
  * igual (as paredes do fundo e da esquerda, com a decoração de parede, não saem do lugar). O que sobra vira área livre.
  */
 export const FOOTPRINT: Rect = { x0: -27, z0: -18, x1: 27, z1: 18 };
+/** Até onde o prédio cresce: para a frente e para a direita (o fundo e a esquerda, com a decoração de parede, ficam). */
+export const GROW = { x1: 70, z1: 40 };
 export interface BaseRoomRect extends Rect { roomId: string }
-export function basePlanProblem(rooms: { id: string; name: string; rect: Rect }[]): string | null {
+/** O prédio: o contorno original, aumentado até onde as salas originais chegam (só para a frente e para a direita). */
+export function buildingOf(rooms: Rect[]): Rect {
+  return rooms.reduce((b, r) => ({ ...b, x1: Math.max(b.x1, r.x1), z1: Math.max(b.z1, r.z1) }), { ...FOOTPRINT });
+}
+/** Confere a planta das salas originais (`annexes` = as salas novas, que ficam fora do prédio). */
+export function basePlanProblem(rooms: { id: string; name: string; rect: Rect }[], annexes: { name: string; rect: Rect }[] = []): string | null {
   const g = PLAN.grid, f = FOOTPRINT;
   for (const { name, rect: r } of rooms) {
     if ([r.x0, r.z0, r.x1, r.z1].some((v) => !Number.isFinite(v) || Math.abs(v / g - Math.round(v / g)) > 1e-6)) return `${name}: medidas fora da grade de meio metro.`;
-    if (r.x0 < f.x0 - 1e-6 || r.z0 < f.z0 - 1e-6 || r.x1 > f.x1 + 1e-6 || r.z1 > f.z1 + 1e-6) return `${name} precisa ficar dentro do prédio.`;
+    if (r.x0 < f.x0 - 1e-6 || r.z0 < f.z0 - 1e-6) return `${name} não pode passar do fundo nem da esquerda do prédio (é onde fica a decoração de parede). Aumente para a frente ou para a direita.`;
+    if (r.x1 > GROW.x1 + 1e-6 || r.z1 > GROW.z1 + 1e-6) return `${name} passou do limite do terreno.`;
     if (r.x1 - r.x0 < PLAN.minW || r.z1 - r.z0 < PLAN.minD) return `${name} ficou pequena demais (mínimo de ${PLAN.minW} × ${PLAN.minD} m).`;
-    // precisa de uma borda para dentro do prédio (para a porta), não só paredes de fora
-    const inner = [r.x0 > f.x0 + 1e-6, r.x1 < f.x1 - 1e-6, r.z0 > f.z0 + 1e-6, r.z1 < f.z1 - 1e-6].some(Boolean);
-    if (!inner) return `${name} ocuparia o prédio inteiro.`;
   }
   for (let i = 0; i < rooms.length; i++)
     for (let j = i + 1; j < rooms.length; j++)
       if (rectsOverlap(rooms[i].rect, rooms[j].rect)) return `${rooms[i].name} e ${rooms[j].name} ficariam uma em cima da outra.`;
+  // o prédio maior não pode engolir uma sala nova
+  const b = buildingOf(rooms.map((r) => r.rect));
+  const hit = annexes.find((a) => rectsOverlap(a.rect, b));
+  if (hit) return `O prédio cresceria por cima de ${hit.name}. Mude ${hit.name} de lugar antes (ela fica do lado de fora, à direita).`;
   return null;
 }
 
-export function planProblem(rooms: { id: string; name: string; rect: Rect }[]): string | null {
+/** Confere a planta inteira das salas novas: devolve o problema, em português, ou null se está tudo certo. */
+export function planProblem(rooms: { id: string; name: string; rect: Rect }[], building: Rect = BUILDING): string | null {
   const g = PLAN.grid;
   for (const { name, rect: r } of rooms) {
     if ([r.x0, r.z0, r.x1, r.z1].some((v) => !Number.isFinite(v) || Math.abs(v / g - Math.round(v / g)) > 1e-6)) return `${name}: medidas fora da grade de meio metro.`;
-    if (r.x0 < PLAN.x0 - 1e-6 || r.z0 < PLAN.z0 - 1e-6 || r.z1 > PLAN.z1 + 1e-6) return `${name} precisa ficar a leste do prédio, entre o fundo e a frente dele.`;
+    if (r.x0 < building.x1 - 1e-6 || r.z0 < building.z0 - 1e-6 || r.z1 > building.z1 + 1e-6) return `${name} precisa ficar a leste do prédio, entre o fundo e a frente dele.`;
     if (r.x1 - r.x0 < PLAN.minW || r.z1 - r.z0 < PLAN.minD) return `${name} ficou pequena demais (mínimo de ${PLAN.minW} × ${PLAN.minD} m).`;
     if (r.x1 - r.x0 > PLAN.maxW || r.z1 - r.z0 > PLAN.maxD) return `${name} ficou grande demais (máximo de ${PLAN.maxW} × ${PLAN.maxD} m).`;
   }
@@ -108,7 +117,7 @@ export function planProblem(rooms: { id: string; name: string; rect: Rect }[]): 
       if (rectsOverlap(rooms[i].rect, rooms[j].rect)) return `${rooms[i].name} e ${rooms[j].name} ficariam uma em cima da outra.`;
   // todas precisam ter caminho até o prédio: encostando nele ou numa sala que chegue lá
   const reach = new Set<number>();
-  const queue = rooms.map((r, i) => (roomsJoin(r.rect, BUILDING) ? i : -1)).filter((i) => i >= 0);
+  const queue = rooms.map((r, i) => (roomsJoin(r.rect, building) ? i : -1)).filter((i) => i >= 0);
   queue.forEach((i) => reach.add(i));
   while (queue.length) {
     const i = queue.shift()!;

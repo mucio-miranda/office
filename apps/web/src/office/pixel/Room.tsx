@@ -1,7 +1,7 @@
 import { useEffect, useMemo } from 'react';
 import { baseOf, useTheme, type PixelPalette } from '../../lib/theme';
 import { useStore } from '../../lib/store';
-import { BOUNDS, PIECE, ROOMS, WALL_T, pieceOf, wallRuns } from '../layout';
+import { BOUNDS, PIECE, ROOMS, WALL_T, buildingRect, pieceOf, wallRuns } from '../layout';
 import { applyWall, dragKeys, useWallDrag, useWallTool } from '../decor/walls';
 import { PlanLayer } from '../decor/PlanLayer';
 import { farSides, useView } from '../view';
@@ -19,8 +19,6 @@ const isBack = (w: { x: number; z: number; w: number; d: number }, far = farSide
   return h ? (far.z0 && Math.abs(w.z - BOUNDS.z0) < 0.2) || (far.z1 && Math.abs(w.z - BOUNDS.z1) < 0.2)
     : (far.x0 && Math.abs(w.x - BOUNDS.x0) < 0.2) || (far.x1 && Math.abs(w.x - BOUNDS.x1) < 0.2);
 };
-/** A laje principal; os anexos têm laje própria, para o vazio entre eles continuar vazio. */
-const MAIN_W = 54, MAIN_D = 36, MAIN_X1 = 27;
 /** Cor do arremate no topo de cada acabamento (a alvenaria usa a madeira da paleta). */
 const WALL_TOP: Record<string, string> = {
   reboco: '#d9d1c4', branca: '#e4e4e0', preta: '#141518', verde: '#83977e', terracota: '#a95c3e', concreto: '#8f8e89', tijolo: '#8a4430', azulejo: '#b9c2c7', madeira: '#7a5233',
@@ -54,6 +52,7 @@ export function PixelRoom({ p, onWalk, onHover, onLeave }: { p: PixelPalette; on
   const mode = useWallTool((s) => s.mode);
   const plan = usePlan((s) => s.on);
   const quarter = useView((s) => s.quarter);
+  const b = buildingRect();
   // pintar: o clique troca o trecho inteiro (pedaços vizinhos do mesmo acabamento)
   const wallClick = (keys: string[]) => (tool && mode === 'pintar' ? { onClick: (e: any) => { e.stopPropagation(); applyWall(keys, tool); } } : {});
   const walls = useMemo(() => wallRuns(styles).map((w) => {
@@ -75,9 +74,10 @@ export function PixelRoom({ p, onWalk, onHover, onLeave }: { p: PixelPalette; on
       </mesh>
       {/* laje do prédio: a borda grossa aparece na frente e à direita */}
       {/* o topo da laje fica 3 cm abaixo do piso: sem disputa de profundidade entre os dois */}
-      <PBox p={p} pos={[0, -0.33, 0]} size={[MAIN_W + 0.6, 0.6, MAIN_D + 0.6]} color={p.slab} cast={false} />
-      <PBox p={p} pos={[0, -0.59, 0]} size={[MAIN_W + 0.9, 0.1, MAIN_D + 0.9]} color={p.slabEdge} cast={false} />
-      {ROOMS.filter((r) => r.x0 >= MAIN_X1).map((r) => (
+      {/* a laje acompanha o prédio (a Planta pode aumentá-lo para a frente e para a direita) */}
+      <PBox p={p} pos={[(b.x0 + b.x1) / 2, -0.33, (b.z0 + b.z1) / 2]} size={[b.x1 - b.x0 + 0.6, 0.6, b.z1 - b.z0 + 0.6]} color={p.slab} cast={false} />
+      <PBox p={p} pos={[(b.x0 + b.x1) / 2, -0.59, (b.z0 + b.z1) / 2]} size={[b.x1 - b.x0 + 0.9, 0.1, b.z1 - b.z0 + 0.9]} color={p.slabEdge} cast={false} />
+      {ROOMS.filter((r) => r.x0 >= b.x1 - 1e-6).map((r) => (
         <group key={`laje-${r.id}`}>
           <PBox p={p} pos={[(r.x0 + r.x1) / 2, -0.33, (r.z0 + r.z1) / 2]} size={[r.x1 - r.x0 + 0.6, 0.6, r.z1 - r.z0 + 0.6]} color={p.slab} cast={false} />
           <PBox p={p} pos={[(r.x0 + r.x1) / 2, -0.59, (r.z0 + r.z1) / 2]} size={[r.x1 - r.x0 + 0.9, 0.1, r.z1 - r.z0 + 0.9]} color={p.slabEdge} cast={false} />

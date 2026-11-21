@@ -20,7 +20,7 @@ import { ClientArchive, cabinets, openArchive } from './Archive';
 import { MoodboardWall } from './MoodboardWall';
 
 const MAQUETE_WALL: Record<string, string> = { branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f', vidro: '#bfe6f5', 'vidro-fume': '#39444c' };
-import { agentSeat, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+import { agentSeat, buildingRect, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -603,6 +603,7 @@ function Floor({ p }: { p: ScenePalette }) {
   const px = usePixel();
   useStore((s) => s.walls);
   if (pixel) return <PixelRoom p={px} onWalk={walk} onHover={hoverFloor} onLeave={leaveFloor} />;
+  const bld = buildingRect();
   return (
     <group>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.22, 0]} onClick={walk}>
@@ -610,8 +611,8 @@ function Floor({ p }: { p: ScenePalette }) {
         <meshBasicMaterial color={p.ground} />
       </mesh>
       {/* base da maquete */}
-      <mesh position={[0, -0.11, 0]} receiveShadow>
-        <boxGeometry args={[54.6, 0.2, 36.6]} />
+      <mesh position={[(bld.x0 + bld.x1) / 2, -0.11, (bld.z0 + bld.z1) / 2]} receiveShadow>
+        <boxGeometry args={[bld.x1 - bld.x0 + 0.6, 0.2, bld.z1 - bld.z0 + 0.6]} />
         <meshBasicMaterial color={p.wallTop} />
       </mesh>
       {ROOMS.map((r) => (
@@ -621,8 +622,8 @@ function Floor({ p }: { p: ScenePalette }) {
         </mesh>
       ))}
       {/* o piso não é iluminado (cor exata da paleta); este plano só recebe as sombras */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.003, 0]} receiveShadow raycast={() => null}>
-        <planeGeometry args={[54, 36]} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(bld.x0 + bld.x1) / 2, 0.003, (bld.z0 + bld.z1) / 2]} receiveShadow raycast={() => null}>
+        <planeGeometry args={[bld.x1 - bld.x0, bld.z1 - bld.z0]} />
         <shadowMaterial transparent opacity={p.shadow + 0.04} />
       </mesh>
       {wallRuns().filter((w) => w.type !== 'removida').map((w) => {

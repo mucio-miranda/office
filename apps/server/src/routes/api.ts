@@ -5,7 +5,7 @@ import { createReadStream, existsSync, statSync, readdirSync, readFileSync } fro
 import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import { POST_FORMATS, POST_STATUSES, MONTH_STEPS, CHECK_STATES, MONTH_STEP_LABEL,
-  BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, annexRect, basePlanProblem, planProblem, roomRect, type BaseRoomRect, type Rect, PROCESSES, WALL_TYPES, processById, uid,
+  BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, annexRect, basePlanProblem, buildingOf, planProblem, roomRect, type BaseRoomRect, type Rect, PROCESSES, WALL_TYPES, processById, uid,
   type AgentJob, type AgentProfile, type Worker, type DirectMessage, type HelperRequest, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
@@ -530,10 +530,12 @@ export async function api(app: FastifyInstance) {
     const roomSchema = z.object({ name: z.string().trim().min(2).max(40), emoji: z.string().trim().min(1).max(8).default('🚪'), floor: hexColor.default('#e8e4dc') });
     const rectSchema = z.object({ x0: z.number(), z0: z.number(), x1: z.number(), z1: z.number() });
     /** A planta das salas novas com uma mudada (ou uma a mais): o problema, ou null se pode salvar. */
+    /** O prédio de agora: o contorno original, aumentado pelas salas originais que passaram dele. */
+    const buildingNow = (officeId: string) => buildingOf(all<Rect>('SELECT x0, z0, x1, z1 FROM base_rooms WHERE office_id = ?', officeId));
     const planWith = (officeId: string, change: { id: string; name: string; rect: Rect }) => {
       const rooms = all<CustomRoom>('SELECT * FROM office_rooms WHERE office_id = ?', officeId)
         .filter((r) => r.id !== change.id).map((r) => ({ id: r.id, name: r.name, rect: roomRect(r) }));
-      return planProblem([...rooms, change]);
+      return planProblem([...rooms, change], buildingNow(officeId));
     };
     r.post('/api/offices/:officeId/rooms', async (req, reply) => {
       if (!requireOwner(req, reply)) return;
@@ -574,7 +576,8 @@ export async function api(app: FastifyInstance) {
       // vazio = volta à planta original
       if (b.rooms.length) {
         if (b.rooms.length !== BASE_IDS.length || new Set(b.rooms.map((x) => x.roomId)).size !== BASE_IDS.length) return reply.code(400).send({ error: 'Mande as sete salas originais.' });
-        const problem = basePlanProblem(b.rooms.map((x) => ({ id: x.roomId, name: x.name || x.roomId, rect: x })));
+        const annexes = all<CustomRoom>('SELECT * FROM office_rooms WHERE office_id = ?', officeId).map((r) => ({ name: r.name, rect: roomRect(r) }));
+        const problem = basePlanProblem(b.rooms.map((x) => ({ id: x.roomId, name: x.name || x.roomId, rect: x })), annexes);
         if (problem) return reply.code(400).send({ error: problem });
       }
       db.prepare('DELETE FROM base_rooms WHERE office_id = ?').run(officeId);

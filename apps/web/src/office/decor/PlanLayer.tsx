@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { FOOTPRINT, PLAN, type Rect } from '@office/shared';
+import { FOOTPRINT, GROW, PLAN, type Rect } from '@office/shared';
 import { useStore } from '../../lib/store';
 import { BASE_ROOM_IDS, BOUNDS, customRects } from '../layout';
 import { endDrag, hitRoom, moveDrag, rectOf, startDrag, usePlan } from './plan';
@@ -31,7 +31,8 @@ export function PlanLayer() {
   const sel = usePlan((s) => s.sel);
   const problem = usePlan((s) => s.problem);
   // o prédio (salas originais) e a área a leste dele (salas novas)
-  const x0 = FOOTPRINT.x0, x1 = Math.max(BOUNDS.x1, PLAN.x0) + 30, z0 = PLAN.z0, z1 = PLAN.z1;
+  // inclui a faixa da frente e da direita para onde o prédio pode crescer
+  const x0 = FOOTPRINT.x0, x1 = Math.min(GROW.x1 + 20, Math.max(BOUNDS.x1, PLAN.x0) + 30), z0 = PLAN.z0, z1 = Math.min(GROW.z1, Math.max(BOUNDS.z1, PLAN.z1) + 20);
   useEffect(() => {
     const up = () => { if (usePlan.getState().drag) endDrag(); };
     addEventListener('pointerup', up);
