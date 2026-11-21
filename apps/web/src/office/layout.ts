@@ -40,6 +40,8 @@ export const ROOMS: Room[] = [
 ];
 
 export const BOUNDS = { x0: -27, z0: -18, x1: 27, z1: 18 };
+/** Borda direita do prédio (BOUNDS.x1 inclui as salas novas, que ficam fora dele). */
+const BUILDING_EDGE = { x1: 27 };
 export const DOOR = 2.6;
 export const WALL_T = 0.14;
 export const WALL_H = 0.6;
@@ -164,11 +166,14 @@ function rebuildWalls() {
   for (const k of keys) WALLS.push(pieceOf(k)!);
 }
 
-/** Salas dos dois lados de um pedaço (null onde é fora do prédio). */
+/** A área livre dentro do prédio (o que sobra quando a Planta muda as salas): conta como lado de dentro. */
+const FREE_AREA = { id: 'area-livre' } as Room;
+/** Salas dos dois lados de um pedaço: a área livre do prédio conta como sala; null só fora do prédio. */
 function sidesOf(key: string) {
   const w = pieceOf(key)!;
   const across = w.w > w.d;
-  return [roomAt(across ? { x: w.x, z: w.z - 0.6 } : { x: w.x - 0.6, z: w.z }), roomAt(across ? { x: w.x, z: w.z + 0.6 } : { x: w.x + 0.6, z: w.z })];
+  const side = (p: Vec2) => roomAt(p) ?? (p.x > BOUNDS.x0 && p.x < BUILDING_EDGE.x1 && p.z > BOUNDS.z0 && p.z < BOUNDS.z1 ? FREE_AREA : null);
+  return [side(across ? { x: w.x, z: w.z - 0.6 } : { x: w.x - 0.6, z: w.z }), side(across ? { x: w.x, z: w.z + 0.6 } : { x: w.x + 0.6, z: w.z })];
 }
 /** Divisórias: pedaços com uma sala diferente de cada lado (as paredes externas do prédio ficam de fora). */
 export function isDivider(key: string) {
@@ -529,6 +534,7 @@ export function setBaseRooms(list: { roomId: string; x0: number; z0: number; x1:
   // o prédio cresce para a frente e para a direita até onde as salas originais chegam
   const box = baseCustomized ? buildingOf(MAIN.rooms.map(rectOf)) : { ...FOOTPRINT };
   MAIN.x1 = box.x1;
+  BUILDING_EDGE.x1 = box.x1;
   BOUNDS.x0 = box.x0;
   BOUNDS.z0 = box.z0;
   BOUNDS.z1 = box.z1;
