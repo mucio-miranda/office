@@ -109,7 +109,8 @@ function Catalog() {
   const [cat, setCat] = useState<DecorCat>('escritorio');
   const [q, setQ] = useState('');
   const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
-  const list = q ? CATALOG.filter((d) => norm(d.name).includes(norm(q))) : CATALOG.filter((d) => d.cat === cat);
+  const visible = CATALOG.filter((d) => !d.fixed);
+  const list = q ? visible.filter((d) => norm(d.name).includes(norm(q))) : visible.filter((d) => d.cat === cat);
   return (
     <div className={`decor-catalog ${open ? '' : 'closed'}`}>
       <div className="decor-tabs">

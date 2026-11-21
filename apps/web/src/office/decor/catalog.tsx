@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import type { PixelPalette } from '../../lib/theme';
 import { Glass, PBox, PCyl, booksTexture, canvasTexture, leafTexture, mossTexture, rugTexture, screenTexture, shade, tiled, woodTexture } from '../pixel/kit';
-import { Bush, OfficeChair, Plant } from '../pixel/Furniture';
+import { Bush, OfficeChair, PixelFurniture, Plant } from '../pixel/Furniture';
 import { FLOOR_MATERIALS, floorMaterialTexture } from '../pixel/floors';
 
 /**
@@ -57,6 +57,8 @@ export interface DecorDef {
    * (jogando), `face` é para onde olham (em relação à peça; sem ele, olham para o meio dela).
    */
   spots?: { x: number; z: number; seat?: boolean; play?: boolean; face?: number }[];
+  /** Mesa fixa mexida no Decorar: não aparece no catálogo e não se remove nem duplica (só move e gira). */
+  fixed?: boolean;
   render: (p: PixelPalette, color: string | undefined) => ReactNode;
 }
 
@@ -487,6 +489,10 @@ export const CATALOG: DecorDef[] = [
         {[-0.8, 0.8].map((x) => <OfficeChair key={`ct${x}`} p={p} pos={[x, 0, -1.3]} rot={Math.PI} color={p.fabricAlt} />)}
       </group>
     ),
+  },
+  {
+    kind: 'mesa-pessoa', name: 'Mesa de trabalho (fixa)', cat: 'mesas', size: [2.2, 1.1], h: 1.4, place: 'chao', fixed: true,
+    render: () => <PixelFurniture f={{ kind: 'mesa', x: 0, z: 0 }} />,
   },
   {
     kind: 'tv-cinema', name: 'TV grande com rack', cat: 'lazer', size: [2.8, 0.6], h: 2, place: 'chao', colors: ['#2b2b30', '#b9824e', '#f4f4f2'],

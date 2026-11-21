@@ -7,7 +7,7 @@ import { useStore, showEmote } from '../lib/store';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/theme';
 import { PixelRoom } from './pixel/Room';
 import { DecorLayer } from './decor/DecorLayer';
-import { useDecor } from './decor/state';
+import { commit, useDecor } from './decor/state';
 import { seatWorkers, sittable } from './seats';
 import { copaSpots, idleSpot, leisureSpots, releaseIdleSpot, workerPhase, type IdleSpot } from './npc';
 import { holdView, quarterOf, rotateView, tiltView, useView, viewRot } from './view';
@@ -20,7 +20,7 @@ import { ClientArchive, cabinets, openArchive } from './Archive';
 import { MoodboardWall } from './MoodboardWall';
 
 const MAQUETE_WALL: Record<string, string> = { branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f', vidro: '#bfe6f5', 'vidro-fume': '#39444c' };
-import { agentSeat, buildingRect, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+import { agentSeat, buildingRect, deskDir, deskItemFor, DESK_DIRS, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -137,14 +137,14 @@ function clickDesk(f: Furniture) {
   const seat = deskSeat(hd);
   const owner = st.members.find((m) => m.desk === hd.id);
   if (owner && owner.id !== st.user?.id) return false;
-  if (owner) { walkAndSit(seat, Math.PI); return true; }
-  st.claimDesk(hd.id).then((ok) => { if (ok) walkAndSit(seat, Math.PI); });
+  if (owner) { walkAndSit(seat, deskDir(hd)); return true; }
+  st.claimDesk(hd.id).then((ok) => { if (ok) walkAndSit(seat, deskDir(hd)); });
   return true;
 }
 
 function sitAt(d: HumanDesk) {
   const seat = deskSeat(d);
-  player.x = seat.x; player.z = seat.z; player.dir = Math.PI;
+  player.x = seat.x; player.z = seat.z; player.dir = deskDir(d);
   stopWalking();
   player.seated = true;
   player.dirty = true;
@@ -520,7 +520,8 @@ function WorkerNPC({ w, spot, p }: { w: Worker; spot: WorkerSpot; p: ScenePalett
 export function AgentNPC({ a, p }: { a: AgentProfile; p: ScenePalette }) {
   const open = useStore((s) => s.open);
   const desk = agentSeat(a);
-  const state = useMemo(() => ({ x: desk.x, z: desk.z, dir: Math.PI, moving: false }), [desk.x, desk.z]);
+  const dir = a.seat ? Math.PI : DESK_DIRS[a.room] ?? Math.PI;
+  const state = useMemo(() => ({ x: desk.x, z: desk.z, dir, moving: false }), [desk.x, desk.z, dir]);
   return (
     <Avatar anchorId={`agent:${a.id}`} seated typing={a.status === 'trabalhando'} color={a.color} look={a.look} p={p}
       ring={STATUS_RING[a.status]} pulse={a.status === 'aguardando'} getState={() => state} onClick={() => { if (!droneBlocksClick()) open('agente', a.id); }} />
@@ -854,7 +855,11 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       ) : f.kind === 'moodboard' ? (
         <MoodboardWall key={i} f={f} p={p} />
       ) : (
-        <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; if (ff.kind === 'mesa' && clickDesk(ff)) return; walkTo({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
+        <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => {
+          // no Decorar, a mesa fixa vira peça editável (mover e girar) e já fica selecionada
+          if (useDecor.getState().editing) { const it = deskItemFor(ff); if (it) { commit([...useDecor.getState().items, it]); useDecor.setState({ sel: it.id }); } return; }
+          if (droneBlocksClick()) return; if (ff.kind === 'mesa' && clickDesk(ff)) return; walkTo({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff);
+        }} />
       ))}
       <DecorLayer />
       <DeskMarkers />

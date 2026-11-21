@@ -1,6 +1,6 @@
 import type { DecorItem, Vec2, Worker } from '@office/shared';
 import { DEF } from './decor/catalog';
-import { DESKS, ROOMS, roomAt, roomCenter } from './layout';
+import { DESKS, DESK_DIRS, ROOMS, roomAt, roomCenter } from './layout';
 
 /**
  * Lugares de trabalho dos funcionários de IA: a mesa padrão de cada sala e as mesas de trabalho colocadas no modo
@@ -38,7 +38,7 @@ export function seatsOf(it: DecorItem): Seat[] {
 }
 
 export function allSeats(items: DecorItem[]): Seat[] {
-  const fixed = Object.entries(DESKS).map(([room, p]): Seat => ({ key: `sala:${room}`, x: p.x, z: p.z, dir: Math.PI, room }));
+  const fixed = Object.entries(DESKS).map(([room, p]): Seat => ({ key: `sala:${room}`, x: p.x, z: p.z, dir: DESK_DIRS[room] ?? Math.PI, room }));
   const decor = items.flatMap((it) => (it.wall ? [] : (DEF[it.kind]?.seats ?? []).map((s) => place(it, s))));
   return [...fixed, ...decor];
 }

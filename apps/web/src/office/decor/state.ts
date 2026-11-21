@@ -3,7 +3,7 @@ import { uid, type DecorItem } from '@office/shared';
 import { useStore } from '../../lib/store';
 import { api } from '../../lib/api';
 import {
-  BOUNDS, DESKS, DOOR_ZONES, FURNITURE, FURN_BOX, HUMAN_DESKS, SPAWN, WALL_BOXES, deskSeat, roomAt, setDecorSolids, type Box,
+  BOUNDS, DESKS, DOOR_ZONES, FURNITURE, FURN_BOX, HUMAN_DESKS, SPAWN, WALL_BOXES, deskSeat, roomAt, setDecorSolids, setDeskItems, type Box,
 } from '../layout';
 import { DEF, footprint, type DecorDef } from './catalog';
 import { resetView } from '../view';
@@ -83,9 +83,10 @@ const wallSpan = (it: DecorItem, d: DecorDef) => {
 const overlap = (a: Box, b: Box, m = 0) => a.x0 < b.x1 - m && a.x1 > b.x0 + m && a.z0 < b.z1 - m && a.z1 > b.z0 + m;
 
 /** Onde as pessoas sentam e entram: nenhum móvel pode ficar em cima. */
-const SEATS = [...Object.values(DESKS), ...HUMAN_DESKS.map(deskSeat), SPAWN].map((s) => ({ x0: s.x - 0.35, x1: s.x + 0.35, z0: s.z - 0.35, z1: s.z + 0.35 }));
+/** Calculados na hora: a Planta e o Decorar mudam as mesas e os móveis de lugar. */
+const seatBoxes = () => [...Object.values(DESKS), ...HUMAN_DESKS.map(deskSeat), SPAWN].map((s) => ({ x0: s.x - 0.35, x1: s.x + 0.35, z0: s.z - 0.35, z1: s.z + 0.35 }));
 /** Móveis fixos, com a cadeira das mesas e as da mesa de reunião. */
-const FIXED: Box[] = FURNITURE.filter((f) => f.solid).map((f) => {
+const fixedBoxes = (): Box[] => FURNITURE.filter((f) => f.solid).map((f) => {
   const b = FURN_BOX(f);
   if (f.kind === 'mesa') return { ...b, z1: b.z1 + 0.85 };
   if (f.kind === 'mesa-reuniao') return { ...b, z0: b.z0 - 0.75, z1: b.z1 + 0.75 };
@@ -128,7 +129,8 @@ export function fits(it: DecorItem, items: DecorItem[]) {
   if (d.place === 'alto') return true;
   if (WALL_BOXES.some((w) => overlap(b, w))) return false;
   if (d.place === 'piso') return true;
-  if (FIXED.some((f) => overlap(b, f, 0.02)) || DOOR_ZONES.some((z) => overlap(b, z)) || SEATS.some((s) => overlap(b, s))) return false;
+  // a mesa fixa sendo mexida não esbarra na própria cadeira
+  if (fixedBoxes().some((f) => overlap(b, f, 0.02)) || DOOR_ZONES.some((z) => overlap(b, z)) || (!d.fixed && seatBoxes().some((s) => overlap(b, s)))) return false;
   return !items.some((o) => {
     const od = DEF[o.kind];
     return o.id !== it.id && od?.place === 'chao' && overlap(b, itemBox(o, od), 0.02);
@@ -164,7 +166,7 @@ export const useDecor = create<DecorState>(() => ({
 
 const solidsOf = (items: DecorItem[]) => items.filter((it) => DEF[it.kind]?.place === 'chao').map((it) => itemBox(it));
 setDecorSolids(solidsOf(DEFAULT_DECOR));
-useDecor.subscribe((s, prev) => { if (s.items !== prev.items) setDecorSolids(solidsOf(s.items)); });
+useDecor.subscribe((s, prev) => { if (s.items !== prev.items) { setDeskItems(s.items); setDecorSolids(solidsOf(s.items)); } });
 
 /** Alterações ainda não confirmadas pelo servidor: enquanto houver, a recarga do servidor não pisa no rascunho. */
 let pending = 0;
@@ -288,6 +290,8 @@ export function rotateSelected() {
 export function removeSelected() {
   const s = useDecor.getState();
   if (!s.sel) return;
+  // mesa fixa: só move e gira (quem tem mesa continua com ela)
+  if (DEF[s.items.find((i) => i.id === s.sel)?.kind ?? '']?.fixed) return useStore.getState().notify('Esta mesa é fixa: dá para mover e girar, não remover.');
   commit(s.items.filter((i) => i.id !== s.sel));
   useDecor.setState({ sel: null });
 }
@@ -299,7 +303,7 @@ export function startPlacing(kind: string, color?: string, rot = 0) {
 
 export function duplicateSelected() {
   const it = selected();
-  if (it) startPlacing(it.kind, it.color, it.rot);
+  if (it && !DEF[it.kind]?.fixed) startPlacing(it.kind, it.color, it.rot);
 }
 
 /** Coloca a peça nova onde está a prévia. Shift mantém a peça na mão para pôr outra igual. */
