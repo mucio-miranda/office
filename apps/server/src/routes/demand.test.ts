@@ -416,3 +416,27 @@ test('virada de mês: o titular escreve a passagem, é arquivado e outro assume;
   void officeId;
 });
 
+
+test('conversa longa: memória e resumo antes, depois o pedido segue numa conversa nova com o mesmo funcionário', async () => {
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
+  // a conversa atual passou de 100 mil tokens relidos
+  db.prepare("UPDATE clients SET session_id = 'sessao-longa' WHERE id = ?").run(c.id);
+  const last = db.prepare("SELECT id FROM jobs WHERE client_id = ? ORDER BY created_at DESC LIMIT 1").get(c.id) as any;
+  db.prepare("UPDATE jobs SET session_id = 'sessao-longa', context_tokens = 130000, status = 'concluido' WHERE id = ?").run(last.id);
+  db.prepare("UPDATE demands SET status = 'entregue' WHERE client_id = ?").run(c.id);
+  const titular = db.prepare("SELECT id FROM workers WHERE client_id = ? AND role = 'titular' AND archived_at IS NULL").get(c.id) as any;
+  const r = await call('POST', `${O}/clients/${c.id}/conversa`, { text: 'troca o título da arte' });
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  const ref = db.prepare("SELECT * FROM jobs WHERE client_id = ? AND prompt LIKE '## Conversa nova%' ORDER BY created_at DESC LIMIT 1").get(c.id) as any;
+  assert.ok(ref, 'pede memória e resumo antes');
+  assert.ok(ref.prompt.includes('CLAUDE.md') && ref.prompt.includes('RESUMO '), 'memória do cliente e resumo da conversa');
+  assert.equal(ref.worker_id, titular?.id ?? null, 'o mesmo funcionário');
+  // terminou: a conversa recomeça e o pedido guardado segue
+  await wait(() => !!db.prepare("SELECT id FROM jobs WHERE client_id = ? AND prompt LIKE '%troca o título da arte%' AND prompt NOT LIKE '## Conversa nova%'").get(c.id));
+  const next = db.prepare("SELECT * FROM jobs WHERE client_id = ? AND prompt LIKE '%troca o título da arte%' AND prompt NOT LIKE '## Conversa nova%'").get(c.id) as any;
+  assert.ok(next, 'o pedido seguiu');
+  assert.equal(next.worker_id, titular?.id ?? null, 'com o mesmo funcionário');
+  assert.ok(!(db.prepare("SELECT archived_at FROM workers WHERE id = ?").get(titular.id) as any).archived_at, 'ninguém é arquivado');
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
+});

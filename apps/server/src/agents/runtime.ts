@@ -158,7 +158,7 @@ export function authorName(by: string | undefined) {
   return one<{ name: string }>('SELECT name FROM users WHERE id = ?', id)?.name ?? null;
 }
 
-function addMessage(jobId: string, officeId: string, role: JobMessage['role'], text: string, author: string | null = null) {
+export function addMessage(jobId: string, officeId: string, role: JobMessage['role'], text: string, author: string | null = null) {
   const message: JobMessage = { id: uid(), jobId, role, text, author, createdAt: now() };
   insert('job_messages', message as never);
   broadcast(officeId, { t: 'jobMessage', message });

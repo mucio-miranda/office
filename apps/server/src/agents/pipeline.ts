@@ -13,7 +13,7 @@ import { clientDir, folderName, indexClient, indexSummary, writeNew } from '../c
 import { clientPaths } from '../clients/layout.ts';
 import { nicheOf } from '../clients/moodboard.ts';
 import { clientDriveFolder, driveInfo, driveSubdir, sendToDrive, type DriveItem } from '../clients/drive.ts';
-import { enqueueJob, followUpJob, interruptJob, replyToJob } from './runtime.ts';
+import { addMessage, enqueueJob, followUpJob, interruptJob, replyToJob } from './runtime.ts';
 import { baseCheck, captionFrom, isInsideAny, latestFiles, marksText, newerFiles, processFiles, slug } from './outputs.ts';
 import { mentionedDirs } from './permissions.ts';
 import { expandCommand, guessKind, listSkills, parseLearnings } from './skills.ts';
@@ -290,7 +290,7 @@ export function grantDirs(officeId: string, clientId: string, by: string, text: 
 /** Demanda aberta pelo mapa ou pelo quadro: quem faz, o processo, o prazo e a prioridade vêm junto com o pedido. */
 export interface NewRequest { title?: string; dueDate?: string | null; priority?: Demand['priority']; process?: string | null; agentId?: string | null }
 
-export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest: boolean | NewRequest = false, interrupt = false): string | null {
+export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest: boolean | NewRequest = false, interrupt = false, noRefresh = false): string | null {
   const client = getClient(clientId);
   if (!client) return 'Cliente não encontrado.';
   const office = getOffice(officeId);
@@ -298,6 +298,11 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
   grantDirs(officeId, clientId, by, raw);
   // a conversa é a do titular: tarefas de ajudante (sessão própria) ficam de fora
   const jobs = all<AgentJob>("SELECT * FROM jobs WHERE client_id = ? AND (stage IS NULL OR stage != 'aprovacao') AND (worker_id IS NULL OR worker_id NOT IN (SELECT id FROM workers WHERE role = 'ajudante')) ORDER BY created_at DESC", clientId);
+  // conversa longa (ou longa e parada): antes do pedido, memória e resumo, e o pedido vai numa conversa limpa
+  if (!noRefresh && !jobs.some((j) => ['fila', 'rodando', 'aguardando'].includes(j.status)) && needsRefresh(client, jobs)) {
+    const e = startRefresh(office, client, raw, by, newRequest);
+    if (!e) return null;
+  }
   try {
     if (!newRequest) {
       const active = jobs.find((j) => ['fila', 'rodando', 'aguardando'].includes(j.status));
@@ -473,6 +478,8 @@ export function onJobFinished(job: AgentJob, finalText: string, ok: boolean) {
   if (handoffHelper(job, finalText, ok)) return;
   // virada de mês: com a passagem escrita, o titular é arquivado e outro assume lendo ela
   if (job.prompt.startsWith(TURNOVER)) { finishTurnover(job, ok); return; }
+  // conversa nova: com a memória e o resumo escritos, recomeça limpa e o pedido guardado segue
+  if (job.prompt.startsWith(REFRESH)) { finishRefresh(job, ok); return; }
   if (!job.demandId) return;
   const d = getDemand(job.demandId);
   if (!d) return;
@@ -691,6 +698,99 @@ export function publishReminders() {
     patchDemand(d, { publish: { ...p, reminded: true } });
     notice(d.officeId, `Hora de publicar "${d.title}" (${p.networks.map((n) => NETWORK_LABEL[n]).join(', ')}). O pacote está na pasta do cliente.`, { demandId: d.id });
   }
+}
+
+// ---------- conversa nova: a mesma pessoa, com a memória do cliente e o resumo da conversa anterior ----------
+
+const REFRESH = '## Conversa nova';
+/** Contexto (tokens relidos a cada passo) a partir do qual o próximo pedido começa uma conversa limpa. */
+export const REFRESH_TOKENS = 100_000;
+/** Parada há mais disto e ainda grande: também recomeça. */
+export const REFRESH_IDLE_HOURS = 24;
+export const REFRESH_IDLE_TOKENS = 50_000;
+
+/** A memória do cliente: lida sozinha pelo Claude Code em toda conversa aberta na pasta dele (Office e terminal). */
+export function memoryFile(office: Office, client: Client) {
+  const dir = jobCwd(office, client);
+  // sem pasta própria, a conversa roda na raiz do escritório: lá o CLAUDE.md é o do projeto, nunca o do cliente
+  return dir === office.rootPath ? null : path.join(dir, 'CLAUDE.md');
+}
+
+function summaryFile(office: Office, client: Client) {
+  const dir = jobCwd(office, client);
+  const docs = dir === office.rootPath ? path.join(dir, 'PASSAGENS', folderName(client.name)) : clientPaths(dir).abs('documentos');
+  const d = new Date();
+  const stamp = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}h${String(d.getMinutes()).padStart(2, '0')}`;
+  return path.join(docs, 'CONVERSAS', `RESUMO ${stamp}.md`);
+}
+
+/** A conversa do cliente passou do ponto: grande, ou parada há mais de um dia e ainda considerável. */
+export function needsRefresh(client: Client, jobs: AgentJob[]) {
+  if (!client.sessionId) return false;
+  const mine = jobs.filter((j) => j.sessionId === client.sessionId);
+  const ctx = mine.reduce((m, j) => Math.max(m, j.contextTokens ?? 0), 0);
+  const last = mine[0];
+  if (!last || !ctx) return false;
+  if (ctx >= REFRESH_TOKENS) return true;
+  const idleH = (Date.now() - Date.parse(last.updatedAt)) / 3_600_000;
+  return idleH >= REFRESH_IDLE_HOURS && ctx >= REFRESH_IDLE_TOKENS;
+}
+
+/**
+ * Antes do pedido: na conversa atual, o titular atualiza a memória do cliente e escreve o resumo; quando termina, a
+ * conversa recomeça limpa (mesmo funcionário) e o pedido segue nela, com o resumo lido antes. O pedido fica guardado
+ * na própria tarefa, para não se perder se o Office reiniciar no meio.
+ */
+function startRefresh(office: Office, client: Client, raw: string, by: string, newRequest: boolean | NewRequest) {
+  const titular = titularOf(office.id, client.id);
+  if (!titular) return 'sem titular';
+  const last = one<AgentJob>('SELECT agent_id, context_tokens FROM jobs WHERE client_id = ? AND session_id = ? ORDER BY updated_at DESC LIMIT 1', client.id, client.sessionId ?? null);
+  const agentId = last?.agentId ?? one<{ id: string }>("SELECT id FROM agents WHERE office_id = ? ORDER BY slug = 'gerente' DESC LIMIT 1", office.id)!.id;
+  const mem = memoryFile(office, client);
+  const summary = summaryFile(office, client);
+  const pending = Buffer.from(JSON.stringify({ raw, by, newRequest }), 'utf8').toString('base64');
+  enqueueJob({
+    officeId: office.id, agentId, demandId: null, clientId: client.id, workerId: titular.id, cwd: jobCwd(office, client), createdBy: by,
+    display: `${raw}\n\n(Conversa longa: antes, ${titular.name} atualiza a memória do cliente e o resumo, e segue numa conversa nova.)`,
+    prompt: [
+      REFRESH,
+      '',
+      `Esta conversa ficou longa (${Math.round((last?.contextTokens ?? 0) / 1000)} mil tokens relidos a cada passo). O próximo pedido vai começar numa conversa limpa, com você mesmo, lendo a memória do cliente e um resumo desta conversa. Antes disso, sem começar trabalho novo:`,
+      '',
+      ...(mem ? [
+        `1. Atualize a memória do cliente em \`${mem}\` (crie se não existir). É lida sozinha em toda conversa nesta pasta: curta (até umas 120 linhas), só fatos e regras que continuam valendo, sem histórico. Aponte para os arquivos de referência que já existem (IDV, PADRAO-EDICAO, marca.json…) em vez de copiar. Seções:`,
+        '   - `# Memória · <cliente>` e uma linha do que é o cliente e o posicionamento;',
+        '   - `## Identidade e onde estão as coisas` (cores, fontes, tom; pastas e arquivos de referência);',
+        '   - `## Regras aprovadas` (correções que viraram regra, o que o cliente não quer);',
+        '   - `## Preferências` (do cliente e da equipe);',
+        '   - `## Em andamento` (trabalhos abertos, com caminhos);',
+        '   - `Atualizado em <data>` no fim.',
+      ] : []),
+      `${mem ? '2' : '1'}. Escreva o resumo desta conversa em \`${summary}\` (crie a pasta se faltar), em até uma página: o que está em andamento e em que ponto, o que espera aprovação, os últimos arquivos entregues (caminhos) e os combinados recentes que ainda não viraram regra.`,
+      '',
+      'Responda só com "ok".',
+      '',
+      `<!-- pedido-pendente: ${pending} -->`,
+      `<!-- resumo: ${summary} -->`,
+    ].join('\n'),
+  });
+  return null;
+}
+
+function finishRefresh(job: AgentJob, ok: boolean) {
+  const client = getClient(job.clientId ?? null);
+  if (!client) return;
+  let pending: { raw: string; by: string; newRequest: boolean | NewRequest } | null = null;
+  try { pending = JSON.parse(Buffer.from(job.prompt.match(/pedido-pendente: ([A-Za-z0-9+/=]+)/)?.[1] ?? '', 'base64').toString('utf8')); } catch { pending = null; }
+  const summary = job.prompt.match(/<!-- resumo: (.+?) -->/)?.[1];
+  if (ok) {
+    // mesma pessoa, conversa nova: o resumo vai como passagem de bastão da primeira mensagem
+    update('clients', client.id, { sessionId: null, sessionDirs: [], sessionCost: 0 });
+    if (job.workerId && summary && existsSync(summary)) update('workers', job.workerId, { handoff: summary });
+    addMessage(job.id, job.officeId, 'sistema', 'Conversa nova: a memória do cliente e o resumo da anterior foram carregados. A anterior continua na aba Sessões.');
+  }
+  // o pedido segue (numa conversa nova se deu certo; senão, na mesma, sem tentar de novo)
+  if (pending) clientMessage(job.officeId, client.id, pending.raw, pending.by, pending.newRequest, false, true);
 }
 
 // ---------- virada de mês: um funcionário novo assume com a passagem de bastão ----------
