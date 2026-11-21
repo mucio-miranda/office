@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, ChevronDown, ClipboardList, Navigation, Plus, Square, Wrench } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, ClipboardList, Copy, Navigation, Plus, Square, Wrench } from 'lucide-react';
 import type { AgentJob } from '@office/shared';
 import { useStore } from '../lib/store';
 import { useDraft } from '../lib/draft';
@@ -133,6 +133,12 @@ export function AgentPanel() {
                 <div key={m.id} className="msg">
                   <div className="who"><span className="avatar" style={{ background: agent.color, width: 18, height: 18, fontSize: 10 }}>{agent.name[0]}</span>{agent.name}</div>
                   <div className="msg-text md" onClick={openPath} dangerouslySetInnerHTML={{ __html: renderMarkdown(m.text) }} />
+                  {/* daily report: a mensagem já vem no formato do WhatsApp */}
+                  {job.prompt.startsWith('# Daily report') && (
+                    <button className="small ghost msg-copy" onClick={() => navigator.clipboard.writeText(m.text).then(() => useStore.getState().notify('Copiado: é só colar no WhatsApp'), () => useStore.getState().notify('Não deu para copiar'))}>
+                      <Copy size={13} /> Copiar para o WhatsApp
+                    </button>
+                  )}
                 </div>
               ),
             )}

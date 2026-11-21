@@ -178,17 +178,36 @@ Monte o daily report de ${d}/${m}/${y}: o que a equipe fez com os funcionários 
 O levantamento abaixo foi feito por script (pedidos, resposta final de cada um, arquivos mexidos, limite consumido). Não abra as
 sessões nem varra pastas: trabalhe só com este material. Se algo estiver cortado, resuma pelo que há.
 
-Formato (Markdown, em português, direto, sem enfeite):
-- **Resumo do dia** em 3 a 5 tópicos.
-- **Por cliente / projeto** (um bloco por cliente; trabalho da agência e do Office/sistema em blocos próprios):
-  feito, entregue (com o caminho do arquivo quando houver), pendente ou aguardando aprovação.
-- **Decisões e regras novas** (o que mudou no jeito de trabalhar, skills alteradas).
-- **Pendências para amanhã**, em lista.
-- **Limite da assinatura**: quanto do limite semanal está usado, quanto subiu no dia e quando renova (o que o levantamento
-  informar). A equipe usa a assinatura do Claude, não a API: não fale em custo nem em dólar.
-Agrupe pedidos repetidos ou correções do mesmo trabalho num tópico só. Não invente o que não está no levantamento.
+Formato: mensagem pronta para colar no WhatsApp (texto puro, em português, direto). Siga este modelo:
 
-Grave o relatório em \`${file}\` (Write) e responda com o mesmo texto.
+*📋 Daily · DD/MM*
+
+*Nome do cliente*
+✅ o que foi concluído ou entregue
+⏳ o que está pendente ou aguardando aprovação (diga de quem depende, se o levantamento disser)
+🚫 o que está bloqueado e o motivo (só se houver)
+
+*Agência / Office*
+✅ …
+
+*📌 Amanhã*
+• próxima ação, uma por linha
+
+📊 Limite semanal do Claude: X% (renova DIA HH:MM)
+
+Regras do formato:
+- Um bloco por cliente ou projeto, com o nome em *negrito de WhatsApp* (um asterisco de cada lado). Trabalho da agência e do
+  Office/sistema em blocos próprios; atividade de fora da agência num bloco *Outros*.
+- Uma linha por item, curta (até uns 90 caracteres), começando pelo emoji. Ordem dentro do bloco: ✅, depois ⏳, depois 🚫.
+- O emoji diz a situação de agora, no fim do dia: o que já foi resolvido é ✅ (mesmo que tenha dado problema no caminho);
+  ⏳ só para o que ainda falta fazer ou aprovar; 🚫 só para o que segue travado e não anda sem outra pessoa ou recurso.
+- Sem títulos com #, sem tabelas, sem **, sem links em Markdown e sem caminho completo de pasta: cite só o nome da peça.
+- Agrupe pedidos repetidos e correções do mesmo trabalho num item só. Não invente o que não está no levantamento.
+- A equipe usa a assinatura do Claude, não a API: nunca fale em custo nem em dólar. Se o levantamento não trouxer o limite,
+  tire a linha do 📊.
+- Nada antes nem depois da mensagem: a resposta inteira é o texto para colar.
+
+Grave a mensagem em \`${file}\` (Write) e responda com o mesmo texto.
 
 ---
 
@@ -208,7 +227,7 @@ export async function startDaily(office: Office, day: string, by: string) {
   if (!agent) throw new Error('Nenhum funcionário neste escritório.');
   const digest = await dailyDigest(office, day);
   if (!digest) throw new Error('Nada registrado nesse dia, nem no Office nem no terminal desta máquina.');
-  const file = path.join(dailyDir(office), `${day}.md`);
+  const file = path.join(dailyDir(office), `${day}.txt`);
   const [y, m, d] = day.split('-');
   return enqueueJob({
     officeId: office.id, agentId: agent.id, demandId: null, clientId: null, workerId: null, cwd: office.rootPath,
