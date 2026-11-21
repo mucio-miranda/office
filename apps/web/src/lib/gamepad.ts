@@ -6,7 +6,7 @@ import { create } from 'zustand';
  * (`pad`); os botões viram ações pelo `startGamepad`. Mexeu no mouse ou no teclado, as dicas somem.
  */
 export type PadKind = 'xbox' | 'playstation';
-export const usePad = create<{ active: boolean; kind: PadKind; name: string; standard: boolean }>(() => ({ active: false, kind: 'xbox', name: '', standard: true }));
+export const usePad = create<{ active: boolean; kind: PadKind; name: string; standard: boolean; mouse: boolean }>(() => ({ active: false, kind: 'xbox', name: '', standard: true, mouse: false }));
 
 /** Analógicos e gatilhos já com zona morta (de -1 a 1; gatilhos de 0 a 1). */
 export const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, run: false, lbSince: 0, rbSince: 0 };
@@ -78,7 +78,8 @@ export function startGamepad(onPress: (b: PadButton) => void, onRelease?: (b: Pa
   // mouse ou teclado de volta: as dicas do controle saem da tela
   let lastMove = 0;
   const off = (e: Event) => {
-    if (!usePad.getState().active) return;
+    // eventos criados pelo próprio controle (modo mouse) não contam como mouse de verdade
+    if (!e.isTrusted || !usePad.getState().active) return;
     if (e.type === 'mousemove') { const now = performance.now(); if (now - lastMove < 60) return; lastMove = now; if (Math.abs((e as MouseEvent).movementX) + Math.abs((e as MouseEvent).movementY) < 6) return; }
     if (e instanceof KeyboardEvent && !e.isTrusted) return;
     usePad.setState({ active: false });
@@ -133,6 +134,45 @@ export function hidePadCursor() {
   padCursor.hover?.classList.remove('pad-hover');
   padCursor.hover = null;
 }
+
+/**
+ * Modo mouse do controle: a seta vale como um mouse de verdade. A aperta (pointerdown), mover com A apertado arrasta
+ * (pointermove) e soltar solta (pointerup + click), no elemento embaixo da seta: serve para o mapa (canvas), o Decorar
+ * (mover peças, salas, desenhar paredes) e qualquer tela.
+ */
+let pressTarget: Element | null = null;
+const fire = (target: Element, type: string, Ctor: typeof PointerEvent | typeof MouseEvent) => {
+  const init = { bubbles: true, cancelable: true, composed: true, clientX: padCursor.x, clientY: padCursor.y, button: 0, buttons: type.endsWith('up') || type === 'click' ? 0 : 1, pointerId: 77, pointerType: 'mouse', isPrimary: true, view: window };
+  target.dispatchEvent(new Ctor(type, init as any));
+};
+export function padPointerDown() {
+  const t = document.elementFromPoint(padCursor.x, padCursor.y);
+  if (!t) return;
+  pressTarget = t;
+  padCursor.shownAt = performance.now();
+  fire(t, 'pointerdown', PointerEvent);
+  fire(t, 'mousedown', MouseEvent);
+  if (t instanceof HTMLElement && t.matches('input, textarea, select, [contenteditable="true"]')) t.focus();
+}
+export function padPointerMove() {
+  const t = pressTarget ?? document.elementFromPoint(padCursor.x, padCursor.y);
+  if (!t) return;
+  fire(t, 'pointermove', PointerEvent);
+  if (pressTarget) fire(t, 'mousemove', MouseEvent);
+}
+export function padPointerUp() {
+  const t = pressTarget ?? document.elementFromPoint(padCursor.x, padCursor.y);
+  const under = document.elementFromPoint(padCursor.x, padCursor.y);
+  pressTarget = null;
+  if (!t) return;
+  fire(t, 'pointerup', PointerEvent);
+  fire(t, 'mouseup', MouseEvent);
+  // clique só se soltou em cima do mesmo lugar (como o mouse)
+  if (under && (under === t || t.contains(under) || under.contains(t))) {
+    fire(under, 'click', MouseEvent);
+  }
+}
+export const padPressing = () => !!pressTarget;
 
 /** A com a seta na tela: clica (ou põe o foco no campo) onde ela está. Devolve se usou a seta. */
 export function clickPadCursor() {

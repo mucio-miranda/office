@@ -11,7 +11,7 @@ import { useDecor } from './decor/state';
 import { seatWorkers, sittable } from './seats';
 import { copaSpots, idleSpot, leisureSpots, releaseIdleSpot, workerPhase, type IdleSpot } from './npc';
 import { holdView, quarterOf, rotateView, tiltView, useView, viewRot } from './view';
-import { HOLD_MS, pad } from '../lib/gamepad';
+import { HOLD_MS, pad, usePad } from '../lib/gamepad';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
@@ -259,7 +259,9 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     }
     // controle: o analógico esquerdo anda (devagar com pouca inclinação, corre no fundo ou com L3)
     let padMag = 1;
-    if (active && !typing() && (pad.lx || pad.ly)) { ix += pad.lx; iz += pad.ly; padMag = Math.max(0.35, Math.min(1, Math.hypot(pad.lx, pad.ly))); }
+    // no modo mouse (e no Decorar) o analógico esquerdo move a seta, não o boneco
+    const padMouse = usePad.getState().mouse || useDecor.getState().editing;
+    if (active && !typing() && !padMouse && (pad.lx || pad.ly)) { ix += pad.lx; iz += pad.ly; padMag = Math.max(0.35, Math.min(1, Math.hypot(pad.lx, pad.ly))); }
     // controle: segurando LB/RB gira livre; RB + analógico direito gira e sobe/desce a câmera; sem RB, o analógico move a câmera
     const nowMs = performance.now();
     const holdL = pad.lbSince && nowMs - pad.lbSince > HOLD_MS, holdR = pad.rbSince && nowMs - pad.rbSince > HOLD_MS;

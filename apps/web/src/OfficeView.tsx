@@ -12,7 +12,7 @@ import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { resetView, rotateView, tiltView } from './office/view';
-import { HOLD_MS, clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
+import { HOLD_MS, padPointerDown, padPointerMove, padPointerUp, padPressing, clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
 import { PadHints } from './lib/PadHints';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { HUMAN_DESKS, ROOMS, BOUNDS, isFixedAgent, roomCenter } from './office/layout';
@@ -105,6 +105,18 @@ export function OfficeView() {
   useEffect(() => startGamepad((b: PadButton) => {
     const { nearby: near, palette: searching, inWorld: world } = padCtx.current;
     const st = useStore.getState();
+    // View/Share: liga e desliga o modo mouse (no Decorar ele já fica ligado)
+    if (b === 'BACK') { const on = !usePad.getState().mouse; usePad.setState({ mouse: on }); if (!on) hidePadCursor(); else movePadCursor(0, 0); return; }
+    const mouse = usePad.getState().mouse || useDecor.getState().editing;
+    if (mouse && !searching) {
+      if (b === 'A') { padPointerDown(); return; }
+      if (b === 'X' && useDecor.getState().editing) { dispatchEvent(new KeyboardEvent('keydown', { key: 'r', bubbles: true })); return; }
+      if (b === 'B') {
+        if (useDecor.getState().editing) { dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); return; }
+        if (!world && !closeTopLayer()) open(null);
+        return;
+      }
+    }
     const dir = ({ UP: 'up', DOWN: 'down', LEFT: 'left', RIGHT: 'right' } as const)[b as 'UP'];
     if (searching) {
       if (b === 'UP' || b === 'DOWN') sendKey(b === 'UP' ? 'ArrowUp' : 'ArrowDown');
@@ -141,6 +153,7 @@ export function OfficeView() {
       if (next) goTo(roomCenter(next));
     }
   }, (b, held) => {
+    if (b === 'A' && padPressing()) { padPointerUp(); return; }
     if ((b === 'LB' || b === 'RB') && held < HOLD_MS && padCtx.current.inWorld && !useDecor.getState().editing) rotateView(b === 'LB' ? -1 : 1);
   }), [open]);
   // analógico direito com um painel aberto: rola a página
@@ -150,12 +163,15 @@ export function OfficeView() {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.05, (t - last) / 1000); last = t;
       const menus = !padCtx.current.inWorld || !!document.querySelector('.modal-bg');
+      const mouse = usePad.getState().mouse || useDecor.getState().editing;
       if (menus && Math.abs(pad.ry) > 0) scrollFocusArea(pad.ry * 1100 * dt);
-      // analógico esquerdo nos menus: a seta do controle (mais rápida quanto mais inclina)
-      if (menus && (pad.lx || pad.ly)) {
+      // analógico esquerdo nos menus (ou no modo mouse, em qualquer lugar): a seta do controle, mais rápida quanto mais inclina
+      if ((menus || mouse) && (pad.lx || pad.ly)) {
         const k = 900 * dt * (0.35 + 0.65 * Math.min(1, Math.hypot(pad.lx, pad.ly)));
         movePadCursor(pad.lx * k, pad.ly * k);
-      } else if (!menus || !padCursorOn()) hidePadCursor();
+        padPointerMove();
+      } else if (mouse && usePad.getState().active) movePadCursor(0, 0);
+      else if (!menus || !padCursorOn()) hidePadCursor();
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -165,15 +181,18 @@ export function OfficeView() {
     if (!usePad.getState().active || s.workers === prev.workers) return;
     if (s.workers.some((w) => w.state === 'aguardando' && prev.workers.find((p) => p.id === w.id)?.state !== 'aguardando')) rumble(220, 0.6);
   }), []);
+  const padMouse = usePad((s) => s.mouse);
   const padItems: { b: PadButton[]; label: string }[] = palette
     ? [{ b: ['UP', 'DOWN'], label: 'Escolher' }, { b: ['A'], label: 'Abrir' }, { b: ['B'], label: 'Fechar' }]
+    : padMouse || decorating
+      ? [{ b: ['LS'], label: 'Mover a seta' }, { b: ['A'], label: 'Clicar (segure para arrastar)' }, ...(decorating ? [{ b: ['X'] as PadButton[], label: 'Girar peça' }] : []), { b: ['B'], label: 'Voltar' }, ...(decorating ? [] : [{ b: ['BACK'] as PadButton[], label: 'Sair do modo mouse' }])]
     : !inWorld
       ? [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['LS'], label: 'Cursor' }, { b: ['A'], label: 'Selecionar' }, { b: ['B'], label: 'Voltar' }, { b: ['RS'], label: 'Rolar' }, { b: ['Y'], label: 'Buscar' }]
       : [
         ...(nearby ? [{ b: ['A'] as PadButton[], label: nearby.label }] : []),
         ...(nearby?.alt ? [{ b: ['X'] as PadButton[], label: nearby.alt.label }] : []),
         { b: ['LS'], label: 'Andar' }, { b: ['RS'], label: 'Câmera' }, { b: ['LB', 'RB'], label: 'Girar (segure: livre)' }, { b: ['RB', 'RS'], label: 'Inclinar' }, { b: ['LT', 'RT'], label: 'Zoom' },
-        { b: ['LEFT', 'RIGHT'], label: 'Salas' }, { b: ['Y'], label: 'Menu' }, { b: ['START'], label: 'Daily' },
+        { b: ['LEFT', 'RIGHT'], label: 'Salas' }, { b: ['Y'], label: 'Menu' }, { b: ['BACK'], label: 'Modo mouse' }, { b: ['START'], label: 'Daily' },
       ];
 
   useEffect(() => {
