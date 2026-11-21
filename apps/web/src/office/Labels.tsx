@@ -3,7 +3,7 @@ import { Vector3 } from 'three';
 import { useStore } from '../lib/store';
 import { useWorldStyle } from '../lib/theme';
 import { isWorkerVisible } from '@office/shared';
-import { DESKS, ROOMS, isFixedAgent } from './layout';
+import { DESKS, FURNITURE, OBJECT_TAG, ROOMS, isFixedAgent } from './layout';
 
 /**
  * Rótulos (nomes, balões de status e nomes das salas) em DOM puro, fora do Canvas.
@@ -61,7 +61,7 @@ export function LabelLayer() {
   for (const r of ROOMS) anchors.set(`room:${r.id}`, () => ({ x: (r.x0 + r.x1) / 2, z: r.z0 + 1.2, y: 0.02 }));
   type Item = {
     id: string; name: string; sub?: string; color: string; status?: string | null; statusClass?: string; emoji?: string;
-    onClick?: () => void; me?: boolean; desk?: boolean; away?: boolean; copa?: boolean; title?: string;
+    onClick?: () => void; me?: boolean; desk?: boolean; away?: boolean; copa?: boolean; title?: string; object?: boolean;
   };
   const items: Item[] = [];
   if (user) items.push({ id: `user:${user.id}`, name: user.name, color: user.color, emoji: emotes[user.id]?.emoji, me: true });
@@ -75,6 +75,15 @@ export function LabelLayer() {
   // quem fica sempre na mesa (o gerente): nome, função e status em cima dele
   for (const a of agents.filter(isFixedAgent)) {
     items.push({ id: `agent:${a.id}`, name: `${a.name} · IA`, sub: a.role.split(/ e |,/)[0], color: a.color, status: AGENT_STATUS[a.status], statusClass: `st-${a.status}`, onClick: () => open('agente', a.id) });
+  }
+  // móveis que abrem alguma coisa: plaquinha com ícone e nome em cima (clicar abre, como chegar perto e apertar E)
+  for (const f of FURNITURE) {
+    if (!f.label || f.kind === 'mesa') continue;
+    const id = `obj:${f.kind}:${f.x}:${f.z}`;
+    const tall = f.kind === 'quadro' || f.kind === 'calendario' || f.kind === 'tv';
+    anchors.set(id, () => ({ x: f.x, z: f.z + (tall ? 0.3 : 0), y: tall ? 2.35 : f.kind === 'moodboard' ? 2.1 : 1.7 }));
+    const tag = OBJECT_TAG[(f.panel ?? (f.kind === 'cafeteira' ? 'cafe' : '')) as keyof typeof OBJECT_TAG] ?? '✨';
+    items.push({ id, name: `${tag} ${f.label}`, color: 'transparent', object: true, onClick: f.panel ? () => open(f.panel!) : undefined });
   }
   // parados na copa: um contador só, em vez de um amontoado de avatares
   const idle = workers.filter((w) => isWorkerVisible(w) && w.state === 'copa');
@@ -103,9 +112,9 @@ export function LabelLayer() {
       ))}
       {items.map((it) => (
         <div key={it.id} ref={(el) => { if (el) elements.set(it.id, el); else elements.delete(it.id); }} style={{ display: 'none' }}>
-          <div className={`nametag ${it.me ? 'me' : ''} ${it.onClick ? 'clickable' : ''} ${it.desk ? 'desk' : ''} ${it.away ? 'away' : ''} ${it.copa ? 'copa' : ''}`} onClick={it.onClick} title={it.title}>
+          <div className={`nametag ${it.me ? 'me' : ''} ${it.onClick ? 'clickable' : ''} ${it.desk ? 'desk' : ''} ${it.away ? 'away' : ''} ${it.copa ? 'copa' : ''} ${it.object ? 'object' : ''}`} onClick={it.onClick} title={it.title}>
             {it.emoji ? <div className="bubble emoji">{it.emoji}</div> : it.status && <div className={`bubble ${it.statusClass}`}>{it.status}</div>}
-            {!it.me && !it.copa && <span className="dot" style={{ background: it.color }} />}
+            {!it.me && !it.copa && !it.object && <span className="dot" style={{ background: it.color }} />}
             {it.name}
             {it.sub && <small>{it.sub}</small>}
           </div>

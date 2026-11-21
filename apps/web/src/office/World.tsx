@@ -19,7 +19,7 @@ import { ClientArchive, cabinets, openArchive } from './Archive';
 import { MoodboardWall } from './MoodboardWall';
 
 const MAQUETE_WALL: Record<string, string> = { branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f', vidro: '#bfe6f5', 'vidro-fume': '#39444c' };
-import { agentSeat, isFixedAgent, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+import { agentSeat, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -195,7 +195,7 @@ const typing = () => {
   return !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable);
 };
 
-export interface Nearby { label: string; action: () => void }
+export interface Nearby { label: string; action: () => void; /** segunda ação (R no teclado, X/□ no controle): o menu da função do funcionário */ alt?: { label: string; action: () => void } }
 
 /** Cores de status (iguais aos tokens CSS) para os anéis no chão. */
 const STATUS_RING: Record<AgentProfile['status'], string | null> = { livre: null, trabalhando: '#2563eb', aguardando: '#f59e0b', erro: '#dc2626' };
@@ -336,11 +336,12 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       const client = st.clients.find((c) => c.id === w.clientId);
       if (d < 2.2 && (!best || d < best.d)) best = { d, key: `w:${w.id}`, n: { label: `Conversar com ${w.name}${client ? ` (${client.name})` : ''}`, action: () => st.open('clientes', w.clientId) } };
     }
-    // quem fica sempre na mesa (o gerente)
+    // funcionários de função, sempre na mesa: conversar ou abrir o menu da função
     for (const a of st.agents.filter(isFixedAgent)) {
       const seat = agentSeat(a);
       const d = Math.hypot(seat.x - player.x, seat.z - player.z);
-      if (d < 2.4 && (!best || d < best.d)) best = { d, key: `a:${a.id}`, n: { label: `Conversar com ${a.name}`, action: () => st.open('agente', a.id) } };
+      const role = roleOf(a);
+      if (d < 2.4 && (!best || d < best.d)) best = { d, key: `a:${a.id}`, n: { label: `Conversar com ${a.name}`, action: () => st.open('agente', a.id), ...(role ? { alt: { label: `Abrir ${role.label}`, action: () => st.open(role.panel) } } : {}) } };
     }
     // outras pessoas do escritório: conversa direta
     for (const pr of Object.values(st.presences)) {

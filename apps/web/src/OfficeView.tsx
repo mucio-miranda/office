@@ -91,6 +91,7 @@ export function OfficeView() {
       const room = ROOMS.find((r) => r.key === k);
       if (room) { goTo(roomCenter(room)); return; }
       if (k === 'e' && nearby && !useDecor.getState().editing) { nearby.action(); return; }
+      if (k === 'r' && nearby?.alt && !useDecor.getState().editing) { nearby.alt.action(); return; }
       if (k === 't' || k === 'enter') { e.preventDefault(); chatRef.current?.focus(); return; }
       if (k === '[') rotateView(-1);
       if (k === ']') rotateView(1);
@@ -126,6 +127,7 @@ export function OfficeView() {
       return;
     }
     if (b === 'A') { near?.action(); return; }
+    if (b === 'X' && near?.alt) { near.alt.action(); return; }
     if (b === 'B' || b === 'X') { recenter(); return; }
     if (b === 'LB') { rotateView(-1); return; }
     if (b === 'RB') { rotateView(1); return; }
@@ -166,6 +168,7 @@ export function OfficeView() {
       ? [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['LS'], label: 'Cursor' }, { b: ['A'], label: 'Selecionar' }, { b: ['B'], label: 'Voltar' }, { b: ['RS'], label: 'Rolar' }, { b: ['Y'], label: 'Buscar' }]
       : [
         ...(nearby ? [{ b: ['A'] as PadButton[], label: nearby.label }] : []),
+        ...(nearby?.alt ? [{ b: ['X'] as PadButton[], label: nearby.alt.label }] : []),
         { b: ['LS'], label: 'Andar' }, { b: ['RS'], label: 'Câmera' }, { b: ['LB', 'RB'], label: 'Girar' }, { b: ['LT', 'RT'], label: 'Zoom' },
         { b: ['LEFT', 'RIGHT'], label: 'Salas' }, { b: ['Y'], label: 'Menu' }, { b: ['START'], label: 'Daily' },
       ];
@@ -206,7 +209,12 @@ export function OfficeView() {
                 {!decorating && <WorldHud />}
                 {!decorating && <MiniMap />}
                 {!decorating && <Chat inputRef={chatRef} />}
-                {nearby && !drone && !touring && !decorating && <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>}
+                {nearby && !drone && !touring && !decorating && (
+                  <div className="prompt-row">
+                    <div className="prompt" onClick={nearby.action}><kbd>E</kbd> {nearby.label}</div>
+                    {nearby.alt && <div className="prompt" onClick={nearby.alt.action}><kbd>R</kbd> {nearby.alt.label}</div>}
+                  </div>
+                )}
                 <DroneOverlay />
                 <Tour />
                 <DecorUI />

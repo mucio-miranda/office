@@ -24,6 +24,8 @@ export const titularOf = (officeId: string, clientId: string) =>
 export function nextName(officeId: string, when = new Date()) {
   const cutoff = new Date(when.getTime() - NAME_COOLDOWN_DAYS * 86_400_000).toISOString();
   const busy = new Set(all<{ name: string }>('SELECT name FROM workers WHERE office_id = ? AND (archived_at IS NULL OR archived_at > ?)', officeId, cutoff).map((w) => w.name));
+  // os funcionários de função ficam sempre no mapa: os dos clientes não repetem o nome deles
+  for (const a of all<{ name: string }>('SELECT name FROM agents WHERE office_id = ?', officeId)) busy.add(a.name);
   const free = WORKER_NAMES.find((n) => !busy.has(n));
   if (free) return free;
   // a lista acabou: o mesmo nome com número

@@ -359,11 +359,25 @@ export const SPAWN: Vec2 = { x: 0, z: 10.5 };
 
 /** Onde o funcionário senta: o lugar dele, a mesa padrão da sala ou, sem nenhum dos dois, o meio da sala. */
 /**
- * Funcionários de IA que ficam sempre na mesa, mesmo sem conversa de cliente: o gerente (daily report, triagem,
- * financeiro) trabalha para o escritório, não para um cliente, então não nasce como funcionário de cliente.
+ * Funcionários de função (gerente, designer, editor de vídeo, copywriter e os contratados a partir deles) ficam sempre na
+ * mesa: são as funções do escritório, não sessões de um cliente. Os funcionários dos clientes andam pelas mesas livres.
  */
-export const FIXED_AGENT_SLUGS = ['gerente'];
-export const isFixedAgent = (a: { slug: string }) => FIXED_AGENT_SLUGS.includes(a.slug);
+export const isFixedAgent = (_a: { slug: string }) => true;
+
+/** Menu de cada função: perto do funcionário, R (ou X/□ no controle) abre o menu dele. */
+export const ROLE_PANEL: Record<string, { panel: PanelId; label: string }> = {
+  gerente: { panel: 'financeiro', label: 'Financeiro' },
+  'editor-de-video': { panel: 'video', label: 'Estúdio de vídeo' },
+  designer: { panel: 'moodboard', label: 'Moodboards' },
+  copywriter: { panel: 'posts', label: 'Posts' },
+};
+/** Função de um funcionário contratado: o modelo de onde ele veio (o slug começa pelo do modelo). */
+export const roleOf = (a: { slug: string }) => ROLE_PANEL[a.slug] ?? Object.entries(ROLE_PANEL).find(([k]) => a.slug.startsWith(`${k}-`))?.[1];
+
+/** Plaquinha dos móveis que abrem alguma coisa (o que é cada um, sem precisar chegar perto). */
+export const OBJECT_TAG: Partial<Record<NonNullable<PanelId> | 'cafe', string>> = {
+  demandas: '📋', calendario: '📅', financeiro: '💰', video: '🎬', moodboard: '🖼️', arquivo: '🗄️', equipe: '👥', atividade: '📰', cafe: '☕',
+};
 
 export const agentSeat = (a: { room: string; seat?: Vec2 | null }): Vec2 => {
   if (a.seat) return a.seat;

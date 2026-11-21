@@ -324,7 +324,7 @@ test('funcionário = sessão do cliente: nasce com o primeiro pedido, tem nome d
   let workers = (await call('GET', `${O}/workers`)).json;
   const titular = workers.find((w: any) => w.clientId === c.id && w.role === 'titular' && !w.archivedAt);
   assert.ok(titular, 'o cliente que já pediu algo tem titular');
-  assert.equal(titular.name, 'Vic', 'primeiro nome da lista');
+  assert.equal(titular.name, 'Luna', 'primeiro nome da lista que não é de um funcionário de função (Vic, Duda, Theo e Rafa ficam no mapa)');
   const jobs = (await call('GET', `${O}/jobs`)).json.filter((j: any) => j.clientId === c.id && j.stage !== 'aprovacao');
   assert.ok(jobs.length && jobs.every((j: any) => j.workerId === titular.id), 'as tarefas do cliente são dele');
   assert.equal(titular.state, 'copa', 'sem trabalho, fica na copa');
@@ -341,7 +341,7 @@ test('funcionário = sessão do cliente: nasce com o primeiro pedido, tem nome d
   const { ensureTitular } = await import('../agents/workers.ts');
   const novo = ensureTitular(titular.officeId, c.id, null);
   assert.notEqual(novo.id, titular.id);
-  assert.equal(novo.name, 'Duda', 'o nome arquivado não volta logo');
+  assert.equal(novo.name, 'Nico', 'o nome arquivado não volta logo');
 });
 
 test('conversa direta: só as duas pessoas leem, a não lida conta para quem recebeu e some ao abrir', async () => {
