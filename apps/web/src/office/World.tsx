@@ -10,7 +10,7 @@ import { DecorLayer } from './decor/DecorLayer';
 import { commit, useDecor } from './decor/state';
 import { seatWorkers, sittable } from './seats';
 import { copaSpots, idleSpot, leisureSpots, releaseIdleSpot, workerPhase, type IdleSpot } from './npc';
-import { holdView, quarterOf, rotateView, tiltView, useView, viewRot } from './view';
+import { busyState, holdView, quarterOf, rotateView, tiltView, useOnlyWorking, useView, viewRot } from './view';
 import { HOLD_MS, pad, usePad } from '../lib/gamepad';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
@@ -689,6 +689,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
   const workers = useStore((s) => s.workers);
   // mesa nova no Decorar: quem estava sem mesa senta nela
   useDecor((s) => s.items);
+  const onlyWorking = useOnlyWorking((s) => s.on);
   // a rotina muda com o tempo (3 h parado: vai para a copa; 12 h: sai do mapa): revê a cada minuto
   const [, setMinute] = useState(0);
   useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60_000); return () => clearInterval(t); }, []);
@@ -866,8 +867,8 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       <LiveScreens />
       <Beacon p={p} />
       <TileCursor />
-      {workerSpots(workers).map(([w, spot]) => <WorkerNPC key={w.id} w={w} spot={spot} p={p} />)}
-      {agents.filter(isFixedAgent).map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
+      {workerSpots(workers).filter(([w]) => !onlyWorking || busyState(w.state)).map(([w, spot]) => <WorkerNPC key={w.id} w={w} spot={spot} p={p} />)}
+      {agents.filter(isFixedAgent).filter((a) => !onlyWorking || busyState(a.status)).map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
       {Object.values(presences).map((pr) => <Remote key={pr.userId} pr={pr} p={p} />)}
       {ready && <Player onNearby={onNearby} p={p} active={active} />}
       <LabelProjector />

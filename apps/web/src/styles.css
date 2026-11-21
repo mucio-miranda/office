@@ -1410,6 +1410,8 @@ label.check input { width: auto; height: auto; }
 .emoji-grid button:hover, .emoji-grid button.on { background: var(--accent); }
 .emoji-custom { margin-top: 8px; }
 .emoji-custom input { flex: 1; min-width: 0; }
+.only-working { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; cursor: var(--cur-hand), pointer; user-select: none; }
+.only-working input { margin: 0; }
 .view-rot { display: inline-flex; gap: 2px; padding: 2px 4px; }
 .view-rot .icon { width: 26px; height: 24px; }
 .pad-hints { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 70; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px;

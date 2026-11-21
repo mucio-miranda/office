@@ -5,6 +5,7 @@ import { useWorldStyle } from '../lib/theme';
 import { isWorkerVisible } from '@office/shared';
 import { DESKS, FURNITURE, OBJECT_TAG, ROOMS, isFixedAgent } from './layout';
 import { workerPhase } from './npc';
+import { busyState, useOnlyWorking } from './view';
 
 /**
  * Rótulos (nomes, balões de status e nomes das salas) em DOM puro, fora do Canvas.
@@ -57,6 +58,7 @@ export function LabelLayer() {
 
   const members = useStore((s) => s.members);
   const agents = useStore((s) => s.agents);
+  const onlyWorking = useOnlyWorking((s) => s.on);
   useStore((s) => s.mapRev);
   // salas: âncora fixa no chão, perto da parede do fundo
   for (const r of ROOMS) anchors.set(`room:${r.id}`, () => ({ x: (r.x0 + r.x1) / 2, z: r.z0 + 1.2, y: 0.02 }));
@@ -70,13 +72,13 @@ export function LabelLayer() {
     items.push({ id: `user:${p.userId}`, name: p.name, color: p.color, emoji: emotes[p.userId]?.emoji, status: PRESENCE_STATUS[p.status], statusClass: 'st-livre' });
   for (const w of workers) {
     const phase = workerPhase(w);
-    if (phase === 'fora') continue;
+    if (phase === 'fora' || (onlyWorking && !busyState(w.state))) continue;
     const st = w.state;
     const client = clients.find((c) => c.id === w.clientId)?.name;
     items.push({ id: `worker:${w.id}`, name: `${w.name} · IA`, sub: phase === 'copa' ? `${client ?? ''} · na copa` : client, color: w.color, status: st === 'copa' ? null : AGENT_STATUS[st], statusClass: `st-${st === 'copa' ? 'livre' : st}`, onClick: () => open('clientes', w.clientId) });
   }
   // quem fica sempre na mesa (o gerente): nome, função e status em cima dele
-  for (const a of agents.filter(isFixedAgent)) {
+  for (const a of agents.filter(isFixedAgent).filter((x) => !onlyWorking || busyState(x.status))) {
     items.push({ id: `agent:${a.id}`, name: `${a.name} · IA`, sub: a.role.split(/ e |,/)[0], color: a.color, status: AGENT_STATUS[a.status], statusClass: `st-${a.status}`, onClick: () => open('agente', a.id) });
   }
   // móveis que abrem alguma coisa: plaquinha com ícone e nome em cima (clicar abre, como chegar perto e apertar E)

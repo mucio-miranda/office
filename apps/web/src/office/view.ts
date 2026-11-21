@@ -27,6 +27,14 @@ const loadElev = () => { const e = read(KEY_ELEV); return e !== null && Number.i
 export const viewRot = { target: loadAngle(), dragging: false, elev: loadElev(), elevTarget: loadElev() };
 
 export const quarterOf = (angle: number) => ((Math.round((angle - DEFAULT_ANGLE) / STEP) % 4) + 4) % 4;
+/** "Só quem está trabalhando": esconde do mapa os funcionários parados (lembrado neste navegador). */
+const KEY_WORKING = 'office.onlyWorking';
+export const useOnlyWorking = create<{ on: boolean; set: (on: boolean) => void }>((set) => ({
+  on: (() => { try { return localStorage.getItem(KEY_WORKING) === '1'; } catch { return false; } })(),
+  set: (on) => { try { localStorage.setItem(KEY_WORKING, on ? '1' : '0'); } catch { /* sem armazenamento */ } set({ on }); },
+}));
+export const busyState = (s: string) => s === 'trabalhando' || s === 'aguardando';
+
 /** Lado mais perto do giro atual (muda quais paredes sobem e quais decorações de parede aparecem). */
 export const useView = create<{ quarter: number }>(() => ({ quarter: quarterOf(loadAngle()) }));
 

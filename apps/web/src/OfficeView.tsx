@@ -11,7 +11,7 @@ import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
-import { resetView, rotateView, tiltView } from './office/view';
+import { resetView, rotateView, tiltView, useOnlyWorking } from './office/view';
 import { HOLD_MS, padPointerDown, padPointerMove, padPointerUp, padPressing, clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
 import { PadHints } from './lib/PadHints';
 import { Tour, startTour, tourSeen } from './office/Tour';
@@ -427,6 +427,16 @@ function TeamList({ onNavigate }: { onNavigate: () => void }) {
   );
 }
 
+/** Caixinha do mapa: mostrar só os funcionários trabalhando ou esperando você. */
+function OnlyWorkingToggle() {
+  const { on, set } = useOnlyWorking();
+  return (
+    <label className="pill only-working" title="Esconde do mapa os funcionários parados (na mesa ou na copa)">
+      <input type="checkbox" checked={on} onChange={(e) => set(e.target.checked)} /> Só quem está trabalhando
+    </label>
+  );
+}
+
 /** Modo drone: visor com cantoneiras enquanto o Espaço está segurado; "Voltar para mim" quando a câmera está solta. */
 function DroneOverlay() {
   const drone = useStore((s) => s.drone);
@@ -460,6 +470,7 @@ function WorldHud() {
     <div className="hud-top">
       <span className="pill"><Circle size={8} fill="currentColor" /> {room ? room.label : 'Área externa'}</span>
       {canDecorate() && <button className="pill decor-btn" onClick={enterDecorate} title="Decorar o escritório (X)"><Paintbrush size={13} /> Decorar</button>}
+      <OnlyWorkingToggle />
       <span className="pill view-rot">
         <button className="icon tiny" onClick={() => rotateView(-1)} title="Girar o escritório (Q) · ou Ctrl + arrastar"><RotateCcw size={13} /></button>
         <button className="icon tiny" onClick={() => rotateView(1)} title="Girar para o outro lado (Shift+Q) · ou Ctrl + arrastar"><RotateCw size={13} /></button>
