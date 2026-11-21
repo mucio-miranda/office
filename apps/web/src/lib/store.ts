@@ -5,7 +5,7 @@ import type {
 } from '@office/shared';
 import { api, getToken, setToken } from './api';
 import { desktop } from './desktop';
-import { setAgentDesks, setCustomRooms, setWallStyles } from '../office/layout';
+import { setAgentDesks, setBaseRooms, setCustomRooms, setWallStyles } from '../office/layout';
 
 export type PanelId = 'pessoa' | 'posts' | 'mes' | 'mesa' | 'moodboard' | 'clientes' | 'demandas' | 'calendario' | 'financeiro' | 'video' | 'agente' | 'equipe' | 'atividade' | 'arquivo' | null;
 
@@ -50,6 +50,8 @@ interface State {
   walls: Record<string, WallType>;
   /** limite da assinatura do Claude (semana e janela de 5 h) */
   limite: ClaudeLimit;
+  /** planta das salas originais (vazio = a de sempre) */
+  baseRooms: { roomId: string; x0: number; z0: number; x1: number; z1: number }[];
   /** Muda quando a planta muda: o mapa remonta. */
   mapRev: number;
   /** Muda quando a checklist do mês ou as peças mudam: o painel Mês busca de novo. */
@@ -87,7 +89,7 @@ interface State {
   logout(): void;
   enterOffice(id: string): Promise<void>;
   leaveOffice(): void;
-  reload(what: 'helpers' | 'workers' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' | 'limite'): Promise<void>;
+  reload(what: 'helpers' | 'workers' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' | 'limite' | 'baseRooms'): Promise<void>;
   loadTools(): Promise<void>;
   /** Liga ou desliga uma ferramenta de um funcionário. */
   toggleAgentTool(agentId: string, toolId: string, on: boolean): Promise<void>;
@@ -106,7 +108,7 @@ let toastTimer: ReturnType<typeof setTimeout> | undefined;
 
 export const useStore = create<State>((set, get) => ({
   user: null, offices: [], office: null, members: [],
-  demands: [], events: [], transactions: [], posts: [], clients: [], agents: [], workers: [], helpers: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, limite: {}, mapRev: 0, monthsRev: 0,
+  demands: [], events: [], transactions: [], posts: [], clients: [], agents: [], workers: [], helpers: [], jobs: [], messages: {}, timelines: [], tools: [], live: [], renders: {}, previews: {}, layout: null, rooms: [], walls: {}, limite: {}, baseRooms: [], mapRev: 0, monthsRev: 0,
   presences: {}, chat: [], emotes: {}, dms: {}, dmUnread: {},
   panel: null, panelArg: null, newDemand: null, teleport: null, myRoom: 'recepcao', toast: null,
   drone: false, droneDragging: false, camDetached: false, tour: null,
@@ -146,7 +148,7 @@ export const useStore = create<State>((set, get) => ({
     try { localStorage.setItem('office.last', id); } catch { /* ok */ }
     set({ office, offices: me.offices, members: info.members, presences: {}, chat: [], messages: {}, dms: {}, dmUnread: {} });
     api<Record<string, number>>(`/api/offices/${office.id}/dm`).then((dmUnread) => set({ dmUnread })).catch(() => {});
-    await Promise.all((['demands', 'events', 'transactions', 'posts', 'clients', 'agents', 'workers', 'helpers', 'jobs', 'timelines', 'live', 'layout', 'rooms', 'walls', 'limite'] as const).map((w) => get().reload(w)));
+    await Promise.all((['demands', 'events', 'transactions', 'posts', 'clients', 'agents', 'workers', 'helpers', 'jobs', 'timelines', 'live', 'layout', 'rooms', 'walls', 'limite', 'baseRooms'] as const).map((w) => get().reload(w)));
     connect(id);
   },
 
@@ -187,6 +189,10 @@ export const useStore = create<State>((set, get) => ({
       set((s) => ({ mapRev: s.mapRev + 1 }));
     }
     if (what === 'walls') setWallStyles(data);
+    if (what === 'baseRooms' && JSON.stringify(data) !== JSON.stringify(get().baseRooms)) {
+      setBaseRooms(data);
+      set((s) => ({ mapRev: s.mapRev + 1 }));
+    }
     if (what === 'agents') setAgentDesks(data);
     set({ [what]: data } as Partial<State>);
   },

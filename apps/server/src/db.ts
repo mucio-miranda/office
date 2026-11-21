@@ -186,6 +186,9 @@ const MIGRATIONS: string[] = [
    ALTER TABLE office_rooms ADD COLUMN z0 REAL;
    ALTER TABLE office_rooms ADD COLUMN x1 REAL;
    ALTER TABLE office_rooms ADD COLUMN z1 REAL;`,
+  // planta: posição e tamanho das salas originais (sem linha = a planta de sempre)
+  `CREATE TABLE base_rooms (office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE, room_id TEXT NOT NULL,
+     x0 REAL NOT NULL, z0 REAL NOT NULL, x1 REAL NOT NULL, z1 REAL NOT NULL, PRIMARY KEY (office_id, room_id));`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

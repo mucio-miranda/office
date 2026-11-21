@@ -1,15 +1,14 @@
 import { create } from 'zustand';
-import { PLAN, planProblem, type Rect, type Vec2, type WallType } from '@office/shared';
+import { PLAN, basePlanProblem, planProblem, type Rect, type Vec2, type WallType } from '@office/shared';
 import { useStore } from '../../lib/store';
 import { api } from '../../lib/api';
-import { ROOMS, customRects, isPieceKey, normalizeWalls, pieceKey } from '../layout';
+import { BASE_ROOM_IDS, ROOMS, customRects, isPieceKey, normalizeWalls, pieceKey, relocate } from '../layout';
 import { commit, useDecor } from './state';
 import { saveWalls } from './walls';
 
 /**
- * Ferramenta Planta do modo Decorar: mover, aumentar e diminuir as salas novas e desenhar sala nova no espaço a
- * leste do prédio. As salas originais ficam onde estão (etapa 2). Ao mover, a decoração, as paredes desenhadas e
- * as mesas de quem senta lá vão junto.
+ * Ferramenta Planta do modo Decorar: mover, aumentar e diminuir as salas (as originais dentro do prédio, as novas a
+ * leste dele) e desenhar sala nova no espaço a leste. Ao mover, a decoração e as mesas de quem senta lá vão junto.
  */
 export type PlanDrag =
   | { mode: 'novo'; start: Vec2; rect: Rect }
@@ -68,9 +67,17 @@ const norm = (a: Vec2, b: Vec2): Rect => ({ x0: Math.min(a.x, b.x), z0: Math.min
 
 export const customRooms = () => useStore.getState().rooms;
 export const nameOf = (id: string) => ROOMS.find((r) => r.id === id)?.label ?? 'A sala';
+export const isBase = (id: string | null) => !!id && BASE_ROOM_IDS.includes(id);
+/** Retângulo atual de qualquer sala (original ou nova). */
+export function rectOf(id: string): Rect | undefined {
+  if (!isBase(id)) return customRects.get(id);
+  const r = ROOMS.find((x) => x.id === id);
+  return r ? { x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1 } : undefined;
+}
 
 /** O problema da planta com essa mudança (null = pode). `id` null é a sala nova. */
 export function problemWith(id: string | null, rect: Rect) {
+  if (isBase(id)) return basePlanProblem(BASE_ROOM_IDS.map((b) => ({ id: b, name: nameOf(b), rect: b === id ? rect : rectOf(b)! })));
   const rooms = customRooms().filter((r) => r.id !== id).map((r) => ({ id: r.id, name: r.name, rect: customRects.get(r.id)! })).filter((r) => r.rect);
   return planProblem([...rooms, { id: id ?? 'nova', name: id ? nameOf(id) : 'A sala nova', rect }]);
 }
@@ -78,8 +85,9 @@ export function problemWith(id: string | null, rect: Rect) {
 /** Sala nova da Planta (ou a de baixo do ponto) e a borda perto dele. */
 export function hitRoom(p: Vec2) {
   const M = 0.8;
-  for (const r of customRooms()) {
-    const a = customRects.get(r.id);
+  // as salas novas primeiro (ficam fora do prédio); depois as originais
+  for (const r of [...customRooms(), ...BASE_ROOM_IDS.map((id) => ({ id }))]) {
+    const a = rectOf(r.id);
     if (!a || p.x < a.x0 - M || p.x > a.x1 + M || p.z < a.z0 - M || p.z > a.z1 + M) continue;
     const edges = { l: Math.abs(p.x - a.x0) < M, r: Math.abs(p.x - a.x1) < M, t: Math.abs(p.z - a.z0) < M, b: Math.abs(p.z - a.z1) < M };
     const inside = p.x > a.x0 && p.x < a.x1 && p.z > a.z0 && p.z < a.z1;
@@ -151,6 +159,7 @@ const inside = (p: Vec2, a: Rect, pad = 0) => p.x >= a.x0 - pad && p.x <= a.x1 +
  * menor encostam na parede), paredes desenhadas e as mesas próprias dos funcionários.
  */
 async function changeRoom(id: string, from: Rect, to: Rect) {
+  if (isBase(id)) return changeBase(id, from, to);
   const st = useStore.getState();
   const base = `/api/offices/${st.office!.id}`;
   await api(`${base}/rooms/${id}`, { method: 'PATCH', body: { rect: to } });
@@ -184,4 +193,29 @@ async function changeRoom(id: string, from: Rect, to: Rect) {
     if (a.seat && inside(a.seat, from)) await api(`${base}/agents/${a.id}`, { method: 'PATCH', body: { seat: shift(a.seat) } }).catch(() => {});
   }
   await Promise.all([st.reload('rooms'), st.reload('agents')]);
+}
+
+/**
+ * Sala original em outro lugar ou tamanho: salva a planta das sete (o servidor confere) e leva junto a decoração de
+ * dentro e as mesas próprias de quem senta lá. Os móveis fixos (quadro, cofre, arquivo…) o próprio mapa reposiciona.
+ */
+async function changeBase(id: string, from: Rect, to: Rect) {
+  const st = useStore.getState();
+  const base = `/api/offices/${st.office!.id}`;
+  const rooms = BASE_ROOM_IDS.map((b) => ({ roomId: b, name: nameOf(b), ...(b === id ? to : rectOf(b)!) }));
+  await api(`${base}/baseRooms`, { method: 'PUT', body: { rooms } });
+  const items = useDecor.getState().items;
+  if (items.some((it) => !it.wall && inside(it, from))) commit(items.map((it) => (!it.wall && inside(it, from) ? { ...it, ...relocate(it, from, to) } : it)));
+  for (const a of st.agents) {
+    if (a.seat && inside(a.seat, from)) await api(`${base}/agents/${a.id}`, { method: 'PATCH', body: { seat: relocate(a.seat, from, to) } }).catch(() => {});
+  }
+  await Promise.all([st.reload('baseRooms'), st.reload('agents')]);
+}
+
+/** Volta as salas originais para a planta de sempre (a decoração que foi junto fica onde está). */
+export async function resetBasePlan() {
+  const st = useStore.getState();
+  await api(`/api/offices/${st.office!.id}/baseRooms`, { method: 'PUT', body: { rooms: [] } });
+  await st.reload('baseRooms');
+  usePlan.setState({ past: [], future: [], sel: null });
 }

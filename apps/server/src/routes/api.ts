@@ -5,7 +5,7 @@ import { createReadStream, existsSync, statSync, readdirSync, readFileSync } fro
 import path from 'node:path';
 import { homedir, networkInterfaces } from 'node:os';
 import { POST_FORMATS, POST_STATUSES, MONTH_STEPS, CHECK_STATES, MONTH_STEP_LABEL,
-  BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, annexRect, planProblem, roomRect, type Rect, PROCESSES, WALL_TYPES, processById, uid,
+  BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, annexRect, basePlanProblem, planProblem, roomRect, type BaseRoomRect, type Rect, PROCESSES, WALL_TYPES, processById, uid,
   type AgentJob, type AgentProfile, type Worker, type DirectMessage, type HelperRequest, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
 } from '@office/shared';
 import { all, db, insert, logActivity, now, one, update } from '../db.ts';
@@ -560,6 +560,31 @@ export async function api(app: FastifyInstance) {
       invalidate(officeId, 'rooms');
       return room;
     });
+    // salas originais na Planta: só o retângulo de cada uma muda (a planta de sempre é a do código)
+    const BASE_IDS = ['recepcao', 'gerencia', 'video', 'design', 'copy', 'reuniao', 'copa'];
+    r.get('/api/offices/:officeId/baseRooms', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      return all<BaseRoomRect>('SELECT room_id, x0, z0, x1, z1 FROM base_rooms WHERE office_id = ?', (req.params as any).officeId);
+    });
+    r.put('/api/offices/:officeId/baseRooms', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const b = body(z.object({ rooms: z.array(z.object({ roomId: z.enum(BASE_IDS as [string, ...string[]]), name: z.string().max(60), x0: z.number(), z0: z.number(), x1: z.number(), z1: z.number() })).max(BASE_IDS.length) }), req, reply);
+      if (!b) return;
+      const { officeId } = req.params as any;
+      // vazio = volta à planta original
+      if (b.rooms.length) {
+        if (b.rooms.length !== BASE_IDS.length || new Set(b.rooms.map((x) => x.roomId)).size !== BASE_IDS.length) return reply.code(400).send({ error: 'Mande as sete salas originais.' });
+        const problem = basePlanProblem(b.rooms.map((x) => ({ id: x.roomId, name: x.name || x.roomId, rect: x })));
+        if (problem) return reply.code(400).send({ error: problem });
+      }
+      db.prepare('DELETE FROM base_rooms WHERE office_id = ?').run(officeId);
+      const ins = db.prepare('INSERT INTO base_rooms (office_id, room_id, x0, z0, x1, z1) VALUES (?, ?, ?, ?, ?, ?)');
+      for (const x of b.rooms) ins.run(officeId, x.roomId, x.x0, x.z0, x.x1, x.z1);
+      logActivity(officeId, `user:${req.user.id}`, b.rooms.length ? 'mudou a planta das salas' : 'voltou a planta original', '');
+      invalidate(officeId, 'baseRooms');
+      return { ok: true };
+    });
+
     r.patch('/api/offices/:officeId/rooms/:id', async (req, reply) => {
       if (!requireOwner(req, reply)) return;
       const { officeId, id } = req.params as { officeId: string; id: string };

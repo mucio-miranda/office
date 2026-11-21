@@ -73,6 +73,28 @@ export function sharedEdge(a: Rect, b: Rect): { vertical: boolean; line: number;
 export const roomsJoin = (a: Rect, b: Rect) => { const e = sharedEdge(a, b); return !!e && e.to - e.from >= PLAN.door + 1; };
 const BUILDING: Rect = { x0: -27, z0: -18, x1: PLAN.x0, z1: 18 };
 /** Confere a planta inteira das salas novas: devolve o problema, em português, ou null se está tudo certo. */
+/**
+ * Salas originais (Recepção, Gerência, Vídeo…): mudam de lugar e de tamanho dentro do contorno do prédio, que fica
+ * igual (as paredes do fundo e da esquerda, com a decoração de parede, não saem do lugar). O que sobra vira área livre.
+ */
+export const FOOTPRINT: Rect = { x0: -27, z0: -18, x1: 27, z1: 18 };
+export interface BaseRoomRect extends Rect { roomId: string }
+export function basePlanProblem(rooms: { id: string; name: string; rect: Rect }[]): string | null {
+  const g = PLAN.grid, f = FOOTPRINT;
+  for (const { name, rect: r } of rooms) {
+    if ([r.x0, r.z0, r.x1, r.z1].some((v) => !Number.isFinite(v) || Math.abs(v / g - Math.round(v / g)) > 1e-6)) return `${name}: medidas fora da grade de meio metro.`;
+    if (r.x0 < f.x0 - 1e-6 || r.z0 < f.z0 - 1e-6 || r.x1 > f.x1 + 1e-6 || r.z1 > f.z1 + 1e-6) return `${name} precisa ficar dentro do prédio.`;
+    if (r.x1 - r.x0 < PLAN.minW || r.z1 - r.z0 < PLAN.minD) return `${name} ficou pequena demais (mínimo de ${PLAN.minW} × ${PLAN.minD} m).`;
+    // precisa de uma borda para dentro do prédio (para a porta), não só paredes de fora
+    const inner = [r.x0 > f.x0 + 1e-6, r.x1 < f.x1 - 1e-6, r.z0 > f.z0 + 1e-6, r.z1 < f.z1 - 1e-6].some(Boolean);
+    if (!inner) return `${name} ocuparia o prédio inteiro.`;
+  }
+  for (let i = 0; i < rooms.length; i++)
+    for (let j = i + 1; j < rooms.length; j++)
+      if (rectsOverlap(rooms[i].rect, rooms[j].rect)) return `${rooms[i].name} e ${rooms[j].name} ficariam uma em cima da outra.`;
+  return null;
+}
+
 export function planProblem(rooms: { id: string; name: string; rect: Rect }[]): string | null {
   const g = PLAN.grid;
   for (const { name, rect: r } of rooms) {
@@ -756,7 +778,7 @@ export type ServerMsg =
   | { t: 'dm'; message: DirectMessage }
   | { t: 'emote'; from: ID; emoji: string }
   /** Algo mudou no banco; a UI recarrega a coleção. */
-  | { t: 'invalidate'; what: 'helpers' | 'workers' | 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' | 'limite' }
+  | { t: 'invalidate'; what: 'helpers' | 'workers' | 'months' | 'posts' | 'demands' | 'events' | 'transactions' | 'clients' | 'agents' | 'jobs' | 'timelines' | 'members' | 'live' | 'layout' | 'rooms' | 'walls' | 'limite' | 'baseRooms' }
   /** Aviso para todo mundo do escritório (ex.: peça esperando aprovação). */
   | { t: 'notice'; text: string; demandId?: ID; agentId?: ID }
   | { t: 'job'; job: AgentJob }

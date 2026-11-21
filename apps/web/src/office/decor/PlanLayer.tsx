@@ -1,8 +1,8 @@
 import { useEffect } from 'react';
-import { PLAN, type Rect } from '@office/shared';
+import { FOOTPRINT, PLAN, type Rect } from '@office/shared';
 import { useStore } from '../../lib/store';
-import { BOUNDS, customRects } from '../layout';
-import { endDrag, hitRoom, moveDrag, startDrag, usePlan } from './plan';
+import { BASE_ROOM_IDS, BOUNDS, customRects } from '../layout';
+import { endDrag, hitRoom, moveDrag, rectOf, startDrag, usePlan } from './plan';
 
 /** Moldura de uma sala no chão (quatro faixas finas). */
 function Frame({ r, color, y = 0.05, t = 0.18 }: { r: Rect; color: string; y?: number; t?: number }) {
@@ -26,10 +26,12 @@ function Frame({ r, color, y = 0.05, t = 0.18 }: { r: Rect; color: string; y?: n
  */
 export function PlanLayer() {
   useStore((s) => s.rooms);
+  useStore((s) => s.baseRooms);
   const drag = usePlan((s) => s.drag);
   const sel = usePlan((s) => s.sel);
   const problem = usePlan((s) => s.problem);
-  const x0 = PLAN.x0, x1 = Math.max(BOUNDS.x1, PLAN.x0) + 30, z0 = PLAN.z0, z1 = PLAN.z1;
+  // o prédio (salas originais) e a área a leste dele (salas novas)
+  const x0 = FOOTPRINT.x0, x1 = Math.max(BOUNDS.x1, PLAN.x0) + 30, z0 = PLAN.z0, z1 = PLAN.z1;
   useEffect(() => {
     const up = () => { if (usePlan.getState().drag) endDrag(); };
     addEventListener('pointerup', up);
@@ -58,6 +60,11 @@ export function PlanLayer() {
       {[...customRects.entries()].map(([id, r]) => (
         drag && drag.mode !== 'novo' && drag.id === id ? null : <Frame key={id} r={r} color={sel === id ? '#ffd23f' : '#4dd2ff'} />
       ))}
+      {/* salas originais: moldura laranja (ficam dentro do prédio) */}
+      {BASE_ROOM_IDS.map((id) => {
+        const r = rectOf(id);
+        return !r || (drag && drag.mode !== 'novo' && drag.id === id) ? null : <Frame key={id} r={r} color={sel === id ? '#ffd23f' : '#ff9f43'} t={0.14} />;
+      })}
       {drag && drag.rect.x1 - drag.rect.x0 >= 1 && drag.rect.z1 - drag.rect.z0 >= 1 && (
         <group>
           <mesh rotation={[-Math.PI / 2, 0, 0]} position={[(drag.rect.x0 + drag.rect.x1) / 2, 0.06, (drag.rect.z0 + drag.rect.z1) / 2]} raycast={() => null}>

@@ -123,3 +123,27 @@ test('planta: sala nova muda de lugar e tamanho, sem passar por cima de outra ne
   assert.equal((await call('PATCH', `${O}/rooms/${east.r.id}`, owner, { rect: { ...bigger, x1: bigger.x1 + 0.3 } })).status, 400, 'fora da grade');
   assert.equal((await call('PATCH', `${O}/rooms/${east.r.id}`, owner, { rect: { ...bigger, z0: -30 } })).status, 400, 'fora da faixa do prédio');
 });
+
+test('planta das salas originais: salva as sete, confere e volta à de sempre', async () => {
+  const base = [
+    { roomId: 'recepcao', name: 'Recepção', x0: -9, z0: -3, x1: 9, z1: 18 },
+    { roomId: 'gerencia', name: 'Gerência', x0: -6, z0: -15, x1: 6, z1: -3 },
+    { roomId: 'video', name: 'Vídeo', x0: 9, z0: -3, x1: 27, z1: 7.5 },
+    { roomId: 'design', name: 'Design', x0: 9, z0: 7.5, x1: 27, z1: 18 },
+    { roomId: 'copy', name: 'Redação', x0: -27, z0: -18, x1: -9, z1: -3 },
+    { roomId: 'reuniao', name: 'Reunião', x0: -27, z0: -3, x1: -9, z1: 18 },
+    { roomId: 'copa', name: 'Copa', x0: 9, z0: -18, x1: 27, z1: -3 },
+  ];
+  assert.equal((await call('PUT', `${O}/baseRooms`, member, { rooms: base })).status, 403, 'só o dono');
+  assert.equal((await call('PUT', `${O}/baseRooms`, owner, { rooms: base })).status, 200);
+  assert.equal((await call('GET', `${O}/baseRooms`, member)).json.length, 7);
+  const over = base.map((r) => (r.roomId === 'gerencia' ? { ...r, x0: -12 } : r));
+  const r1 = await call('PUT', `${O}/baseRooms`, owner, { rooms: over });
+  assert.equal(r1.status, 400);
+  assert.match(r1.json.error, /uma em cima da outra/);
+  const fora = base.map((r) => (r.roomId === 'copa' ? { ...r, x1: 30 } : r));
+  assert.match((await call('PUT', `${O}/baseRooms`, owner, { rooms: fora })).json.error, /dentro do prédio/);
+  assert.equal((await call('PUT', `${O}/baseRooms`, owner, { rooms: base.slice(1) })).status, 400, 'as sete juntas');
+  assert.equal((await call('PUT', `${O}/baseRooms`, owner, { rooms: [] })).status, 200, 'volta à planta original');
+  assert.equal((await call('GET', `${O}/baseRooms`, owner)).json.length, 0);
+});

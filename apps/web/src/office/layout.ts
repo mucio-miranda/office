@@ -142,7 +142,10 @@ export const WALLS: WallSeg[] = [];
 
 function setDefs(defs: WallDef[]) {
   DEFAULT_PIECES.clear(); OPEN_PIECES.clear(); LEGACY_OF.clear(); LEGACY_PIECES.clear(); dividerCache.clear();
-  for (const d of defs) for (const k of defPieces(d)) { DEFAULT_PIECES.add(k); if (d.open) OPEN_PIECES.add(k); }
+  const closed = new Set<string>();
+  for (const d of defs) for (const k of defPieces(d)) { DEFAULT_PIECES.add(k); if (d.open) OPEN_PIECES.add(k); else closed.add(k); }
+  // encostada numa sala fechada (reunião, vídeo), a divisa tem parede mesmo do lado da sala aberta
+  for (const k of closed) OPEN_PIECES.delete(k);
   for (const s of defs.flatMap(legacySegs)) {
     const h = s.w > s.d;
     const lo = h ? s.x - s.w / 2 : s.z - s.d / 2, hi = h ? s.x + s.w / 2 : s.z + s.d / 2;
@@ -417,6 +420,122 @@ export const setDecorSolids = (b: Box[]) => { decorSolids = b; resetGrid(); };
 
 const MAIN = { rooms: [...ROOMS], furniture: [...FURNITURE], desks: [...HUMAN_DESKS], x1: BOUNDS.x1, walls: WALL_DEFS };
 
+// ---------------------------------------------------------------- salas originais na Planta (etapa 2)
+
+/** A planta de sempre, guardada para voltar a ela e para levar os móveis junto quando uma sala muda. */
+const ORIG = {
+  rooms: MAIN.rooms.map((r) => ({ ...r })),
+  furniture: MAIN.furniture.map((f) => ({ ...f })),
+  desks: MAIN.desks.map((d) => ({ ...d })),
+  seats: Object.fromEntries(Object.entries(DESKS).map(([k, v]) => [k, { ...v }])) as Record<string, Vec2>,
+  archive: { x: ARCHIVE.x, z: ARCHIVE.z },
+  moodboard: { x: MOODBOARD.x, z: MOODBOARD.z },
+};
+/** Salas que continuam fechadas por parede quando a planta muda; as outras seguem o andar aberto. */
+const CLOSED_ROOMS = new Set(['reuniao', 'video']);
+export const BASE_ROOM_IDS = ORIG.rooms.map((r) => r.id);
+let lastCustom: CustomRoom[] = [];
+/** A planta das salas originais foi mudada (senão vale a de sempre, idêntica à do código). */
+export let baseCustomized = false;
+
+const rectOf = (r: Box): Rect => ({ x0: r.x0, z0: r.z0, x1: r.x1, z1: r.z1 });
+/** Sala original de onde um ponto é (o que fica na divisa vai para a sala de dentro). */
+export function origRoomOf(p: Vec2) {
+  return ORIG.rooms.find((r) => p.x > r.x0 && p.x < r.x1 && p.z > r.z0 && p.z < r.z1)
+    ?? ORIG.rooms.find((r) => p.x >= r.x0 - 0.3 && p.x <= r.x1 + 0.3 && p.z >= r.z0 - 0.3 && p.z <= r.z1 + 0.3);
+}
+/**
+ * Leva um ponto de uma sala para a mesma sala em outro lugar ou tamanho: o que está encostado numa parede continua
+ * encostado nela (a mesma distância), o resto acompanha a proporção da sala.
+ */
+export function relocate(p: Vec2, from: Rect, to: Rect): Vec2 {
+  const axis = (v: number, a0: number, a1: number, b0: number, b1: number) => {
+    const near = 1.4;
+    if (v - a0 < near) return b0 + (v - a0);
+    if (a1 - v < near) return b1 - (a1 - v);
+    return b0 + ((v - a0) / (a1 - a0)) * (b1 - b0);
+  };
+  const x = axis(p.x, from.x0, from.x1, to.x0, to.x1), z = axis(p.z, from.z0, from.z1, to.z0, to.z1);
+  return { x: Math.min(to.x1 - 0.1, Math.max(to.x0 + 0.1, x)), z: Math.min(to.z1 - 0.1, Math.max(to.z0 + 0.1, z)) };
+}
+
+/** Móveis presos na parede (quadro, calendário, TV): a borda onde ficam ganha parede e a porta sai de perto deles. */
+const WALL_KINDS = new Set<FurnitureKind>(['quadro', 'calendario', 'tv']);
+type Hung = { x: number; z: number; w: number };
+
+/** Paredes da planta mudada: o contorno do prédio (porta da frente na recepção) e as bordas das salas, com portas. */
+function baseWalls(rects: { id: string; rect: Rect }[], hung: Hung[] = []): WallDef[] {
+  const f = { x0: BOUNDS.x0, z0: BOUNDS.z0, x1: MAIN.x1, z1: BOUNDS.z1 };
+  const snap = (v: number) => Math.round(v / PIECE) * PIECE;
+  const rec = rects.find((r) => r.id === 'recepcao')?.rect;
+  const front = rec && Math.abs(rec.z1 - f.z1) < 1e-6 ? snap((rec.x0 + rec.x1) / 2) : 0;
+  const defs: WallDef[] = [
+    { a: { x: f.x0, z: f.z0 }, b: { x: f.x1, z: f.z0 }, doors: [] },
+    { a: { x: f.x0, z: f.z1 }, b: { x: f.x1, z: f.z1 }, doors: [front] },
+    { a: { x: f.x0, z: f.z0 }, b: { x: f.x0, z: f.z1 }, doors: [] },
+    { a: { x: f.x1, z: f.z0 }, b: { x: f.x1, z: f.z1 }, doors: [] },
+  ];
+  for (const { id, rect: a } of rects) {
+    const others = rects.filter((o) => o.id !== id).map((o) => o.rect);
+    const edges: { a: Vec2; b: Vec2; vertical: boolean; line: number; from: number; to: number; outer: boolean }[] = [
+      { a: { x: a.x0, z: a.z0 }, b: { x: a.x1, z: a.z0 }, vertical: false, line: a.z0, from: a.x0, to: a.x1, outer: Math.abs(a.z0 - f.z0) < 1e-6 },
+      { a: { x: a.x0, z: a.z1 }, b: { x: a.x1, z: a.z1 }, vertical: false, line: a.z1, from: a.x0, to: a.x1, outer: Math.abs(a.z1 - f.z1) < 1e-6 },
+      { a: { x: a.x0, z: a.z0 }, b: { x: a.x0, z: a.z1 }, vertical: true, line: a.x0, from: a.z0, to: a.z1, outer: Math.abs(a.x0 - f.x0) < 1e-6 },
+      { a: { x: a.x1, z: a.z0 }, b: { x: a.x1, z: a.z1 }, vertical: true, line: a.x1, from: a.z0, to: a.z1, outer: Math.abs(a.x1 - f.x1) < 1e-6 },
+    ];
+    for (const e of edges) {
+      if (e.outer) continue;
+      // móveis pendurados nesta borda: ela fica com parede, e a porta não cai em cima deles
+      const onEdge = hung.filter((h) => (e.vertical ? Math.abs(h.x - e.line) < 0.6 && h.z > e.from && h.z < e.to : Math.abs(h.z - e.line) < 0.6 && h.x > e.from && h.x < e.to));
+      const clear = (c: number) => onEdge.every((h) => Math.abs((e.vertical ? h.z : h.x) - c) > h.w / 2 + PLAN.door / 2 + 0.2);
+      /** O ponto livre mais perto do meio de um trecho (em passos de meio metro). */
+      const doorIn = (from: number, to: number) => {
+        const mid = snap((from + to) / 2);
+        for (let k = 0; k <= (to - from) / PIECE; k++)
+          for (const c of [mid + k * PIECE, mid - k * PIECE]) if (c - PLAN.door / 2 >= from + 0.5 && c + PLAN.door / 2 <= to - 0.5 && clear(c)) return c;
+        return null;
+      };
+      // porta em cada trecho encostado em outra sala; sem vizinha, no meio da borda (dá para o corredor)
+      const doors = others.flatMap((o) => {
+        const s = sharedEdge(a, o);
+        if (!(s && s.vertical === e.vertical && Math.abs(s.line - e.line) < 1e-6 && s.to - s.from >= PLAN.door + 1)) return [];
+        const c = doorIn(s.from, s.to);
+        return c === null ? [] : [c];
+      });
+      if (!doors.length && e.to - e.from >= PLAN.door + 1) { const c = doorIn(e.from, e.to); if (c !== null) doors.push(c); }
+      defs.push({ a: e.a, b: e.b, doors, open: !CLOSED_ROOMS.has(id) && !onEdge.length });
+    }
+  }
+  return defs;
+}
+
+/**
+ * Planta das salas originais: posição e tamanho próprios de cada uma (vazio = a de sempre). Os móveis, as mesas e o
+ * lugar dos funcionários vão junto; as paredes saem das bordas. Remonta o mapa inteiro (com as salas novas).
+ */
+export function setBaseRooms(list: { roomId: string; x0: number; z0: number; x1: number; z1: number }[]) {
+  const over = new Map(list.map((r) => [r.roomId, rectOf(r)]));
+  baseCustomized = ORIG.rooms.every((r) => over.has(r.id));
+  const target = (id: string) => (baseCustomized ? over.get(id)! : rectOf(ORIG.rooms.find((r) => r.id === id)!));
+  MAIN.rooms = ORIG.rooms.map((r) => ({ ...r, ...target(r.id) }));
+  const move = (p: Vec2): Vec2 => {
+    const o = origRoomOf(p);
+    return o && baseCustomized ? relocate(p, rectOf(o), target(o.id)) : { x: p.x, z: p.z };
+  };
+  Object.assign(ARCHIVE, move(ORIG.archive));
+  Object.assign(MOODBOARD, move(ORIG.moodboard));
+  MAIN.furniture = ORIG.furniture.map((f) => {
+    if (f.kind === 'arquivo') return ARCHIVE;
+    if (f.kind === 'moodboard') return MOODBOARD;
+    return { ...f, ...move(f) };
+  });
+  MAIN.desks = ORIG.desks.map((d) => ({ ...d, ...move(d) }));
+  for (const [k, v] of Object.entries(ORIG.seats)) DESKS[k] = move(v);
+  const hung = MAIN.furniture.filter((f) => WALL_KINDS.has(f.kind)).map((f) => ({ x: f.x, z: f.z, w: f.w ?? 3 }));
+  MAIN.walls = baseCustomized ? baseWalls(MAIN.rooms.map((r) => ({ id: r.id, rect: rectOf(r) })), hung) : WALL_DEFS;
+  setCustomRooms(lastCustom);
+}
+
 let agentDesks: Box[] = [];
 export const wallTypeOf = (key: string): WallType => styleOf(wallStyles, key);
 export const dividerKeys = () => WALLS.filter((w) => isDivider(w.key)).map((w) => w.key);
@@ -450,6 +569,7 @@ export const customRects = new Map<string, Rect>();
  * (no meio do trecho em comum) e mesas para pessoas. Parede encostada sai uma só, com a mesma porta dos dois lados.
  */
 export function setCustomRooms(list: CustomRoom[]) {
+  lastCustom = list;
   const rects = list.map((r) => ({ r, rect: roomRect(r) }));
   customRects.clear();
   for (const { r, rect } of rects) customRects.set(r.id, rect);

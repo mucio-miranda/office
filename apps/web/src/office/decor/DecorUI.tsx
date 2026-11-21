@@ -7,8 +7,8 @@ import { useTheme, useWorldStyle, usePixel } from '../../lib/theme';
 import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
-import { ROOMS, customRects } from '../layout';
-import { redoPlan, undoPlan, usePlan } from './plan';
+import { ROOMS, baseCustomized, customRects } from '../layout';
+import { isBase, rectOf, redoPlan, resetBasePlan, undoPlan, usePlan } from './plan';
 import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, allWalls, applyWall, defaultWall, dividerWall, openOffice, saveWalls, setOpenOffice, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
@@ -240,8 +240,10 @@ function PlanToolButton() {
     if (!on) { useWallTool.getState().setTool(null); useDecor.setState({ placing: null, ghost: null, sel: null }); }
     usePlan.setState({ on: !on, drag: null, problem: null });
   };
-  const rect = drag?.rect ?? (sel ? customRects.get(sel) : undefined);
-  const name = drag && drag.mode !== 'novo' ? rooms.find((r) => r.id === drag.id)?.name : drag ? 'Sala nova' : rooms.find((r) => r.id === sel)?.name;
+  useStore((s) => s.baseRooms);
+  const rect = drag?.rect ?? (sel ? (isBase(sel) ? rectOf(sel) : customRects.get(sel)) : undefined);
+  const labelOf = (id: string) => rooms.find((r) => r.id === id)?.name ?? ROOMS.find((r) => r.id === id)?.label;
+  const name = drag && drag.mode !== 'novo' ? labelOf(drag.id) : drag ? 'Sala nova' : sel ? labelOf(sel) : undefined;
   return (
     <>
       <button className={`ghost small ${on ? 'on' : ''}`} onClick={toggle} title="Mover, aumentar e criar salas">Planta</button>
@@ -249,9 +251,9 @@ function PlanToolButton() {
         <div className="wall-panel">
           <b>Planta</b>
           <p className="muted small" style={{ margin: 0 }}>
-            Na área azul, a leste do prédio: <b>arraste uma sala</b> para mudar de lugar, <b>arraste a borda</b> para aumentar ou
-            diminuir e <b>arraste no vazio</b> para desenhar uma sala nova. A decoração vai junto. A porta aparece sozinha onde a sala
-            encosta no prédio ou em outra sala.
+            <b>Arraste uma sala</b> para mudar de lugar e <b>a borda</b> para aumentar ou diminuir: as originais (moldura laranja)
+            dentro do prédio, as novas (azul) a leste dele. <b>Arraste no vazio a leste</b> para desenhar uma sala nova. Os móveis e a
+            decoração vão junto; as portas aparecem sozinhas onde as salas se encostam. O espaço que sobra no prédio vira área livre.
           </p>
           {rect && <p className="small" style={{ margin: 0 }}><b>{name}</b> · {rect.x1 - rect.x0} × {rect.z1 - rect.z0} m</p>}
           {drag && problem && <p className="small" style={{ margin: 0, color: '#e5484d' }}>{problem}</p>}
@@ -260,7 +262,12 @@ function PlanToolButton() {
             <button className="ghost small" disabled={!canUndoPlan || busy} onClick={undoPlan} title="Desfazer a última mudança da planta (Ctrl Z)"><Undo2 size={14} /> Desfazer</button>
             <button className="ghost small" disabled={!canRedoPlan || busy} onClick={redoPlan} title="Refazer (Ctrl Y)"><Redo2 size={14} /> Refazer</button>
           </div>
-          <p className="muted small" style={{ margin: 0 }}>As salas originais (Gerência, Vídeo, Design…) ainda não mudam. Nome, ícone e remover ficam na aba Equipe.</p>
+          <p className="muted small" style={{ margin: 0 }}>Nome, ícone e remover das salas novas ficam na aba Equipe.</p>
+          {baseCustomized && (
+            <button className="ghost small" disabled={busy} onClick={() => { if (confirm('Voltar as salas originais para a planta de sempre? A decoração que foi junto com elas fica onde está.')) resetBasePlan().catch((e) => useStore.getState().notify((e as Error).message)); }}>
+              Planta original
+            </button>
+          )}
         </div>
       )}
     </>
