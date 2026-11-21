@@ -8,7 +8,7 @@ import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/the
 import { PixelRoom } from './pixel/Room';
 import { DecorLayer } from './decor/DecorLayer';
 import { useDecor } from './decor/state';
-import { seatWorkers } from './seats';
+import { seatWorkers, sittable } from './seats';
 import { quarterOf, rotateView, snapView, useView, viewRot } from './view';
 import { pad } from '../lib/gamepad';
 import { Avatar } from './Avatar';
@@ -32,6 +32,8 @@ export const player = {
   replans: 0,
   /** sentado na própria mesa (andar levanta) */
   seated: false,
+  /** clicou numa mesa ou cadeira: senta quando chegar */
+  sitOnArrive: null as { x: number; z: number; dir: number } | null,
   /** força o envio da posição no próximo quadro (sentar, aparecer na mesa) */
   dirty: false,
 };
@@ -53,6 +55,7 @@ export const cam = {
 
 /** Anda até um ponto contornando paredes e móveis. */
 export function walkTo(p: Vec2) {
+  player.sitOnArrive = null;
   player.path = findPath(player, p);
   player.target = player.path.shift() ?? null;
   player.goal = player.target ? p : null;
@@ -105,6 +108,23 @@ export function goToAgent(a: AgentProfile) {
 }
 
 /** Senta na cadeira de uma mesa, de frente para o monitor. */
+/** Senta onde estiver (mesa de trabalho, cadeira, sofá): de frente para a direção dada. */
+export function sitHere(p: Vec2, dir: number) {
+  player.x = p.x; player.z = p.z; player.dir = dir;
+  stopWalking();
+  player.sitOnArrive = null;
+  player.seated = true;
+  player.dirty = true;
+  recenter();
+}
+
+/** Clique numa mesa ou cadeira: anda até ela e senta ao chegar (perto, senta na hora). */
+export function walkAndSit(p: Vec2, dir: number) {
+  if (Math.hypot(p.x - player.x, p.z - player.z) < 1.4) return sitHere(p, dir);
+  walkTo(p);
+  player.sitOnArrive = { x: p.x, z: p.z, dir };
+}
+
 function sitAt(d: HumanDesk) {
   const seat = deskSeat(d);
   player.x = seat.x; player.z = seat.z; player.dir = Math.PI;
@@ -240,7 +260,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       const dist = Math.hypot(tx, tz);
       if (dist < 0.08) {
         player.target = player.path.shift() ?? null;
-        if (!player.target) stopWalking();
+        if (!player.target) { const s = player.sitOnArrive; stopWalking(); if (s) sitHere(s, s.dir); }
       } else {
         const s = Math.min(dist, speed * dt);
         dx = (tx / dist) * s; dz = (tz / dist) * s;
@@ -248,6 +268,9 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     }
     const moving = !!(dx || dz);
     if (moving) {
+      // levantando de uma cadeira ou sofá (o lugar fica dentro da peça): primeiro sai dela
+      if (player.seated && blocked(player)) { const q = freeSpotNear(player); player.x = q.x; player.z = q.z; }
+      if (ix || iz) player.sitOnArrive = null;
       const next = step(player, dx, dz);
       if (next.x === player.x && next.z === player.z) {
         // esbarrou (outra pessoa mexeu na decoração, ou a rota raspou uma quina): refaz o caminho algumas vezes antes de desistir
@@ -299,10 +322,30 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       if (!owner) best = { d, key: `d:${hd.id}:livre`, n: { label: 'Ficar com esta mesa', action: () => { st.claimDesk(hd.id).then((ok) => ok && sitAt(hd)); } } };
       else if (owner.id === st.user?.id && !player.seated) best = { d, key: `d:${hd.id}:minha`, n: { label: 'Sentar na sua mesa', action: () => sitAt(hd) } };
     }
-    for (const [w, spot] of workerSpots(st.workers)) {
+    const spots = workerSpots(st.workers);
+    // mesas de trabalho e peças de sentar (as ocupadas por funcionários ficam de fora)
+    if (!player.seated) {
+      for (const s of sittable(useDecor.getState().items)) {
+        if (spots.some(([, w]) => Math.hypot(w.x - s.x, w.z - s.z) < 0.4)) continue;
+        const d = Math.hypot(s.x - player.x, s.z - player.z);
+        if (d < 1.6 && (!best || d < best.d)) best = { d, key: `s:${s.key}`, n: { label: 'Sentar', action: () => sitHere(s, s.dir) } };
+      }
+    }
+    for (const [w, spot] of spots) {
       const d = Math.hypot(spot.x - player.x, spot.z - player.z);
       const client = st.clients.find((c) => c.id === w.clientId);
       if (d < 2.2 && (!best || d < best.d)) best = { d, key: `w:${w.id}`, n: { label: `Conversar com ${w.name}${client ? ` (${client.name})` : ''}`, action: () => st.open('clientes', w.clientId) } };
+    }
+    // quem fica sempre na mesa (o gerente)
+    for (const a of st.agents.filter(isFixedAgent)) {
+      const seat = agentSeat(a);
+      const d = Math.hypot(seat.x - player.x, seat.z - player.z);
+      if (d < 2.4 && (!best || d < best.d)) best = { d, key: `a:${a.id}`, n: { label: `Conversar com ${a.name}`, action: () => st.open('agente', a.id) } };
+    }
+    // outras pessoas do escritório: conversa direta
+    for (const pr of Object.values(st.presences)) {
+      const d = Math.hypot(pr.pos.x - player.x, pr.pos.z - player.z);
+      if (d < 2.2 && (!best || d < best.d)) best = { d, key: `p:${pr.userId}`, n: { label: `Conversar com ${pr.name}`, action: () => st.open('pessoa', pr.userId) } };
     }
     if ((best?.key ?? null) !== lastNear.current) {
       lastNear.current = best?.key ?? null;

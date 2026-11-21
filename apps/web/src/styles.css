@@ -1439,3 +1439,24 @@ body:has(.pad-hints) :focus-visible, body:has(.pad-hints) .main :focus { outline
 .drive-confirm { width: min(440px, 100%); padding: 20px; gap: 10px; }
 .drive-confirm h3 { margin: 0; }
 .drive-confirm p { margin: 0; }
+
+/* cursor da casa: seta e mãozinha desenhadas, nas cores do tema (o mapa e os campos de texto mantêm os deles) */
+:root { --cur-arrow: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M4%202.5%20L4%2019%20L8.4%2015%20L11.3%2021.4%20L14.2%2020.1%20L11.4%2013.9%20L17.4%2013.6%20Z'%20fill='%23171717'%20stroke='%23ffffff'%20stroke-width='1.6'%20stroke-linejoin='round'/%3E%3C/svg%3E") 4 2; --cur-hand: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M9.5%203.2c.9%200%201.6.7%201.6%201.6v6.1l.4-.1V9.6c0-.8.7-1.5%201.5-1.5s1.5.7%201.5%201.5v1.2c.2-.7.8-1.1%201.5-1.1.8%200%201.5.7%201.5%201.5v1.1c.2-.6.8-1%201.4-1%20.8%200%201.4.6%201.4%201.4v3.7c0%203.4-2.6%206-6%206h-1.6c-2%200-3.5-.9-4.6-2.5l-3.2-4.6c-.5-.7-.3-1.6.4-2.1.6-.4%201.4-.3%201.9.2l1.2%201.3V4.8c0-.9.7-1.6%201.6-1.6z'%20fill='%23ffffff'%20stroke='%23171717'%20stroke-width='1.4'%20stroke-linejoin='round'/%3E%3C/svg%3E") 9 3; }
+:root:is([data-theme='dark'], [data-theme='ultradark'], [data-theme='glass']) { --cur-arrow: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M4%202.5%20L4%2019%20L8.4%2015%20L11.3%2021.4%20L14.2%2020.1%20L11.4%2013.9%20L17.4%2013.6%20Z'%20fill='%23f4f4f2'%20stroke='%23111111'%20stroke-width='1.6'%20stroke-linejoin='round'/%3E%3C/svg%3E") 4 2; --cur-hand: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M9.5%203.2c.9%200%201.6.7%201.6%201.6v6.1l.4-.1V9.6c0-.8.7-1.5%201.5-1.5s1.5.7%201.5%201.5v1.2c.2-.7.8-1.1%201.5-1.1.8%200%201.5.7%201.5%201.5v1.1c.2-.6.8-1%201.4-1%20.8%200%201.4.6%201.4%201.4v3.7c0%203.4-2.6%206-6%206h-1.6c-2%200-3.5-.9-4.6-2.5l-3.2-4.6c-.5-.7-.3-1.6.4-2.1.6-.4%201.4-.3%201.9.2l1.2%201.3V4.8c0-.9.7-1.6%201.6-1.6z'%20fill='%23f4f4f2'%20stroke='%23111111'%20stroke-width='1.4'%20stroke-linejoin='round'/%3E%3C/svg%3E") 9 3; }
+body { cursor: var(--cur-arrow), default; }
+:is(button, a[href], summary, select, label, [role='button'], [role='tab'], [role='option'], .nav-item, .tl-item, .job-item, .chip):not(:disabled) { cursor: var(--cur-hand), pointer; }
+:is(input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='button']), textarea, [contenteditable='true']) { cursor: text; }
+
+/* barra de rolagem fina e arredondada, discreta até passar o mouse */
+* { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--muted-foreground) 45%, transparent) transparent; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--muted-foreground) 38%, transparent); border-radius: 999px; border: 3px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: color-mix(in srgb, var(--muted-foreground) 70%, transparent); background-clip: padding-box; border: 2px solid transparent; }
+::-webkit-scrollbar-corner { background: transparent; }
+
+/* cursor do controle: aparece nos painéis quando o analógico esquerdo mexe; A clica onde ele está */
+.pad-cursor { position: fixed; z-index: 200; width: 26px; height: 26px; margin: -3px 0 0 -4px; pointer-events: none; background: var(--cur-pad) no-repeat center / contain;
+  filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); transition: opacity .2s; }
+:root { --cur-pad: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M4%202.5%20L4%2019%20L8.4%2015%20L11.3%2021.4%20L14.2%2020.1%20L11.4%2013.9%20L17.4%2013.6%20Z'%20fill='%23ffd23f'%20stroke='%23171717'%20stroke-width='1.6'%20stroke-linejoin='round'/%3E%3C/svg%3E"); }
+.pad-hover { outline: 3px solid #ffd23f !important; outline-offset: 2px; }

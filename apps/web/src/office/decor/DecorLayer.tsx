@@ -6,6 +6,8 @@ import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../../lib/
 import { useStore } from '../../lib/store';
 import { BOUNDS, roomAt, type FurnitureKind } from '../layout';
 import { usePlan } from './plan';
+import { seatsOf } from '../seats';
+import { droneBlocksClick, player, walkAndSit } from '../World';
 import { farSides, useView } from '../view';
 import { FurnitureMesh } from '../Furniture';
 import { OutlineColor } from '../pixel/kit';
@@ -252,7 +254,22 @@ export function DecorLayer() {
 
   useEffect(() => { if (!editing) { setHover(null); setDragging(null); draggingRef.current = null; dragId.current = null; } }, [editing]);
 
-  const handlers = (it: DecorItem) => editing ? {
+  // fora do Decorar: clicar numa mesa de trabalho ou peça de sentar anda até ela e senta
+  const sitHandlers = (it: DecorItem) => {
+    const seats = seatsOf(it);
+    if (!seats.length) return {};
+    return {
+      onDown: (e: any) => {
+        if (e.button !== 0 || droneBlocksClick()) return;
+        e.stopPropagation();
+        const s = [...seats].sort((a, b) => Math.hypot(a.x - player.x, a.z - player.z) - Math.hypot(b.x - player.x, b.z - player.z))[0];
+        walkAndSit(s, s.dir);
+      },
+      onOver: (e: any) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; },
+      onOut: () => { document.body.style.cursor = ''; },
+    };
+  };
+  const handlers = (it: DecorItem) => !editing ? sitHandlers(it) : editing ? {
     onDown: (e: any) => {
       // na Planta, o clique passa para a camada das salas
       if (e.button !== 0 || useDecor.getState().placing || useStore.getState().drone || usePlan.getState().on) return;

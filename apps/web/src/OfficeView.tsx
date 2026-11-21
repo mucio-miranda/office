@@ -12,7 +12,7 @@ import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { rotateView } from './office/view';
-import { closeTopLayer, moveFocus, pad, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
+import { clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
 import { PadHints } from './lib/PadHints';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { HUMAN_DESKS, ROOMS, BOUNDS, isFixedAgent, roomCenter } from './office/layout';
@@ -120,7 +120,8 @@ export function OfficeView() {
       // B: sai do campo; senão fecha a janela de cima; senão volta para o mapa
       if (b === 'B') { if (typingNow) el!.blur(); else if (!closeTopLayer()) open(null); return; }
       if ((b === 'LEFT' || b === 'RIGHT') && stepSelect(b === 'LEFT' ? -1 : 1)) return;
-      if (dir) { moveFocus(dir); return; }
+      if (dir) { hidePadCursor(); moveFocus(dir); return; }
+      if (b === 'A' && clickPadCursor()) return;
       if (b === 'A' && el && el !== document.body && !typingNow) el.click();
       return;
     }
@@ -143,7 +144,13 @@ export function OfficeView() {
     const loop = (t: number) => {
       raf = requestAnimationFrame(loop);
       const dt = Math.min(0.05, (t - last) / 1000); last = t;
-      if (!padCtx.current.inWorld && Math.abs(pad.ry) > 0) scrollFocusArea(pad.ry * 1100 * dt);
+      const menus = !padCtx.current.inWorld || !!document.querySelector('.modal-bg');
+      if (menus && Math.abs(pad.ry) > 0) scrollFocusArea(pad.ry * 1100 * dt);
+      // analógico esquerdo nos menus: a seta do controle (mais rápida quanto mais inclina)
+      if (menus && (pad.lx || pad.ly)) {
+        const k = 900 * dt * (0.35 + 0.65 * Math.min(1, Math.hypot(pad.lx, pad.ly)));
+        movePadCursor(pad.lx * k, pad.ly * k);
+      } else if (!menus || !padCursorOn()) hidePadCursor();
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
@@ -156,7 +163,7 @@ export function OfficeView() {
   const padItems: { b: PadButton[]; label: string }[] = palette
     ? [{ b: ['UP', 'DOWN'], label: 'Escolher' }, { b: ['A'], label: 'Abrir' }, { b: ['B'], label: 'Fechar' }]
     : !inWorld
-      ? [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['A'], label: 'Selecionar' }, { b: ['B'], label: 'Voltar' }, { b: ['RS'], label: 'Rolar' }, { b: ['Y'], label: 'Buscar' }]
+      ? [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['LS'], label: 'Cursor' }, { b: ['A'], label: 'Selecionar' }, { b: ['B'], label: 'Voltar' }, { b: ['RS'], label: 'Rolar' }, { b: ['Y'], label: 'Buscar' }]
       : [
         ...(nearby ? [{ b: ['A'] as PadButton[], label: nearby.label }] : []),
         { b: ['LS'], label: 'Andar' }, { b: ['RS'], label: 'Câmera' }, { b: ['LB', 'RB'], label: 'Girar' }, { b: ['LT', 'RT'], label: 'Zoom' },

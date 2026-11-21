@@ -82,6 +82,57 @@ export function startGamepad(onPress: (b: PadButton) => void) {
   };
 }
 
+/**
+ * Cursor do controle nos painéis: o analógico esquerdo move uma seta na tela (o navegador não deixa mexer no mouse
+ * de verdade). O item clicável embaixo dela fica marcado e o A clica nele. Some depois de uns segundos parado ou
+ * quando o direcional volta a andar pelo foco.
+ */
+const CLICKABLE = 'button, a[href], summary, select, label, input, textarea, [role="button"], [role="tab"], [role="option"], [tabindex]:not([tabindex="-1"])';
+export const padCursor = { x: innerWidth / 2, y: innerHeight / 2, shownAt: 0, el: null as HTMLDivElement | null, hover: null as HTMLElement | null };
+
+const cursorEl = () => {
+  if (!padCursor.el) {
+    padCursor.el = document.createElement('div');
+    padCursor.el.className = 'pad-cursor';
+    padCursor.el.style.opacity = '0';
+    document.body.appendChild(padCursor.el);
+  }
+  return padCursor.el;
+};
+
+/** Move a seta (dx, dy em pixels) e marca o item clicável embaixo dela. */
+export function movePadCursor(dx: number, dy: number) {
+  const el = cursorEl();
+  padCursor.x = Math.min(innerWidth - 4, Math.max(2, padCursor.x + dx));
+  padCursor.y = Math.min(innerHeight - 4, Math.max(2, padCursor.y + dy));
+  padCursor.shownAt = performance.now();
+  el.style.transform = `translate(${padCursor.x}px, ${padCursor.y}px)`;
+  el.style.left = '0'; el.style.top = '0';
+  el.style.opacity = '1';
+  const under = (document.elementFromPoint(padCursor.x, padCursor.y) as HTMLElement | null)?.closest<HTMLElement>(CLICKABLE) ?? null;
+  if (under !== padCursor.hover) { padCursor.hover?.classList.remove('pad-hover'); under?.classList.add('pad-hover'); padCursor.hover = under; }
+}
+
+export const padCursorOn = () => performance.now() - padCursor.shownAt < 4000;
+
+export function hidePadCursor() {
+  padCursor.shownAt = 0;
+  if (padCursor.el) padCursor.el.style.opacity = '0';
+  padCursor.hover?.classList.remove('pad-hover');
+  padCursor.hover = null;
+}
+
+/** A com a seta na tela: clica (ou põe o foco no campo) onde ela está. Devolve se usou a seta. */
+export function clickPadCursor() {
+  if (!padCursorOn()) return false;
+  const target = (document.elementFromPoint(padCursor.x, padCursor.y) as HTMLElement | null)?.closest<HTMLElement>(CLICKABLE);
+  if (!target) return true;
+  if (target instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'submit'].includes(target.type) || target instanceof HTMLTextAreaElement) target.focus();
+  else { target.focus({ preventScroll: true }); target.click(); }
+  padCursor.shownAt = performance.now();
+  return true;
+}
+
 /** Manda uma tecla para o elemento com foco (a busca e as listas já sabem tratar setas, Enter e Esc). */
 export function sendKey(key: string) {
   const el = (document.activeElement as HTMLElement | null) ?? document.body;
