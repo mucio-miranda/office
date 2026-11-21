@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'node:fs';
+import { readFileSync, realpathSync, statSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 /**
@@ -48,4 +48,42 @@ export function squadsOf(rootPath?: string | null): Squad[] {
 export function squadOfClient(squads: Squad[], c: { name: string; folder: string | null }) {
   const keys = [c.folder ? base(c.folder) : '', squadKey(c.name)].filter(Boolean);
   return squads.find((s) => keys.some((k) => s.match.includes(k)))?.id ?? null;
+}
+
+/**
+ * Troca o squad de um cliente direto no squads.json (o mesmo que as skills leem): tira o cliente de onde estava e
+ * põe no squad escolhido (null = sem squad), guardando o que já estava anotado nele (status, observações). Devolve
+ * o caminho do arquivo, para quem chamou registrar no histórico das skills.
+ */
+export function setClientSquad(office: { rootPath: string; driveRoot?: string | null }, c: { name: string; folder: string | null; dir: string | null }, squadId: string | null) {
+  const file = path.join(office.rootPath, '.claude', 'skills', '_global', 'squads.json');
+  const text = readFileSync(file, 'utf8').replace(/^\uFEFF/, '');
+  const raw = JSON.parse(text);
+  if (!Array.isArray(raw.squads)) throw new Error('squads.json sem a lista de squads.');
+  const keys = [c.folder ? base(c.folder) : '', squadKey(c.name)].filter(Boolean);
+  const same = (e: any) => keys.includes(typeof e?.pasta === 'string' ? base(e.pasta) : '') || keys.includes(typeof e?.nome === 'string' ? squadKey(e.nome) : '');
+  let kept: any = null;
+  for (const sq of raw.squads) {
+    if (!Array.isArray(sq.clientes)) continue;
+    const old = sq.clientes.find(same);
+    if (old && !kept) kept = old;
+    sq.clientes = sq.clientes.filter((e: any) => !same(e));
+  }
+  if (squadId) {
+    const target = raw.squads.find((sq: any) => sq.id === squadId);
+    if (!target) throw new Error('Squad não encontrado.');
+    // a pasta vai relativa ao Drive da agência, como as outras (o atalho em Documents\REZZU leva até ela)
+    let pasta: string | null = kept?.pasta ?? null;
+    if (c.dir && office.driveRoot) {
+      let real = c.dir;
+      try { real = realpathSync(c.dir); } catch { /* pasta fora do ar */ }
+      const rel = path.relative(office.driveRoot, real);
+      if (rel && !rel.startsWith('..') && !path.isAbsolute(rel)) pasta = rel.split(path.sep).join('/');
+    }
+    target.clientes = [...(target.clientes ?? []), { ...(kept ?? {}), nome: kept?.nome ?? c.name, pasta }];
+  }
+  const eol = text.includes('\r\n') ? '\r\n' : '\n';
+  writeFileSync(file, `${JSON.stringify(raw, null, 2).replace(/\n/g, eol)}${eol}`, 'utf8');
+  cached = null;
+  return file;
 }

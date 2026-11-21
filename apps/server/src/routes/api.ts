@@ -20,11 +20,11 @@ import { loadTemplates } from '../agents/templates.ts';
 import { authorName, cancelJob, enqueueJob, followUpJob, jobForToken, releaseBrowser, releaseRender, replyToJob, takeBrowser, takeRender } from '../agents/runtime.ts';
 import { approveAndDeliver, deliverApproved, postPieces, postsOf, progress, refreshLinks, savePosts, type PostInput } from '../agents/calendar.ts';
 import { applySkillChange, proposeSkillChange, rejectSkillChange, skillChanges } from '../agents/curator.ts';
-import { importSkills, pushSkills, setRemote, skillsState, startHistory } from '../agents/skillsRepo.ts';
+import { commitAll, importSkills, pushSkills, setRemote, skillsDirOf, skillsState, startHistory } from '../agents/skillsRepo.ts';
 import { detectDirs, mergeDirs, rootProblem } from '../agents/officeSetup.ts';
 import { driveDirs, existingDriveFolders, linkedDriveFolder } from '../clients/drive.ts';
 import { discoverClients } from '../clients/discover.ts';
-import { squadOfClient, squadsOf } from '../clients/squads.ts';
+import { setClientSquad, squadOfClient, squadsOf } from '../clients/squads.ts';
 import { listSkills } from '../agents/skills.ts';
 import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/sessions.ts';
 import { startTurnover, resumeSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, resetConversation, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
@@ -789,6 +789,29 @@ export async function api(app: FastifyInstance) {
         squads: squads.map(({ match: _m, ...s }) => s),
         byClient: Object.fromEntries(clients.map((c) => [c.id, squadOfClient(squads, c)])),
       };
+    });
+
+    // trocar o squad do cliente: grava no squads.json das skills, com registro no histórico (e envio, se houver cópia remota)
+    r.put('/api/offices/:officeId/clients/:id/squad', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ squad: z.string().min(1).nullable() }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      try {
+        const file = setClientSquad(office, { name: c.name, folder: c.folder, dir: clientDir(office, c) }, b.squad);
+        const nome = b.squad ? squadsOf(office.rootPath).find((s) => s.id === b.squad)?.nome ?? b.squad : 'sem squad';
+        try {
+          const dir = skillsDirOf(office);
+          commitAll(dir, `Office: ${c.name} agora em ${nome}`, [path.relative(dir, file)]);
+          if (skillsState(office).remote) { try { pushSkills(office); } catch { /* fica para "Enviar agora" */ } }
+        } catch { /* sem histórico git: o arquivo já mudou */ }
+        logActivity(officeId, `user:${req.user.id}`, 'mudou o squad de', `${c.name} → ${nome}`);
+        invalidate(officeId, 'clients');
+        return { ok: true, squad: b.squad };
+      } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
     });
 
     // pastas de CLIENTES que ainda não são clientes no Office

@@ -236,6 +236,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
                   <button className={c.kind === 'projeto' ? 'on' : ''} title="Projeto da casa: o site, o perfil da agência, uma campanha interna" onClick={() => patch({ kind: 'projeto' })}>Projeto</button>
                 </div>
               </div>
+              <SquadPicker clientId={c.id} />
               <div>
                 <small className="muted">Pasta do cliente</small>
                 <code className="truncate" title={c.folder ?? ''}>{c.folder ?? 'sem pasta'}</code>
@@ -498,6 +499,31 @@ function NewClient({ onClose }: { onClose: (id?: string) => void }) {
 const STATE_LABEL = { trabalhando: 'trabalhando', aguardando: 'precisa de você', copa: 'na copa' } as const;
 
 /** Um funcionário de IA da equipe do cliente: nome, selo IA, papel e onde está. */
+/** Squad do cliente: muda direto no squads.json, que as skills e o Office leem. */
+function SquadPicker({ clientId }: { clientId: string }) {
+  const { office, notify } = useStore();
+  const [data, setData] = useState<{ squads: { id: string; nome: string }[]; byClient: Record<string, string | null> } | null>(null);
+  const load = () => api(`/api/offices/${office!.id}/squads`).then(setData).catch(() => setData(null));
+  useEffect(() => { load(); }, [clientId]); // eslint-disable-line react-hooks/exhaustive-deps
+  if (!data?.squads.length) return null;
+  const cur = data.byClient[clientId] ?? '';
+  return (
+    <div>
+      <small className="muted">Squad</small>
+      <select value={cur} disabled={!canWork(office!.role)} onChange={async (e) => {
+        try {
+          await api(`/api/offices/${office!.id}/clients/${clientId}/squad`, { method: 'PUT', body: { squad: e.target.value || null } });
+          notify(e.target.value ? `Agora no squad ${data.squads.find((s) => s.id === e.target.value)?.nome}` : 'Sem squad');
+          load();
+        } catch (x) { notify((x as Error).message); }
+      }}>
+        <option value="">Sem squad</option>
+        {data.squads.map((s) => <option key={s.id} value={s.id}>{s.nome}</option>)}
+      </select>
+    </div>
+  );
+}
+
 function TeamRow({ w, label, onOpen }: { w: Worker; label: string; onOpen?: () => void }) {
   const { office, notify } = useStore();
   const [editing, setEditing] = useState(false);
