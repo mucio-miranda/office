@@ -77,20 +77,19 @@ const BUILDING: Rect = { x0: -27, z0: -18, x1: PLAN.x0, z1: 18 };
  * igual (as paredes do fundo e da esquerda, com a decoração de parede, não saem do lugar). O que sobra vira área livre.
  */
 export const FOOTPRINT: Rect = { x0: -27, z0: -18, x1: 27, z1: 18 };
-/** Até onde o prédio cresce: para a frente e para a direita (o fundo e a esquerda, com a decoração de parede, ficam). */
-export const GROW = { x1: 70, z1: 40 };
+/** Até onde o prédio cresce, para qualquer lado (a decoração de parede acompanha as paredes do fundo e da esquerda). */
+export const GROW = { x0: -70, z0: -50, x1: 70, z1: 40 };
 export interface BaseRoomRect extends Rect { roomId: string }
-/** O prédio: o contorno original, aumentado até onde as salas originais chegam (só para a frente e para a direita). */
+/** O prédio: o contorno original, aumentado até onde as salas originais chegam (para qualquer lado). */
 export function buildingOf(rooms: Rect[]): Rect {
-  return rooms.reduce((b, r) => ({ ...b, x1: Math.max(b.x1, r.x1), z1: Math.max(b.z1, r.z1) }), { ...FOOTPRINT });
+  return rooms.reduce((b, r) => ({ x0: Math.min(b.x0, r.x0), z0: Math.min(b.z0, r.z0), x1: Math.max(b.x1, r.x1), z1: Math.max(b.z1, r.z1) }), { ...FOOTPRINT });
 }
 /** Confere a planta das salas originais (`annexes` = as salas novas, que ficam fora do prédio). */
 export function basePlanProblem(rooms: { id: string; name: string; rect: Rect }[], annexes: { name: string; rect: Rect }[] = []): string | null {
-  const g = PLAN.grid, f = FOOTPRINT;
+  const g = PLAN.grid;
   for (const { name, rect: r } of rooms) {
     if ([r.x0, r.z0, r.x1, r.z1].some((v) => !Number.isFinite(v) || Math.abs(v / g - Math.round(v / g)) > 1e-6)) return `${name}: medidas fora da grade de meio metro.`;
-    if (r.x0 < f.x0 - 1e-6 || r.z0 < f.z0 - 1e-6) return `${name} não pode passar do fundo nem da esquerda do prédio (é onde fica a decoração de parede). Aumente para a frente ou para a direita.`;
-    if (r.x1 > GROW.x1 + 1e-6 || r.z1 > GROW.z1 + 1e-6) return `${name} passou do limite do terreno.`;
+    if (r.x0 < GROW.x0 - 1e-6 || r.z0 < GROW.z0 - 1e-6 || r.x1 > GROW.x1 + 1e-6 || r.z1 > GROW.z1 + 1e-6) return `${name} passou do limite do terreno.`;
     if (r.x1 - r.x0 < PLAN.minW || r.z1 - r.z0 < PLAN.minD) return `${name} ficou pequena demais (mínimo de ${PLAN.minW} × ${PLAN.minD} m).`;
   }
   for (let i = 0; i < rooms.length; i++)

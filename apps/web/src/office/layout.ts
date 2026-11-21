@@ -521,6 +521,8 @@ export function setBaseRooms(list: { roomId: string; x0: number; z0: number; x1:
   // o prédio cresce para a frente e para a direita até onde as salas originais chegam
   const box = baseCustomized ? buildingOf(MAIN.rooms.map(rectOf)) : { ...FOOTPRINT };
   MAIN.x1 = box.x1;
+  BOUNDS.x0 = box.x0;
+  BOUNDS.z0 = box.z0;
   BOUNDS.z1 = box.z1;
   const move = (p: Vec2): Vec2 => {
     const o = origRoomOf(p);

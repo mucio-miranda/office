@@ -32,7 +32,8 @@ export function PlanLayer() {
   const problem = usePlan((s) => s.problem);
   // o prédio (salas originais) e a área a leste dele (salas novas)
   // inclui a faixa da frente e da direita para onde o prédio pode crescer
-  const x0 = FOOTPRINT.x0, x1 = Math.min(GROW.x1 + 20, Math.max(BOUNDS.x1, PLAN.x0) + 30), z0 = PLAN.z0, z1 = Math.min(GROW.z1, Math.max(BOUNDS.z1, PLAN.z1) + 20);
+  const x0 = Math.max(GROW.x0, Math.min(BOUNDS.x0, FOOTPRINT.x0) - 20), x1 = Math.min(GROW.x1 + 20, Math.max(BOUNDS.x1, PLAN.x0) + 30);
+  const z0 = Math.max(GROW.z0, Math.min(BOUNDS.z0, FOOTPRINT.z0) - 20), z1 = Math.min(GROW.z1, Math.max(BOUNDS.z1, PLAN.z1) + 20);
   useEffect(() => {
     const up = () => { if (usePlan.getState().drag) endDrag(); };
     addEventListener('pointerup', up);

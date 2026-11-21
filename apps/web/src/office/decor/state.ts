@@ -11,6 +11,9 @@ import { resetView } from '../view';
 /** Face de dentro das paredes do fundo, onde encostam os itens de parede. */
 export const BACK_Z = BOUNDS.z0 + 0.08;
 export const LEFT_X = BOUNDS.x0 + 0.08;
+/** Face de dentro das paredes do fundo e da esquerda de agora (o prédio pode crescer: a decoração de parede vai junto). */
+export const backZ = () => BOUNDS.z0 + 0.08;
+export const leftX = () => BOUNDS.x0 + 0.08;
 /** Altura das paredes do fundo (Room). */
 export const WALL_TOP = 2.6;
 
@@ -90,7 +93,8 @@ const FIXED: Box[] = FURNITURE.filter((f) => f.solid).map((f) => {
 });
 /** Itens fixos nas paredes do fundo (quadro de demandas, calendário, TV da reunião) e os encontros com as paredes internas. */
 type WallSpan = { wall: 'fundo' | 'esquerda'; a0: number; a1: number };
-const FIXED_WALL: WallSpan[] = [
+/** Calculado na hora: com a Planta, os móveis de parede mudam de lugar junto com as salas. */
+const fixedWall = (): WallSpan[] => [
   ...FURNITURE.filter((f) => ['quadro', 'calendario', 'tv'].includes(f.kind)).flatMap((f): WallSpan[] => {
     const w = f.w ?? (f.kind === 'calendario' ? 1.1 : 3);
     if (Math.abs(f.z - BOUNDS.z0) < 0.3) return [{ wall: 'fundo', a0: f.x - w / 2, a1: f.x + w / 2 }];
@@ -111,7 +115,7 @@ export function fits(it: DecorItem, items: DecorItem[]) {
     const len = it.wall === 'fundo' ? [BOUNDS.x0, BOUNDS.x1] : [BOUNDS.z0, BOUNDS.z1];
     if (s.a0 < len[0] + 0.1 || s.a1 > len[1] - 0.1 || s.y0 < -0.01 || s.y1 > WALL_TOP + 0.01) return false;
     if (d.cover) return true;
-    if (FIXED_WALL.some((f) => f.wall === it.wall && s.a0 < f.a1 && s.a1 > f.a0)) return false;
+    if (fixedWall().some((f) => f.wall === it.wall && s.a0 < f.a1 && s.a1 > f.a0)) return false;
     return !items.some((o) => {
       const od = DEF[o.kind];
       if (o.id === it.id || !od || od.place !== 'parede' || od.cover || o.wall !== it.wall) return false;

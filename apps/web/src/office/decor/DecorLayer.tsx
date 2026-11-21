@@ -12,7 +12,7 @@ import { farSides, useView } from '../view';
 import { FurnitureMesh } from '../Furniture';
 import { OutlineColor } from '../pixel/kit';
 import { DEF, footprint, type DecorDef } from './catalog';
-import { BACK_Z, LEFT_X, WALL_TOP, fits, placeGhost, useDecor, commit } from './state';
+import { WALL_TOP, backZ, fits, leftX, placeGhost, useDecor, commit } from './state';
 
 const C_HOVER = '#ffe066';
 const C_SEL = '#4dd2ff';
@@ -26,7 +26,7 @@ function placement(it: DecorItem): { pos: [number, number, number]; rotY: number
   const d = DEF[it.kind];
   if (d?.place === 'parede') {
     const y = d.y ?? 1.5;
-    return it.wall === 'esquerda' ? { pos: [LEFT_X, y, it.z], rotY: Math.PI / 2 } : { pos: [it.x, y, BACK_Z], rotY: 0 };
+    return it.wall === 'esquerda' ? { pos: [leftX(), y, it.z], rotY: Math.PI / 2 } : { pos: [it.x, y, backZ()], rotY: 0 };
   }
   return { pos: [it.x, 0, it.z], rotY: (it.rot * Math.PI) / 2 };
 }
@@ -134,8 +134,8 @@ const ray = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 const hit = new THREE.Vector3();
 const FLOOR = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
-const BACK = new THREE.Plane(new THREE.Vector3(0, 0, 1), -BACK_Z);
-const LEFT = new THREE.Plane(new THREE.Vector3(1, 0, 0), -LEFT_X);
+const BACK = new THREE.Plane(new THREE.Vector3(0, 0, 1), 0);
+const LEFT = new THREE.Plane(new THREE.Vector3(1, 0, 0), 0);
 
 /**
  * Decoração do mapa e o modo Decorar: clicar seleciona, arrastar move, a peça do catálogo segue o
@@ -165,6 +165,9 @@ export function DecorLayer() {
     /** Ponto na parede do fundo mais próxima do cursor. */
     const wallPoint = (d: DecorDef) => {
       const opts: { wall: 'fundo' | 'esquerda'; along: number; t: number }[] = [];
+      // as paredes do fundo e da esquerda de agora (a Planta pode ter aumentado o prédio)
+      BACK.constant = -backZ();
+      LEFT.constant = -leftX();
       if (ray.ray.intersectPlane(BACK, hit) && hit.y > -0.2 && hit.y < WALL_TOP + 0.6 && hit.x > BOUNDS.x0 && hit.x < BOUNDS.x1)
         opts.push({ wall: 'fundo', along: hit.x, t: ray.ray.origin.distanceTo(hit) });
       if (ray.ray.intersectPlane(LEFT, hit) && hit.y > -0.2 && hit.y < WALL_TOP + 0.6 && hit.z > BOUNDS.z0 && hit.z < BOUNDS.z1)
@@ -178,7 +181,7 @@ export function DecorLayer() {
       const half = d.size[0] / 2;
       const [lo, hi] = best.wall === 'fundo' ? [BOUNDS.x0, BOUNDS.x1] : [BOUNDS.z0, BOUNDS.z1];
       const along = Math.min(hi - half - 0.1, Math.max(lo + half + 0.1, snap(best.along)));
-      return best.wall === 'fundo' ? { wall: best.wall, x: along, z: BACK_Z } : { wall: best.wall, x: LEFT_X, z: along };
+      return best.wall === 'fundo' ? { wall: best.wall, x: along, z: backZ() } : { wall: best.wall, x: leftX(), z: along };
     };
     /** Prévia na posição do cursor: peça nova (placing) ou a que está sendo arrastada. */
     const preview = (base: DecorItem) => {
