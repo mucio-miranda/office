@@ -71,7 +71,7 @@ export function VideoStudio() {
       </aside>
       {watchJob ? <div className="studio-live"><StudioWatch key={watchJob.id} job={watchJob} /></div>
         : watching ? <div className="studio-live"><LiveMirror s={watching} big /></div>
-        : openId ? <Editor key={openId} id={openId} /> : <div className="studio-empty"><div className="stack" style={{ alignItems: 'center' }}><Clapperboard size={28} /><span>Crie uma timeline ou importe o <code>timeline.json</code> que a Vic deixou na pasta do cliente.</span></div></div>}
+        : openId ? <Editor key={openId} id={openId} /> : <div className="studio-empty"><div className="stack" style={{ alignItems: 'center' }}><Clapperboard size={28} /><span>Crie uma timeline ou importe o <code>timeline.json</code> que {agents.find((a) => a.slug === 'editor-de-video')?.name ?? 'o editor de vídeo'} deixou na pasta do cliente.</span></div></div>}
       {creating && (
         <NewTimeline onClose={() => setCreating(false)}
           onPick={async (dir, name) => {

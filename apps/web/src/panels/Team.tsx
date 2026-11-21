@@ -182,7 +182,8 @@ export function Team() {
   );
 }
 
-const BASES: [string, string][] = [['designer', 'Design (como a Duda)'], ['editor-de-video', 'Vídeo (como o Vic)'], ['copywriter', 'Copy (como o Theo)'], ['gerente', 'Gerência (como o Rafa)']];
+/** Modelos para contratar: o rótulo usa o nome atual de quem tem aquela função (os funcionários podem ser renomeados). */
+const BASES: [string, string][] = [['designer', 'Design'], ['editor-de-video', 'Vídeo'], ['copywriter', 'Copy'], ['gerente', 'Gerência']];
 
 /** Funcionário novo ou existente: nome, cargo, sala, aparência e, nos novos, o modelo de que herda o trabalho. */
 function AgentEditor({ agent, onClose }: { agent: AgentProfile | null; onClose: () => void }) {
@@ -214,7 +215,7 @@ function AgentEditor({ agent, onClose }: { agent: AgentProfile | null; onClose: 
       <label>Cargo<input value={role} maxLength={80} placeholder={agent ? '' : 'Vem do modelo, se ficar em branco'} onChange={(e) => setRole(e.target.value)} /></label>
       {!agent && (
         <label>Trabalha como <span className="muted">(herda as skills e as permissões, e pega os mesmos processos)</span>
-          <select value={base} onChange={(e) => setBase(e.target.value)}>{BASES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}</select>
+          <select value={base} onChange={(e) => setBase(e.target.value)}>{BASES.map(([id, label]) => { const who = agents.find((x) => x.slug === id); return <option key={id} value={id}>{who ? `${label} (como ${who.name})` : label}</option>; })}</select>
         </label>
       )}
       <label>Sala

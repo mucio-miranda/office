@@ -187,7 +187,7 @@ export function listTools(): ToolInfo[] {
 function whisperInfo(): ToolInfo {
   const w = findWhisper();
   return {
-    id: 'whisper', name: 'Whisper', replaces: 'legenda automática do CapCut', kind: 'programa', usedBy: 'Estúdio de vídeo e Vic',
+    id: 'whisper', name: 'Whisper', replaces: 'legenda automática do CapCut', kind: 'programa', usedBy: 'Estúdio de vídeo e editor de vídeo',
     summary: 'Transcrição local (whisper.cpp, modelo large-v3-turbo e Silero VAD): legendas automáticas com tempo por palavra.',
     url: 'https://github.com/ggml-org/whisper.cpp', installed: !!w?.vad, path: w?.bin ?? null,
     version: w ? path.basename(path.dirname(path.dirname(w.bin))).replace(/^v/, '') : null,
