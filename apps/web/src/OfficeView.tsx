@@ -3,7 +3,7 @@ import { MAX_WORKERS, WORKER_IDLE_HOURS, canSeeFinance, isWorkerVisible } from '
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
-  LocateFixed, Navigation, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
+  LocateFixed, Navigation, RotateCcw, RotateCw, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
   Plus, PanelLeftClose, PanelLeftOpen, ListChecks, Download, Send,
 } from 'lucide-react';
@@ -11,6 +11,7 @@ import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
+import { rotateView } from './office/view';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { HUMAN_DESKS, ROOMS, BOUNDS, isFixedAgent, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
@@ -352,6 +353,10 @@ function WorldHud() {
     <div className="hud-top">
       <span className="pill"><Circle size={8} fill="currentColor" /> {room ? room.label : 'Área externa'}</span>
       {canDecorate() && <button className="pill decor-btn" onClick={enterDecorate} title="Decorar o escritório (X)"><Paintbrush size={13} /> Decorar</button>}
+      <span className="pill view-rot">
+        <button className="icon tiny" onClick={() => rotateView(-1)} title="Girar o escritório (Q) · ou Ctrl + arrastar"><RotateCcw size={13} /></button>
+        <button className="icon tiny" onClick={() => rotateView(1)} title="Girar para o outro lado (Shift+Q) · ou Ctrl + arrastar"><RotateCw size={13} /></button>
+      </span>
       <span className="spacer" />
       <span className="pill stats">
         <span title="Pessoas online"><Users size={13} /><b>{Object.keys(presences).length + 1}</b></span>

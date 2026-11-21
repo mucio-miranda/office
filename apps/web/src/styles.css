@@ -1410,6 +1410,8 @@ label.check input { width: auto; height: auto; }
 .emoji-grid button:hover, .emoji-grid button.on { background: var(--accent); }
 .emoji-custom { margin-top: 8px; }
 .emoji-custom input { flex: 1; min-width: 0; }
+.view-rot { display: inline-flex; gap: 2px; padding: 2px 4px; }
+.view-rot .icon { width: 26px; height: 24px; }
 .ctx-high { color: var(--warning, #c98a00); }
 .team-idle { padding: 4px 10px 0; font-size: 11px; }
 

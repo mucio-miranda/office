@@ -6,6 +6,7 @@ import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../../lib/
 import { useStore } from '../../lib/store';
 import { BOUNDS, roomAt, type FurnitureKind } from '../layout';
 import { usePlan } from './plan';
+import { farSides, useView } from '../view';
 import { FurnitureMesh } from '../Furniture';
 import { OutlineColor } from '../pixel/kit';
 import { DEF, footprint, type DecorDef } from './catalog';
@@ -58,8 +59,11 @@ function DecorPiece({ it, outline, onDown, onOver, onOut }: {
   const scene = useScene();
   const pixel = useWorldStyle((s) => s.style) === 'pixel';
   const d = DEF[it.kind];
+  const quarter = useView((s) => s.quarter);
   // o piso de sala é desenhado pelo próprio chão (PixelRoom)
   if (!d || d.place === 'sala') return null;
+  // decoração de parede: só aparece quando a parede dela está do lado de longe (é ali que ela sobe inteira)
+  if (it.wall) { const far = farSides(quarter); if ((it.wall === 'fundo' && !far.z0) || (it.wall === 'esquerda' && !far.x0)) return null; }
   const { pos, rotY } = placement(it);
   return (
     <group position={pos} rotation={[0, rotY, 0]} onPointerDown={onDown} onPointerOver={onOver} onPointerOut={onOut}>

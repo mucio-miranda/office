@@ -4,6 +4,7 @@ import { useStore } from '../../lib/store';
 import { BOUNDS, PIECE, ROOMS, WALL_T, pieceOf, wallRuns } from '../layout';
 import { applyWall, dragKeys, useWallDrag, useWallTool } from '../decor/walls';
 import { PlanLayer } from '../decor/PlanLayer';
+import { farSides, useView } from '../view';
 import { usePlan } from '../decor/plan';
 import { roomFloors, useDecor } from '../decor/state';
 import { FLOOR_MATERIAL_M, GLASS_FLOORS, floorMaterialTexture } from './floors';
@@ -12,8 +13,12 @@ import { PBox, tiled, useFloorTextures, wallFinishTexture, wallpaperTexture } fr
 /** As paredes do fundo (vistas de frente pela câmera) sobem inteiras; as internas ficam baixas. */
 const BACK_H = 2.6;
 const LOW_H = 1.05;
-const isBack = (w: { x: number; z: number; w: number; d: number }) =>
-  Math.abs(w.z - BOUNDS.z0) < 0.2 || Math.abs(w.x - BOUNDS.x0) < 0.2;
+/** Paredes de fora do prédio do lado longe da câmera (depende de para onde o escritório está girado). */
+const isBack = (w: { x: number; z: number; w: number; d: number }, far = farSides()) => {
+  const h = w.w > w.d;
+  return h ? (far.z0 && Math.abs(w.z - BOUNDS.z0) < 0.2) || (far.z1 && Math.abs(w.z - BOUNDS.z1) < 0.2)
+    : (far.x0 && Math.abs(w.x - BOUNDS.x0) < 0.2) || (far.x1 && Math.abs(w.x - BOUNDS.x1) < 0.2);
+};
 /** A laje principal; os anexos têm laje própria, para o vazio entre eles continuar vazio. */
 const MAIN_W = 54, MAIN_D = 36, MAIN_X1 = 27;
 /** Cor do arremate no topo de cada acabamento (a alvenaria usa a madeira da paleta). */
@@ -48,17 +53,18 @@ export function PixelRoom({ p, onWalk, onHover, onLeave }: { p: PixelPalette; on
   const tool = useWallTool((s) => s.tool);
   const mode = useWallTool((s) => s.mode);
   const plan = usePlan((s) => s.on);
+  const quarter = useView((s) => s.quarter);
   // pintar: o clique troca o trecho inteiro (pedaços vizinhos do mesmo acabamento)
   const wallClick = (keys: string[]) => (tool && mode === 'pintar' ? { onClick: (e: any) => { e.stopPropagation(); applyWall(keys, tool); } } : {});
   const walls = useMemo(() => wallRuns(styles).map((w) => {
-    const h = isBack(w) ? BACK_H : LOW_H;
+    const h = isBack(w, farSides(quarter)) ? BACK_H : LOW_H;
     const t = wallpaperTexture(p).clone();
     // 1 repetição por metro de comprimento e a cada 2 m de altura
     t.repeat.set(Math.max(w.w, w.d), h / 2);
     t.needsUpdate = true;
     return { ...w, h, t };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }), [p, styles, mapRev]);
+  }), [p, styles, mapRev, quarter]);
 
   return (
     <group>
@@ -122,7 +128,7 @@ export function PixelRoom({ p, onWalk, onHover, onLeave }: { p: PixelPalette; on
       })}
       {/* rodapé das paredes do fundo */}
       {walls.filter((w) => w.h === BACK_H && w.type === 'alvenaria').map((w, i) => (
-        <PBox key={`r${i}`} p={p} pos={[w.x + (w.w > w.d ? 0 : WALL_T), 0.08, w.z + (w.w > w.d ? WALL_T : 0)]} size={[w.w > w.d ? w.w : 0.04, 0.16, w.w > w.d ? 0.04 : w.d]} color={p.baseboard} outline={false} />
+        <PBox key={`r${i}`} p={p} pos={[w.x + (w.w > w.d ? 0 : Math.abs(w.x - BOUNDS.x1) < 0.2 ? -WALL_T : WALL_T), 0.08, w.z + (w.w > w.d ? (Math.abs(w.z - BOUNDS.z1) < 0.2 ? -WALL_T : WALL_T) : 0)]} size={[w.w > w.d ? w.w : 0.04, 0.16, w.w > w.d ? 0.04 : w.d]} color={p.baseboard} outline={false} />
       ))}
       {tool && mode !== 'pintar' && <WallDrawLayer erase={mode === 'apagar'} />}
       {plan && <PlanLayer />}

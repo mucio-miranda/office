@@ -9,6 +9,7 @@ import { PixelRoom } from './pixel/Room';
 import { DecorLayer } from './decor/DecorLayer';
 import { useDecor } from './decor/state';
 import { seatWorkers } from './seats';
+import { quarterOf, rotateView, snapView, useView, viewRot } from './view';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
@@ -35,7 +36,7 @@ export const player = {
 };
 export const cam = {
   zoom: 38,
-  angle: Math.PI / 4,
+  angle: viewRot.target,
   /** false = câmera solta (modo drone): fica em (tx, tz) em vez de seguir o jogador. */
   follow: true,
   tx: SPAWN.x,
@@ -306,6 +307,9 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     else camTarget.current.lerp(tmp.set(cam.tx, 0, cam.tz), cam.dragging ? 1 : Math.min(1, dt * 10));
     cam.cx = camTarget.current.x;
     cam.cz = camTarget.current.z;
+    if (!viewRot.dragging && Math.abs(viewRot.target - cam.angle) > 1e-4) cam.angle += (viewRot.target - cam.angle) * Math.min(1, dt * 9);
+    const q = quarterOf(cam.angle);
+    if (q !== useView.getState().quarter) useView.setState({ quarter: q });
     const d = 30;
     camera.position.set(camTarget.current.x + Math.cos(cam.angle) * d, d * camHeight(), camTarget.current.z + Math.sin(cam.angle) * d);
     camera.lookAt(camTarget.current);
@@ -561,6 +565,8 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         return;
       }
       if (e.key === 'Escape') recenter();
+      // Q gira o escritório (Shift+Q para o outro lado); no Decorar ele fica no lado de sempre
+      if (e.key.toLowerCase() === 'q' && !e.ctrlKey && !e.metaKey && !e.altKey && !useDecor.getState().editing) { rotateView(e.shiftKey ? 1 : -1); return; }
       keys.add(e.key.toLowerCase());
     };
     const up = (e: KeyboardEvent) => {
@@ -596,8 +602,19 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
     // arrastar: Espaço + botão esquerdo, ou botão direito ou do meio a qualquer momento (o avatar fica parado)
     let last: { x: number; y: number } | null = null;
     let moved = 0;
+    // Ctrl (ou Alt) + arrastar com o botão esquerdo: gira o escritório; ao soltar, encaixa no lado mais perto
+    let spin: { x: number; angle: number } | null = null;
     const pdown = (e: PointerEvent) => {
       if ((e.target as HTMLElement)?.tagName !== 'CANVAS') return;
+      if (e.button === 0 && (e.ctrlKey || e.altKey) && !useDecor.getState().editing) {
+        e.preventDefault();
+        e.stopPropagation();
+        spin = { x: e.clientX, angle: cam.angle };
+        viewRot.dragging = true;
+        cam.dragging = true;
+        document.body.style.cursor = 'grabbing';
+        return;
+      }
       if (!(e.button === 1 || e.button === 2 || (e.button === 0 && useStore.getState().drone))) return;
       e.preventDefault();
       last = { x: e.clientX, y: e.clientY };
@@ -606,6 +623,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       useStore.setState({ droneDragging: true });
     };
     const pmove = (e: PointerEvent) => {
+      if (spin) { cam.angle = spin.angle + (e.clientX - spin.x) * 0.008; return; }
       if (!last) return;
       const dx = e.clientX - last.x, dy = e.clientY - last.y;
       last = { x: e.clientX, y: e.clientY };
@@ -613,6 +631,15 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       panBy(dx, dy);
     };
     const pup = () => {
+      if (spin) {
+        spin = null;
+        viewRot.dragging = false;
+        snapView(cam.angle);
+        document.body.style.cursor = '';
+        cam.justDragged = true;
+        setTimeout(() => { cam.dragging = false; cam.justDragged = false; }, 0);
+        return;
+      }
       if (!last) return;
       last = null;
       cam.dragging = false;

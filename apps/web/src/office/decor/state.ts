@@ -6,6 +6,7 @@ import {
   BOUNDS, DESKS, DOOR_ZONES, FURNITURE, FURN_BOX, HUMAN_DESKS, SPAWN, WALL_BOXES, deskSeat, roomAt, setDecorSolids, type Box,
 } from '../layout';
 import { DEF, footprint, type DecorDef } from './catalog';
+import { resetView } from '../view';
 
 /** Face de dentro das paredes do fundo, onde encostam os itens de parede. */
 export const BACK_Z = BOUNDS.z0 + 0.08;
@@ -247,6 +248,8 @@ export function setEditing(on: boolean) {
   if (on && !canDecorate()) return useStore.getState().notify('Convidados não mudam a decoração.');
   useDecor.setState({ editing: on, sel: null, placing: null, ghost: null });
   if (on) useStore.setState({ panel: null, panelArg: null });
+  // o Decorar trabalha no lado de sempre: a decoração de parede vai no fundo e na esquerda do prédio
+  if (on) resetView();
 }
 
 export const selected = () => {
