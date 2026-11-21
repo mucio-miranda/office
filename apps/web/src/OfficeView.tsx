@@ -167,7 +167,9 @@ export function OfficeView() {
       if (menus && Math.abs(pad.ry) > 0) scrollFocusArea(pad.ry * 1100 * dt);
       // analógico esquerdo nos menus (ou no modo mouse, em qualquer lugar): a seta do controle, mais rápida quanto mais inclina
       if ((menus || mouse) && (pad.lx || pad.ly)) {
-        const k = 900 * dt * (0.35 + 0.65 * Math.min(1, Math.hypot(pad.lx, pad.ly)));
+        // curva de aceleração: pouca inclinação anda devagar (precisão), no fundo vai rápido; LT segurado deixa ainda mais lento
+        const mag = Math.min(1, Math.hypot(pad.lx, pad.ly));
+        const k = 560 * dt * (0.12 + 0.88 * mag * mag) * (pad.lt > 0.3 ? 0.35 : 1);
         movePadCursor(pad.lx * k, pad.ly * k);
         padPointerMove();
       } else if (mouse && usePad.getState().active) movePadCursor(0, 0);
