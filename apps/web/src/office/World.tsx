@@ -9,9 +9,9 @@ import { PixelRoom } from './pixel/Room';
 import { DecorLayer } from './decor/DecorLayer';
 import { useDecor } from './decor/state';
 import { seatWorkers, sittable } from './seats';
-import { copaSpot, copaSpots, releaseCopaSpot, workerPhase } from './npc';
+import { copaSpots, idleSpot, leisureSpots, releaseIdleSpot, workerPhase, type IdleSpot } from './npc';
 import { holdView, quarterOf, rotateView, tiltView, useView, viewRot } from './view';
-import { pad } from '../lib/gamepad';
+import { HOLD_MS, pad } from '../lib/gamepad';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
@@ -224,6 +224,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
   const lastSent = useRef(0);
   const lastRoom = useRef<string | null>('recepcao');
   const lastNear = useRef<string | null>(null);
+  const padSpinning = useRef(false);
   const camTarget = useRef(new THREE.Vector3(player.x, 0, player.z));
   const tmp = useMemo(() => new THREE.Vector3(), []);
 
@@ -259,7 +260,23 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     // controle: o analógico esquerdo anda (devagar com pouca inclinação, corre no fundo ou com L3)
     let padMag = 1;
     if (active && !typing() && (pad.lx || pad.ly)) { ix += pad.lx; iz += pad.ly; padMag = Math.max(0.35, Math.min(1, Math.hypot(pad.lx, pad.ly))); }
-    if (active && (pad.rx || pad.ry)) panBy(-pad.rx * 900 * dt, -pad.ry * 900 * dt);
+    // controle: segurando LB/RB gira livre; RB + analógico direito gira e sobe/desce a câmera; sem RB, o analógico move a câmera
+    const nowMs = performance.now();
+    const holdL = pad.lbSince && nowMs - pad.lbSince > HOLD_MS, holdR = pad.rbSince && nowMs - pad.rbSince > HOLD_MS;
+    if (active && (holdL || holdR || (pad.rbSince && (pad.rx || pad.ry)))) {
+      viewRot.dragging = true;
+      if (holdL && !pad.rbSince) cam.angle -= 1.6 * dt;
+      if (holdR && !(pad.rx || pad.ry)) cam.angle += 1.6 * dt;
+      if (pad.rbSince && (pad.rx || pad.ry)) {
+        cam.angle += pad.rx * 2 * dt;
+        viewRot.elevTarget = Math.min(2.6, Math.max(0.45, viewRot.elevTarget * Math.exp(-pad.ry * 1.4 * dt)));
+        viewRot.elev = viewRot.elevTarget;
+      }
+      padSpinning.current = true;
+    } else {
+      if (padSpinning.current) { padSpinning.current = false; viewRot.dragging = false; holdView(cam.angle); tiltView(1); }
+      if (active && (pad.rx || pad.ry)) panBy(-pad.rx * 900 * dt, -pad.ry * 900 * dt);
+    }
     if (active && (pad.lt || pad.rt)) cam.zoom = Math.min(110, Math.max(9, cam.zoom * Math.exp((pad.rt - pad.lt) * dt * 1.8)));
     const speed = 5.2 * (keys.has('shift') || pad.run ? 1.8 : 1) * padMag;
     let dx = 0, dz = 0;
@@ -422,7 +439,9 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
  * Funcionários no mapa: só quem está trabalhando ou esperando você, na sala do trabalho. Os parados não andam pela copa
  * (viravam um amontoado): aparecem num contador só, em cima da mesa da copa, e na Equipe.
  */
-export type WorkerSpot = Vec2 & { dir: number; seated: boolean; copa: boolean };
+export type WorkerSpot = Vec2 & { dir: number; seated: boolean; copa: boolean; play?: boolean };
+/** Lugares para passar o tempo (objetos de qualquer sala e a copa), com quem está nas mesas de trabalho fora. */
+const idleSpots = (): IdleSpot[] => [...leisureSpots(useDecor.getState().items), ...copaSpots()];
 export function workerSpots(workers: Worker[]) {
   const now = Date.now();
   const atDesk = workers.filter((w) => workerPhase(w, now) === 'mesa');
@@ -438,12 +457,12 @@ export function workerSpots(workers: Worker[]) {
       : { ...workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1)), dir: Math.PI, seated: false, copa: false };
     return [w, spot] as const;
   });
-  // na copa: cada um no seu canto (os pontos são espaçados e nunca repetem)
-  const spots = copaSpots();
-  for (const w of workers) if (workerPhase(w, now) !== 'copa') releaseCopaSpot(w.id);
+  // passando o tempo: cada um no seu lugar (jogos, sofás, café ou um canto da copa), nunca dois no mesmo
+  const spots = idleSpots();
+  for (const w of workers) if (workerPhase(w, now) !== 'copa') releaseIdleSpot(w.id);
   const copa = inCopa.flatMap((w) => {
-    const p = copaSpot(w.id, spots);
-    return p ? [[w, { ...p, dir: Math.PI / 4, seated: false, copa: true } as WorkerSpot] as const] : [];
+    const p = idleSpot(w.id, spots);
+    return p ? [[w, { x: p.x, z: p.z, dir: p.dir, seated: p.seated, play: p.play, copa: true } as WorkerSpot] as const] : [];
   });
   return [...desk, ...copa];
 }
@@ -476,7 +495,7 @@ function WorkerNPC({ w, spot, p }: { w: Worker; spot: WorkerSpot; p: ScenePalett
       const dx = s.target.x - s.x, dz = s.target.z - s.z, d = Math.hypot(dx, dz);
       if (d < 0.06) {
         s.target = s.path.shift() ?? null;
-        if (!s.target) { s.moving = false; s.x = s.goal.x; s.z = s.goal.z; s.seated = s.goal.seated; if (s.goal.seated) s.dir = s.goal.dir; }
+        if (!s.target) { s.moving = false; s.x = s.goal.x; s.z = s.goal.z; s.seated = s.goal.seated; s.dir = s.goal.dir; }
       } else {
         const v = Math.min(d, 2.3 * dt);
         s.x += (dx / d) * v; s.z += (dz / d) * v;
@@ -484,14 +503,14 @@ function WorkerNPC({ w, spot, p }: { w: Worker; spot: WorkerSpot; p: ScenePalett
         s.moving = true;
       }
     } else if (s.goal.copa && performance.now() > s.next) {
-      // na copa: de vez em quando, outro canto livre
-      s.next = performance.now() + 15000 + Math.random() * 25000;
-      const to = copaSpot(w.id, copaSpots(), true);
-      if (to) { s.goal = { ...to, dir: s.dir, seated: false, copa: true }; goTo(to); }
+      // passando o tempo: depois de um tempo, outra atividade (jogo, sofá, café, canto da copa)
+      s.next = performance.now() + 25000 + Math.random() * 45000;
+      const to = idleSpot(w.id, idleSpots(), true);
+      if (to) { s.goal = { x: to.x, z: to.z, dir: to.dir, seated: to.seated, play: to.play, copa: true }; goTo(to); }
     }
   });
   return (
-    <Avatar anchorId={`worker:${w.id}`} seated={st.current.seated} typing={w.state === 'trabalhando'} color={w.color} p={p}
+    <Avatar anchorId={`worker:${w.id}`} seated={st.current.seated} typing={w.state === 'trabalhando' || !!spot.play} color={w.color} p={p}
       ring={WORKER_RING[w.state]} pulse={w.state === 'aguardando'} getState={() => st.current} onClick={() => { if (!droneBlocksClick()) open('clientes', w.clientId); }} />
   );
 }

@@ -12,7 +12,7 @@ import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { resetView, rotateView, tiltView } from './office/view';
-import { clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
+import { HOLD_MS, clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
 import { PadHints } from './lib/PadHints';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { HUMAN_DESKS, ROOMS, BOUNDS, isFixedAgent, roomCenter } from './office/layout';
@@ -130,8 +130,8 @@ export function OfficeView() {
     if (b === 'X' && near?.alt) { near.alt.action(); return; }
     if (b === 'B' || b === 'X') { recenter(); return; }
     if (b === 'RS') { resetView(); return; }
-    if (b === 'LB') { rotateView(-1); return; }
-    if (b === 'RB') { rotateView(1); return; }
+    // LB/RB: o giro de 90° sai no soltar, se foi um toque (segurando, gira livre: ver World)
+    if (b === 'LB' || b === 'RB') return;
     if (b === 'UP') { goToMyDesk(); return; }
     if (b === 'LEFT' || b === 'RIGHT') {
       // de sala em sala, na ordem das teclas de atalho
@@ -140,6 +140,8 @@ export function OfficeView() {
       const next = list[((here < 0 ? 0 : here + (b === 'RIGHT' ? 1 : -1)) + list.length) % list.length];
       if (next) goTo(roomCenter(next));
     }
+  }, (b, held) => {
+    if ((b === 'LB' || b === 'RB') && held < HOLD_MS && padCtx.current.inWorld && !useDecor.getState().editing) rotateView(b === 'LB' ? -1 : 1);
   }), [open]);
   // analógico direito com um painel aberto: rola a página
   useEffect(() => {
@@ -170,7 +172,7 @@ export function OfficeView() {
       : [
         ...(nearby ? [{ b: ['A'] as PadButton[], label: nearby.label }] : []),
         ...(nearby?.alt ? [{ b: ['X'] as PadButton[], label: nearby.alt.label }] : []),
-        { b: ['LS'], label: 'Andar' }, { b: ['RS'], label: 'Câmera' }, { b: ['LB', 'RB'], label: 'Girar' }, { b: ['LT', 'RT'], label: 'Zoom' },
+        { b: ['LS'], label: 'Andar' }, { b: ['RS'], label: 'Câmera' }, { b: ['LB', 'RB'], label: 'Girar (segure: livre)' }, { b: ['RB', 'RS'], label: 'Inclinar' }, { b: ['LT', 'RT'], label: 'Zoom' },
         { b: ['LEFT', 'RIGHT'], label: 'Salas' }, { b: ['Y'], label: 'Menu' }, { b: ['START'], label: 'Daily' },
       ];
 

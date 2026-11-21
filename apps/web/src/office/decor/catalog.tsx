@@ -52,6 +52,11 @@ export interface DecorDef {
    * outro lado da mesa, de costas para o fundo. Sem isso, a peça é só decoração.
    */
   seats?: { x: number; z: number; back?: boolean }[];
+  /**
+   * Onde os funcionários parados ficam usando a peça (posição com a peça sem girar): `seat` senta, `play` mexe as mãos
+   * (jogando), `face` é para onde olham (em relação à peça; sem ele, olham para o meio dela).
+   */
+  spots?: { x: number; z: number; seat?: boolean; play?: boolean; face?: number }[];
   render: (p: PixelPalette, color: string | undefined) => ReactNode;
 }
 
@@ -484,6 +489,49 @@ export const CATALOG: DecorDef[] = [
     ),
   },
   {
+    kind: 'tv-cinema', name: 'TV grande com rack', cat: 'lazer', size: [2.8, 0.6], h: 2, place: 'chao', colors: ['#2b2b30', '#b9824e', '#f4f4f2'],
+    render: (p, c = '#2b2b30') => (
+      <group>
+        <PBox p={p} pos={[0, 0.25, 0]} size={[2.8, 0.5, 0.55]} color={c} />
+        <PBox p={p} pos={[-0.7, 0.25, 0.28]} size={[1.1, 0.36, 0.02]} color={shade(c, 0.8)} outline={false} />
+        <PBox p={p} pos={[0.7, 0.25, 0.28]} size={[1.1, 0.36, 0.02]} color={shade(c, 0.8)} outline={false} />
+        <PBox p={p} pos={[0, 0.56, -0.05]} size={[0.5, 0.06, 0.25]} color="#1c1f26" />
+        <PBox p={p} pos={[0, 0.72, -0.08]} size={[0.08, 0.26, 0.06]} color="#1c1f26" />
+        <PBox p={p} pos={[0, 1.38, -0.1]} size={[2.5, 1.42, 0.08]} color="#111216" />
+        <PBox p={p} pos={[0, 1.38, -0.055]} size={[2.36, 1.3, 0.01]} color="#ffffff" map={screenTexture(p.screenGlow)} glow outline={false} cast={false} />
+        <PBox p={p} pos={[-1.2, 0.62, 0.05]} size={[0.22, 0.24, 0.22]} color="#1c1f26" />
+        <PBox p={p} pos={[1.2, 0.62, 0.05]} size={[0.22, 0.24, 0.22]} color="#1c1f26" />
+      </group>
+    ),
+  },
+  {
+    kind: 'sofa-cinema', name: 'Sofá de cinema (3 lugares)', cat: 'lazer', size: [3, 1.1], h: 1.1, place: 'chao', colors: ['#8e2c2c', '#2b2b30', '#3f7fd6', '#c9b79c'],
+    spots: [{ x: -0.95, z: 0.1, seat: true, face: 0 }, { x: 0, z: 0.1, seat: true, face: 0 }, { x: 0.95, z: 0.1, seat: true, face: 0 }],
+    render: (p, c = '#8e2c2c') => (
+      <group>
+        <PBox p={p} pos={[0, 0.2, 0]} size={[3, 0.28, 1.1]} color={shade(c, 0.6)} />
+        {[-0.95, 0, 0.95].map((x) => <PBox key={x} p={p} pos={[x, 0.42, 0.06]} size={[0.86, 0.16, 0.9]} color={c} />)}
+        <PBox p={p} pos={[0, 0.78, -0.42]} size={[3, 0.72, 0.26]} color={c} />
+        {[-1.42, -0.48, 0.48, 1.42].map((x) => <PBox key={`a${x}`} p={p} pos={[x, 0.6, 0.02]} size={[0.16, 0.36, 1.06]} color={shade(c, 0.85)} />)}
+        <PCyl p={p} pos={[-0.48, 0.81, 0.3]} r={0.05} h={0.12} color="#f4f4f2" sides={8} />
+        <PCyl p={p} pos={[0.48, 0.81, 0.3]} r={0.05} h={0.12} color="#e63946" sides={8} />
+      </group>
+    ),
+  },
+  {
+    kind: 'pipoqueira', name: 'Carrinho de pipoca', cat: 'lazer', size: [0.8, 0.6], h: 1.6, place: 'chao', colors: ['#e63946', '#3f7fd6'],
+    spots: [{ x: 0, z: 0.75 }],
+    render: (p, c = '#e63946') => (
+      <group>
+        {[-0.3, 0.3].map((x) => <PBox key={x} p={p} pos={[x, 0.35, 0]} size={[0.06, 0.7, 0.5]} color={c} />)}
+        <PBox p={p} pos={[0, 0.72, 0]} size={[0.7, 0.06, 0.55]} color={shade(c, 0.8)} />
+        <Glass pos={[0, 1.05, 0]} size={[0.62, 0.6, 0.48]} />
+        <PBox p={p} pos={[0, 0.88, 0]} size={[0.55, 0.22, 0.42]} color="#ffe08a" outline={false} />
+        <PBox p={p} pos={[0, 1.4, 0]} size={[0.7, 0.08, 0.55]} color={c} />
+      </group>
+    ),
+  },
+  {
     kind: 'cadeira', name: 'Cadeira de escritório', cat: 'escritorio', size: [0.6, 0.6], h: 1.1, place: 'chao', colors: FABRICS,
     render: (p, c = '#3f7fd6') => <OfficeChair p={p} pos={[0, 0, 0]} rot={Math.PI} color={c} />,
   },
@@ -619,6 +667,7 @@ export const CATALOG: DecorDef[] = [
   // ------------------------------------------------ lounge
   {
     kind: 'sofa', name: 'Sofá', cat: 'lounge', size: [2.6, 1], h: 1, place: 'chao', colors: FABRICS,
+    spots: [{ x: -0.6, z: 0.1, seat: true, face: 0 }, { x: 0.6, z: 0.1, seat: true, face: 0 }],
     render: (p, c = p.fabric) => (
       <group>
         <PBox p={p} pos={[0, 0.22, 0]} size={[2.6, 0.3, 1]} color={p.woodDark} />
@@ -647,6 +696,7 @@ export const CATALOG: DecorDef[] = [
   },
   {
     kind: 'pufe', name: 'Pufe', cat: 'lounge', size: [0.8, 0.8], h: 0.6, place: 'chao', colors: FABRICS,
+    spots: [{ x: 0, z: 0, seat: true, face: 0 }],
     render: (p, c = '#f1c40f') => (
       <group>
         <PCyl p={p} pos={[0, 0.17, 0]} r={0.38} rTop={0.4} h={0.34} color={c} sides={10} />
@@ -672,6 +722,7 @@ export const CATALOG: DecorDef[] = [
   },
   {
     kind: 'arquibancada', name: 'Arquibancada de madeira', cat: 'lounge', size: [3, 2], h: 1.3, place: 'chao', colors: FABRICS,
+    spots: [{ x: -0.8, z: 0.55, seat: true, face: 0 }, { x: 0.8, z: 0.55, seat: true, face: 0 }, { x: 0, z: -0.2, seat: true, face: 0 }],
     render: (p, c = '#9b5cff') => (
       <group>
         {[0, 1, 2].map((i) => (
@@ -742,6 +793,7 @@ export const CATALOG: DecorDef[] = [
   // ------------------------------------------------ plantas
   {
     kind: 'sofa-curvo', name: 'Sofá orgânico curvo', cat: 'lounge', size: [2.9, 1.3], h: 0.9, place: 'chao', colors: ['#8aa67a', '#c9b79c', '#f4a261', '#2a9d8f', '#3d3d46'],
+    spots: [{ x: -0.7, z: 0.1, seat: true, face: 0 }, { x: 0.7, z: 0.1, seat: true, face: 0 }],
     render: (p, c = '#8aa67a') => <group position={[0, 0, 0.1]}><CurvedSofa p={p} c={c} /></group>,
   },
   {
@@ -858,6 +910,7 @@ export const CATALOG: DecorDef[] = [
   },
   {
     kind: 'maquina-lanches', name: 'Máquina de lanches', cat: 'copa', size: [0.95, 0.75], h: 2, place: 'chao', colors: ['#c0392b', '#264653', '#9b5cff'],
+    spots: [{ x: 0, z: 0.85 }],
     render: (p, c = '#c0392b') => (
       <group>
         <PBox p={p} pos={[0, 1, 0]} size={[0.95, 2, 0.75]} color={c} />
@@ -883,6 +936,7 @@ export const CATALOG: DecorDef[] = [
   },
   {
     kind: 'bar-cereais', name: 'Bar de cereais', cat: 'copa', size: [1.6, 0.6], h: 1.5, place: 'chao', colors: WOODS,
+    spots: [{ x: -0.4, z: 0.75 }, { x: 0.4, z: 0.75 }],
     render: (p, c = WOODS[1]) => (
       <group>
         <PBox p={p} pos={[0, 0.45, 0]} size={[1.6, 0.9, 0.6]} color={c} />
@@ -902,6 +956,7 @@ export const CATALOG: DecorDef[] = [
   },
   {
     kind: 'mesa-bistro', name: 'Mesa bistrô com banquetas', cat: 'copa', size: [1.5, 1.5], h: 1.1, place: 'chao', colors: FABRICS,
+    spots: [{ x: -0.55, z: 0.35, seat: true }, { x: 0.55, z: -0.35, seat: true }],
     render: (p, c = '#e76f51') => (
       <group>
         <PCyl p={p} pos={[0, 0.03, 0]} r={0.28} h={0.06} color="#2b2b30" sides={10} />
@@ -932,6 +987,7 @@ export const CATALOG: DecorDef[] = [
   // ------------------------------------------------ lazer
   {
     kind: 'pebolim', name: 'Pebolim', cat: 'lazer', size: [1.4, 0.8], h: 1, place: 'chao', colors: ['#264653', '#b9824e', '#c0392b'],
+    spots: [{ x: 0.15, z: 0.95, play: true }, { x: -0.15, z: -0.95, play: true }],
     render: (p, c = '#264653') => (
       <group>
         {[[-0.6, -0.3], [0.6, -0.3], [-0.6, 0.3], [0.6, 0.3]].map(([x, z]) => <group key={`${x}${z}`}>{leg(p, [x, 0, z], 0.6, '#1d1720', 0.08)}</group>)}
@@ -952,6 +1008,7 @@ export const CATALOG: DecorDef[] = [
   },
   {
     kind: 'pingpong', name: 'Mesa de pingue-pongue', cat: 'lazer', size: [2.8, 1.6], h: 0.9, place: 'chao', colors: ['#2b5aa8', '#2e9e4f'],
+    spots: [{ x: 1.85, z: 0, play: true }, { x: -1.85, z: 0, play: true }],
     render: (p, c = '#2b5aa8') => (
       <group>
         {[[-1.1, -0.6], [1.1, -0.6], [-1.1, 0.6], [1.1, 0.6]].map(([x, z]) => <group key={`${x}${z}`}>{leg(p, [x, 0, z], 0.72, '#2b2b30', 0.06)}</group>)}
@@ -968,6 +1025,7 @@ export const CATALOG: DecorDef[] = [
   },
   {
     kind: 'fliperama', name: 'Fliperama', cat: 'lazer', size: [0.8, 0.8], h: 1.9, place: 'chao', colors: ['#5b2a86', '#c0392b', '#264653', '#2b2b30'],
+    spots: [{ x: 0, z: 0.85, play: true }],
     render: (p, c = '#5b2a86') => (
       <group>
         <PBox p={p} pos={[0, 0.5, -0.05]} size={[0.8, 1, 0.7]} color={c} />
@@ -983,6 +1041,7 @@ export const CATALOG: DecorDef[] = [
   },
   {
     kind: 'sinuca', name: 'Mesa de sinuca', cat: 'lazer', size: [2.4, 1.4], h: 0.9, place: 'chao', colors: ['#2e7d32', '#1f4e8c', '#8e2c2c'],
+    spots: [{ x: 1.65, z: 0.3, play: true }, { x: -1.65, z: -0.3, play: true }, { x: 0, z: 1.15 }],
     render: (p, c = '#2e7d32') => (
       <group>
         {[[-1, -0.5], [1, -0.5], [-1, 0.5], [1, 0.5]].map(([x, z]) => <PBox key={`${x}${z}`} p={p} pos={[x, 0.3, z]} size={[0.16, 0.6, 0.16]} color={p.woodDark} />)}

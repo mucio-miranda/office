@@ -9,7 +9,9 @@ export type PadKind = 'xbox' | 'playstation';
 export const usePad = create<{ active: boolean; kind: PadKind; name: string; standard: boolean }>(() => ({ active: false, kind: 'xbox', name: '', standard: true }));
 
 /** Analógicos e gatilhos já com zona morta (de -1 a 1; gatilhos de 0 a 1). */
-export const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, run: false };
+export const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, run: false, lbSince: 0, rbSince: 0 };
+/** Segurando LB/RB há mais disto, gira livre (toque rápido gira 90°). */
+export const HOLD_MS = 260;
 
 /** Botões no layout padrão (iguais no Xbox e no PlayStation). */
 export const B = { A: 0, B: 1, X: 2, Y: 3, LB: 4, RB: 5, LT: 6, RT: 7, BACK: 8, START: 9, LS: 10, RS: 11, UP: 12, DOWN: 13, LEFT: 14, RIGHT: 15 } as const;
@@ -32,9 +34,11 @@ export function rumble(ms = 180, strong = 0.5) {
  * Lê o controle a cada quadro e chama `onPress` quando um botão é apertado (o direcional repete se ficar segurado).
  * Devolve a função que para a leitura.
  */
-export function startGamepad(onPress: (b: PadButton) => void) {
+export function startGamepad(onPress: (b: PadButton) => void, onRelease?: (b: PadButton, heldMs: number) => void) {
   let raf = 0;
   const was = new Map<number, number>();
+  /** quando cada botão começou a ser apertado (para saber se foi toque ou segurada) */
+  const first = new Map<number, number>();
   const names = Object.keys(B) as PadButton[];
   const repeatable = new Set<number>([B.UP, B.DOWN, B.LEFT, B.RIGHT]);
   const loop = (t: number) => {
@@ -46,8 +50,16 @@ export function startGamepad(onPress: (b: PadButton) => void) {
     pad.lt = gp.buttons[B.LT]?.value ?? 0; pad.rt = gp.buttons[B.RT]?.value ?? 0;
     pad.run = !!gp.buttons[B.LS]?.pressed || Math.hypot(pad.lx, pad.ly) > 0.97;
     let used = Math.abs(pad.lx) + Math.abs(pad.ly) + Math.abs(pad.rx) + Math.abs(pad.ry) + pad.lt + pad.rt > 0.05;
+    pad.lbSince = gp.buttons[B.LB]?.pressed ? (pad.lbSince || t) : 0;
+    pad.rbSince = gp.buttons[B.RB]?.pressed ? (pad.rbSince || t) : 0;
     gp.buttons.forEach((btn, i) => {
-      if (!btn.pressed) { was.delete(i); return; }
+      if (!btn.pressed) {
+        const since = first.get(i);
+        if (since !== undefined) { first.delete(i); if (names[i]) onRelease?.(names[i], t - since); }
+        was.delete(i);
+        return;
+      }
+      if (!first.has(i)) first.set(i, t);
       used = true;
       const since = was.get(i);
       if (since === undefined) { was.set(i, t); if (names[i]) onPress(names[i]); return; }
