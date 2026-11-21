@@ -184,7 +184,6 @@ Formato: mensagem pronta para colar no WhatsApp (texto puro, em português, dire
 
 *Nome do cliente*
 ✅ o que foi concluído ou entregue
-⏳ o que está pendente ou aguardando aprovação (diga de quem depende, se o levantamento disser)
 🚫 o que está bloqueado e o motivo (só se houver)
 
 *Agência / Office*
@@ -198,9 +197,11 @@ Formato: mensagem pronta para colar no WhatsApp (texto puro, em português, dire
 Regras do formato:
 - Um bloco por cliente ou projeto, com o nome em *negrito de WhatsApp* (um asterisco de cada lado). Trabalho da agência e do
   Office/sistema em blocos próprios; atividade de fora da agência num bloco *Outros*.
-- Uma linha por item, curta (até uns 90 caracteres), começando pelo emoji. Ordem dentro do bloco: ✅, depois ⏳, depois 🚫.
+- Uma linha por item, curta (até uns 90 caracteres), começando pelo emoji. Ordem dentro do bloco: ✅, depois 🚫.
+- Sem itens pendentes nos blocos: o que ainda falta fazer ou aprovar vai só no *📌 Amanhã*. Cliente sem nada concluído
+  nem bloqueado no dia fica de fora.
 - O emoji diz a situação de agora, no fim do dia: o que já foi resolvido é ✅ (mesmo que tenha dado problema no caminho);
-  ⏳ só para o que ainda falta fazer ou aprovar; 🚫 só para o que segue travado e não anda sem outra pessoa ou recurso.
+  🚫 só para o que segue travado e não anda sem outra pessoa ou recurso.
 - Sem títulos com #, sem tabelas, sem **, sem links em Markdown e sem caminho completo de pasta: cite só o nome da peça.
 - Agrupe pedidos repetidos e correções do mesmo trabalho num item só. Não invente o que não está no levantamento.
 - A equipe usa a assinatura do Claude, não a API: nunca fale em custo nem em dólar. Se o levantamento não trouxer o limite,
