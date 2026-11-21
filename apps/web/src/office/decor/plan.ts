@@ -16,9 +16,50 @@ export type PlanDrag =
   | { mode: 'mover'; id: string; start: Vec2; base: Rect; rect: Rect }
   | { mode: 'borda'; id: string; edges: { l: boolean; r: boolean; t: boolean; b: boolean }; base: Rect; rect: Rect };
 
-export const usePlan = create<{ on: boolean; sel: string | null; drag: PlanDrag | null; problem: string | null; busy: boolean }>(() => ({
-  on: false, sel: null, drag: null, problem: null, busy: false,
+/** Uma mudança da planta, para desfazer e refazer: `before` null = a sala foi criada. */
+interface PlanStep { id: string; before: Rect | null; after: Rect }
+export const usePlan = create<{ on: boolean; sel: string | null; drag: PlanDrag | null; problem: string | null; busy: boolean; past: PlanStep[]; future: PlanStep[] }>(() => ({
+  on: false, sel: null, drag: null, problem: null, busy: false, past: [], future: [],
 }));
+const remember = (step: PlanStep) => usePlan.setState((s) => ({ past: [...s.past.slice(-30), step], future: [] }));
+
+/** Desfaz a última mudança da planta (sala criada sai, se ainda estiver vazia; sala mexida volta ao lugar). */
+export async function undoPlan() {
+  const { past, busy } = usePlan.getState();
+  const step = past.at(-1);
+  if (!step || busy) return;
+  usePlan.setState({ busy: true });
+  try {
+    if (step.before) await changeRoom(step.id, step.after, step.before);
+    else await removeCreated(step.id, step.after);
+    usePlan.setState((s) => ({ past: s.past.slice(0, -1), future: [...s.future, step] }));
+  } catch (e) { useStore.getState().notify((e as Error).message); }
+  usePlan.setState({ busy: false });
+}
+
+export async function redoPlan() {
+  const { future, busy } = usePlan.getState();
+  const step = future.at(-1);
+  if (!step || busy) return;
+  usePlan.setState({ busy: true });
+  try {
+    if (step.before) { await changeRoom(step.id, step.before, step.after); usePlan.setState((s) => ({ future: s.future.slice(0, -1), past: [...s.past, step] })); }
+    else {
+      // refazer a criação: uma sala nova no mesmo lugar (o id muda; o passo passa a apontar para ela)
+      const id = await createRoom(step.after);
+      usePlan.setState((s) => ({ future: s.future.slice(0, -1), past: [...s.past, { ...step, id }] }));
+    }
+  } catch (e) { useStore.getState().notify((e as Error).message); }
+  usePlan.setState({ busy: false });
+}
+
+async function removeCreated(id: string, rect: Rect) {
+  const st = useStore.getState();
+  if (useDecor.getState().items.some((it) => !it.wall && inside(it, rect))) throw new Error('A sala já tem peças de decoração: tire as peças ou remova a sala pela aba Equipe.');
+  await api(`/api/offices/${st.office!.id}/rooms/${id}`, { method: 'DELETE' });
+  await st.reload('rooms');
+  usePlan.setState({ sel: null });
+}
 
 export const STEP = 1;
 export const snap = (v: number) => Math.round(v / STEP) * STEP;
@@ -87,8 +128,8 @@ export async function endDrag() {
   if (problem) { notify(problem); usePlan.setState({ problem: null }); return; }
   usePlan.setState({ busy: true });
   try {
-    if (d.mode === 'novo') await createRoom(d.rect);
-    else await changeRoom(d.id, d.base, d.rect);
+    if (d.mode === 'novo') { const id = await createRoom(d.rect); remember({ id, before: null, after: d.rect }); }
+    else { await changeRoom(d.id, d.base, d.rect); remember({ id: d.id, before: d.base, after: d.rect }); }
   } catch (e) { notify((e as Error).message); }
   usePlan.setState({ busy: false, problem: null });
 }
@@ -100,6 +141,7 @@ async function createRoom(rect: Rect) {
   await st.reload('rooms');
   usePlan.setState({ sel: room.id });
   st.notify(`${room.name} criada. Troque o nome e o ícone na aba Equipe.`);
+  return room.id;
 }
 
 const inside = (p: Vec2, a: Rect, pad = 0) => p.x >= a.x0 - pad && p.x <= a.x1 + pad && p.z >= a.z0 - pad && p.z <= a.z1 + pad;

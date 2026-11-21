@@ -6,7 +6,7 @@ import { create } from 'zustand';
  * (`pad`); os botões viram ações pelo `startGamepad`. Mexeu no mouse ou no teclado, as dicas somem.
  */
 export type PadKind = 'xbox' | 'playstation';
-export const usePad = create<{ active: boolean; kind: PadKind; name: string }>(() => ({ active: false, kind: 'xbox', name: '' }));
+export const usePad = create<{ active: boolean; kind: PadKind; name: string; standard: boolean }>(() => ({ active: false, kind: 'xbox', name: '', standard: true }));
 
 /** Analógicos e gatilhos já com zona morta (de -1 a 1; gatilhos de 0 a 1). */
 export const pad = { lx: 0, ly: 0, rx: 0, ry: 0, lt: 0, rt: 0, run: false };
@@ -57,7 +57,9 @@ export function startGamepad(onPress: (b: PadButton) => void) {
     if (used) {
       const s = usePad.getState();
       const kind = kindOf(gp.id);
-      if (!s.active || s.kind !== kind) usePad.setState({ active: true, kind, name: gp.id });
+      // sem o layout padrão (alguns controles genéricos), os botões podem vir trocados: a dica avisa
+      const standard = gp.mapping === 'standard';
+      if (!s.active || s.kind !== kind || s.standard !== standard) usePad.setState({ active: true, kind, name: gp.id, standard });
     }
   };
   raf = requestAnimationFrame(loop);
@@ -88,19 +90,75 @@ export function sendKey(key: string) {
 
 const FOCUSABLE = 'button:not([disabled]), a[href], input:not([disabled]):not([type="hidden"]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"]), summary';
 
+const visible = (el: HTMLElement) => { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden'; };
+
+/** Janela por cima (diálogo, popover) que prende o foco: a de cima de todas, se houver. */
+export function topLayer(): HTMLElement | null {
+  const layers = [...document.querySelectorAll<HTMLElement>('.modal-bg .modal, .modal-bg, [role="dialog"]')].filter(visible);
+  return layers.at(-1) ?? null;
+}
+
+/** B com uma janela por cima: fecha ela (clique no fundo escuro ou Esc), em vez do painel inteiro. Devolve se fechou algo. */
+export function closeTopLayer() {
+  const layer = topLayer();
+  if (!layer) return false;
+  const bg = layer.closest<HTMLElement>('.modal-bg') ?? (layer.classList.contains('modal-bg') ? layer : null);
+  if (bg) bg.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+  else layer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
+  return true;
+}
+
+/** Lista de opções com foco: setas para os lados trocam a opção (o React vê como se a pessoa tivesse escolhido). */
+export function stepSelect(delta: number) {
+  const el = document.activeElement;
+  if (!(el instanceof HTMLSelectElement) || el.disabled) return false;
+  const i = Math.min(el.options.length - 1, Math.max(0, el.selectedIndex + delta));
+  if (i !== el.selectedIndex) { el.selectedIndex = i; el.dispatchEvent(new Event('change', { bubbles: true })); }
+  return true;
+}
+
+/** Rola a área com rolagem em volta do foco (ou a maior da página) pelo analógico direito. */
+export function scrollFocusArea(dy: number) {
+  let el = document.activeElement as HTMLElement | null;
+  const scrolls = (x: HTMLElement) => { const o = getComputedStyle(x).overflowY; return (o === 'auto' || o === 'scroll') && x.scrollHeight > x.clientHeight + 2; };
+  while (el && el !== document.body && !scrolls(el)) el = el.parentElement;
+  if (!el || el === document.body) {
+    const root = topLayer() ?? document.querySelector<HTMLElement>('.main');
+    el = [...(root?.querySelectorAll<HTMLElement>('*') ?? [])].filter((x) => visible(x) && scrolls(x)).sort((a, b) => b.clientHeight * b.clientWidth - a.clientHeight * a.clientWidth)[0] ?? null;
+  }
+  el?.scrollBy({ top: dy });
+}
+
 /**
- * Direcional nos painéis: vai para o elemento clicável mais perto na direção apertada (dentro de `root`). Prefere
- * o que está alinhado com o atual; o escolhido ganha foco visível e entra na tela.
+ * Direcional nos painéis: vai para o elemento clicável mais perto na direção apertada. Com uma janela por cima, fica
+ * dentro dela; senão anda pela página e, saindo pela esquerda, entra na barra lateral (e volta pela direita).
  */
-export function moveFocus(dir: 'up' | 'down' | 'left' | 'right', root: HTMLElement | null = document.querySelector('.main')) {
-  if (!root) return;
-  const all = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => {
-    const r = el.getBoundingClientRect();
-    return r.width > 0 && r.height > 0 && getComputedStyle(el).visibility !== 'hidden';
-  });
-  if (!all.length) return;
+export function moveFocus(dir: 'up' | 'down' | 'left' | 'right') {
+  const layer = topLayer();
+  const main = document.querySelector<HTMLElement>('.main'), side = document.querySelector<HTMLElement>('.sidebar');
+  const cur0 = document.activeElement as HTMLElement | null;
+  const inSide = !!(side && cur0 && side.contains(cur0));
+  const roots = layer ? [layer] : inSide ? (dir === 'right' ? [side, main] : [side]) : dir === 'left' ? [main, side] : [main];
+  for (const root of roots) if (root && focusIn(dir, root)) return;
+}
+
+function focusIn(dir: 'up' | 'down' | 'left' | 'right', root: HTMLElement) {
+  const all = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter(visible);
+  if (!all.length) return false;
   const cur = document.activeElement as HTMLElement | null;
-  if (!cur || !root.contains(cur) || cur === document.body) { all[0].focus(); all[0].scrollIntoView({ block: 'nearest' }); return; }
+  if (!cur || cur === document.body || !root.contains(cur)) {
+    // entrando na área: o item mais perto na direção certa a partir de onde o foco estava (ou o primeiro da área)
+    if (cur && cur !== document.body) {
+      const a = cur.getBoundingClientRect();
+      const ahead = all.filter((el) => { const r = el.getBoundingClientRect(); return dir === 'left' ? r.right <= a.left + 4 : dir === 'right' ? r.left >= a.right - 4 : true; });
+      const pick = ahead.sort((x, y) => Math.abs(x.getBoundingClientRect().top - a.top) - Math.abs(y.getBoundingClientRect().top - a.top))[0];
+      if (!pick) return false;
+      pick.focus({ preventScroll: true }); pick.scrollIntoView({ block: 'nearest' });
+      return true;
+    }
+    all[0].focus(); all[0].scrollIntoView({ block: 'nearest' });
+    return true;
+  }
   const a = cur.getBoundingClientRect();
   const ac = { x: a.left + a.width / 2, y: a.top + a.height / 2 };
   let best: HTMLElement | null = null, bestScore = Infinity;
@@ -115,5 +173,6 @@ export function moveFocus(dir: 'up' | 'down' | 'left' | 'right', root: HTMLEleme
     const score = main + side * 2.5;
     if (score < bestScore) { bestScore = score; best = el; }
   }
-  if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); }
+  if (best) { best.focus({ preventScroll: true }); best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); return true; }
+  return false;
 }

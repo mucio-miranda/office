@@ -24,9 +24,11 @@ export function Glyph({ b }: { b: PadButton }) {
 /** Dicas do controle no rodapé da tela: só aparecem enquanto você usa o controle. */
 export function PadHints({ items }: { items: { b: PadButton[]; label: string }[] }) {
   const active = usePad((s) => s.active);
+  const standard = usePad((s) => s.standard);
   if (!active || !items.length) return null;
   return (
     <div className="pad-hints" aria-hidden>
+      {!standard && <span className="pad-hint" style={{ color: '#ffd23f' }}>Controle sem o layout padrão: se algum botão estiver trocado, avise</span>}
       {items.map((it) => (
         <span key={it.label} className="pad-hint">{it.b.map((b) => <Glyph key={b} b={b} />)}<span>{it.label}</span></span>
       ))}

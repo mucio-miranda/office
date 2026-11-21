@@ -12,7 +12,7 @@ import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { rotateView } from './office/view';
-import { moveFocus, rumble, sendKey, startGamepad, usePad, type PadButton } from './lib/gamepad';
+import { closeTopLayer, moveFocus, pad, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
 import { PadHints } from './lib/PadHints';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { HUMAN_DESKS, ROOMS, BOUNDS, isFixedAgent, roomCenter } from './office/layout';
@@ -114,10 +114,12 @@ export function OfficeView() {
     if (b === 'Y') { setPalette(true); return; }
     if (b === 'START') { const rafa = st.agents.find(isFixedAgent); if (rafa) open('agente', rafa.id); return; }
     if (useDecor.getState().editing) { if (b === 'B') setEditing(false); return; }
-    if (!world) {
+    if (!world || document.querySelector('.modal-bg')) {
       const el = document.activeElement as HTMLElement | null;
-      const typingNow = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
-      if (b === 'B') { if (typingNow) el!.blur(); else open(null); return; }
+      const typingNow = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !['checkbox', 'radio', 'button', 'submit'].includes((el as HTMLInputElement).type);
+      // B: sai do campo; senão fecha a janela de cima; senão volta para o mapa
+      if (b === 'B') { if (typingNow) el!.blur(); else if (!closeTopLayer()) open(null); return; }
+      if ((b === 'LEFT' || b === 'RIGHT') && stepSelect(b === 'LEFT' ? -1 : 1)) return;
       if (dir) { moveFocus(dir); return; }
       if (b === 'A' && el && el !== document.body && !typingNow) el.click();
       return;
@@ -135,6 +137,17 @@ export function OfficeView() {
       if (next) goTo(roomCenter(next));
     }
   }), [open]);
+  // analógico direito com um painel aberto: rola a página
+  useEffect(() => {
+    let raf = 0, last = performance.now();
+    const loop = (t: number) => {
+      raf = requestAnimationFrame(loop);
+      const dt = Math.min(0.05, (t - last) / 1000); last = t;
+      if (!padCtx.current.inWorld && Math.abs(pad.ry) > 0) scrollFocusArea(pad.ry * 1100 * dt);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
   // funcionário que passa a precisar de você: o controle vibra
   useEffect(() => useStore.subscribe((s, prev) => {
     if (!usePad.getState().active || s.workers === prev.workers) return;
@@ -143,7 +156,7 @@ export function OfficeView() {
   const padItems: { b: PadButton[]; label: string }[] = palette
     ? [{ b: ['UP', 'DOWN'], label: 'Escolher' }, { b: ['A'], label: 'Abrir' }, { b: ['B'], label: 'Fechar' }]
     : !inWorld
-      ? [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['A'], label: 'Selecionar' }, { b: ['B'], label: 'Voltar' }, { b: ['Y'], label: 'Buscar' }]
+      ? [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['A'], label: 'Selecionar' }, { b: ['B'], label: 'Voltar' }, { b: ['RS'], label: 'Rolar' }, { b: ['Y'], label: 'Buscar' }]
       : [
         ...(nearby ? [{ b: ['A'] as PadButton[], label: nearby.label }] : []),
         { b: ['LS'], label: 'Andar' }, { b: ['RS'], label: 'Câmera' }, { b: ['LB', 'RB'], label: 'Girar' }, { b: ['LT', 'RT'], label: 'Zoom' },

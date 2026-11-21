@@ -8,7 +8,7 @@ import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
 import { ROOMS, customRects } from '../layout';
-import { usePlan } from './plan';
+import { redoPlan, undoPlan, usePlan } from './plan';
 import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, allWalls, applyWall, defaultWall, dividerWall, openOffice, saveWalls, setOpenOffice, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
 import {
   canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
@@ -232,6 +232,8 @@ function PlanToolButton() {
   const drag = usePlan((s) => s.drag);
   const problem = usePlan((s) => s.problem);
   const busy = usePlan((s) => s.busy);
+  const canUndoPlan = usePlan((s) => s.past.length > 0);
+  const canRedoPlan = usePlan((s) => s.future.length > 0);
   const rooms = useStore((s) => s.rooms);
   useEffect(() => () => usePlan.setState({ on: false, drag: null, sel: null }), []);
   const toggle = () => {
@@ -254,6 +256,10 @@ function PlanToolButton() {
           {rect && <p className="small" style={{ margin: 0 }}><b>{name}</b> · {rect.x1 - rect.x0} × {rect.z1 - rect.z0} m</p>}
           {drag && problem && <p className="small" style={{ margin: 0, color: '#e5484d' }}>{problem}</p>}
           {busy && <p className="muted small" style={{ margin: 0 }}>Salvando…</p>}
+          <div className="row gap">
+            <button className="ghost small" disabled={!canUndoPlan || busy} onClick={undoPlan} title="Desfazer a última mudança da planta (Ctrl Z)"><Undo2 size={14} /> Desfazer</button>
+            <button className="ghost small" disabled={!canRedoPlan || busy} onClick={redoPlan} title="Refazer (Ctrl Y)"><Redo2 size={14} /> Refazer</button>
+          </div>
           <p className="muted small" style={{ margin: 0 }}>As salas originais (Gerência, Vídeo, Design…) ainda não mudam. Nome, ícone e remover ficam na aba Equipe.</p>
         </div>
       )}
@@ -341,8 +347,9 @@ export function DecorUI() {
       } else if (k === 'x' && !mod) setEditing(false);
       else if (k === 'r' && !mod) rotateSelected();
       else if (k === 'delete' || k === 'backspace') removeSelected();
-      else if (mod && k === 'z') (e.shiftKey ? redo : undo)();
-      else if (mod && k === 'y') redo();
+      // com a Planta ligada, Ctrl Z / Ctrl Y desfazem e refazem a planta
+      else if (mod && k === 'z') (usePlan.getState().on ? (e.shiftKey ? redoPlan : undoPlan) : (e.shiftKey ? redo : undo))();
+      else if (mod && k === 'y') (usePlan.getState().on ? redoPlan : redo)();
       else if (mod && k === 'd') duplicateSelected();
       else handled = false;
       if (handled) { e.preventDefault(); e.stopPropagation(); }
