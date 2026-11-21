@@ -2,13 +2,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrthographicCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { isWorkerVisible, type AgentProfile, type Presence, type Vec2, type Worker } from '@office/shared';
+import { type AgentProfile, type Presence, type Vec2, type Worker } from '@office/shared';
 import { useStore, showEmote } from '../lib/store';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/theme';
 import { PixelRoom } from './pixel/Room';
 import { DecorLayer } from './decor/DecorLayer';
 import { useDecor } from './decor/state';
 import { seatWorkers, sittable } from './seats';
+import { copaSpot, copaSpots, releaseCopaSpot, workerPhase } from './npc';
 import { quarterOf, rotateView, snapView, useView, viewRot } from './view';
 import { pad } from '../lib/gamepad';
 import { Avatar } from './Avatar';
@@ -402,28 +403,77 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
  * Funcionários no mapa: só quem está trabalhando ou esperando você, na sala do trabalho. Os parados não andam pela copa
  * (viravam um amontoado): aparecem num contador só, em cima da mesa da copa, e na Equipe.
  */
+export type WorkerSpot = Vec2 & { dir: number; seated: boolean; copa: boolean };
 export function workerSpots(workers: Worker[]) {
-  const visible = workers.filter((w) => isWorkerVisible(w) && w.state !== 'copa');
-  // sempre numa mesa: a da sala ou uma mesa de trabalho do Decorar; a mesa de quem fica fixo (o gerente) não conta
+  const now = Date.now();
+  const atDesk = workers.filter((w) => workerPhase(w, now) === 'mesa');
+  const inCopa = workers.filter((w) => workerPhase(w, now) === 'copa');
+  // na mesa: a da sala ou uma mesa de trabalho do Decorar; as mesas dos funcionários de função não contam
   const fixed = useStore.getState().agents.filter(isFixedAgent).map(agentSeat);
-  const seats = seatWorkers(visible, useDecor.getState().items, fixed);
+  const seats = seatWorkers(atDesk, useDecor.getState().items, fixed);
   const count: Record<string, number> = {};
-  return visible.map((w) => {
+  const desk = atDesk.map((w) => {
     const s = seats.get(w.id);
-    const spot: Vec2 & { dir: number; seated: boolean } = s
-      ? { x: s.x, z: s.z, dir: s.dir, seated: true }
-      : { ...workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1)), dir: Math.PI, seated: false };
+    const spot: WorkerSpot = s
+      ? { x: s.x, z: s.z, dir: s.dir, seated: true, copa: false }
+      : { ...workerSpot(w.room, (count[w.room] = (count[w.room] ?? -1) + 1)), dir: Math.PI, seated: false, copa: false };
     return [w, spot] as const;
   });
+  // na copa: cada um no seu canto (os pontos são espaçados e nunca repetem)
+  const spots = copaSpots();
+  for (const w of workers) if (workerPhase(w, now) !== 'copa') releaseCopaSpot(w.id);
+  const copa = inCopa.flatMap((w) => {
+    const p = copaSpot(w.id, spots);
+    return p ? [[w, { ...p, dir: Math.PI / 4, seated: false, copa: true } as WorkerSpot] as const] : [];
+  });
+  return [...desk, ...copa];
 }
 const WORKER_RING: Record<Worker['state'], string | null> = { copa: null, trabalhando: '#2563eb', aguardando: '#f59e0b' };
 
-function WorkerNPC({ w, spot, p }: { w: Worker; spot: Vec2 & { dir: number; seated: boolean }; p: ScenePalette }) {
+/**
+ * Funcionário de cliente no mapa: anda até o lugar dele (mesa ou copa) desviando dos móveis, senta na mesa e, na copa,
+ * circula de tempos em tempos para outro canto livre.
+ */
+function WorkerNPC({ w, spot, p }: { w: Worker; spot: WorkerSpot; p: ScenePalette }) {
   const open = useStore((s) => s.open);
-  const state = useMemo(() => ({ x: spot.x, z: spot.z, dir: spot.dir, moving: false }), [spot.x, spot.z, spot.dir]);
+  const st = useRef({ x: spot.x, z: spot.z, dir: spot.dir, moving: false, seated: spot.seated, path: [] as Vec2[], target: null as Vec2 | null, goal: spot, next: performance.now() + 8000 + Math.random() * 20000 });
+  const goTo = (to: Vec2) => {
+    const s = st.current;
+    s.path = findPath(s, to);
+    s.target = s.path.shift() ?? null;
+    s.seated = false;
+  };
+  // o lugar mudou (acabou o trabalho, chegou trabalho novo): vai andando até lá
+  useEffect(() => {
+    const s = st.current;
+    s.goal = spot;
+    if (Math.hypot(spot.x - s.x, spot.z - s.z) > 0.3) goTo(spot);
+    else { s.seated = spot.seated; s.dir = spot.dir; }
+  }, [spot.x, spot.z, spot.seated]); // eslint-disable-line react-hooks/exhaustive-deps
+  useFrame((_, dtRaw) => {
+    const dt = Math.min(dtRaw, 0.05);
+    const s = st.current;
+    if (s.target) {
+      const dx = s.target.x - s.x, dz = s.target.z - s.z, d = Math.hypot(dx, dz);
+      if (d < 0.06) {
+        s.target = s.path.shift() ?? null;
+        if (!s.target) { s.moving = false; s.x = s.goal.x; s.z = s.goal.z; s.seated = s.goal.seated; if (s.goal.seated) s.dir = s.goal.dir; }
+      } else {
+        const v = Math.min(d, 2.3 * dt);
+        s.x += (dx / d) * v; s.z += (dz / d) * v;
+        s.dir = Math.atan2(dx, dz);
+        s.moving = true;
+      }
+    } else if (s.goal.copa && performance.now() > s.next) {
+      // na copa: de vez em quando, outro canto livre
+      s.next = performance.now() + 15000 + Math.random() * 25000;
+      const to = copaSpot(w.id, copaSpots(), true);
+      if (to) { s.goal = { ...to, dir: s.dir, seated: false, copa: true }; goTo(to); }
+    }
+  });
   return (
-    <Avatar anchorId={`worker:${w.id}`} seated={spot.seated} typing={w.state === 'trabalhando'} color={w.color} p={p}
-      ring={WORKER_RING[w.state]} pulse={w.state === 'aguardando'} getState={() => state} onClick={() => { if (!droneBlocksClick()) open('clientes', w.clientId); }} />
+    <Avatar anchorId={`worker:${w.id}`} seated={st.current.seated} typing={w.state === 'trabalhando'} color={w.color} p={p}
+      ring={WORKER_RING[w.state]} pulse={w.state === 'aguardando'} getState={() => st.current} onClick={() => { if (!droneBlocksClick()) open('clientes', w.clientId); }} />
   );
 }
 
@@ -597,6 +647,9 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
   const workers = useStore((s) => s.workers);
   // mesa nova no Decorar: quem estava sem mesa senta nela
   useDecor((s) => s.items);
+  // a rotina muda com o tempo (3 h parado: vai para a copa; 12 h: sai do mapa): revê a cada minuto
+  const [, setMinute] = useState(0);
+  useEffect(() => { const t = setInterval(() => setMinute((m) => m + 1), 60_000); return () => clearInterval(t); }, []);
   const p = useScene();
   const px = usePixel();
   const pixel = useWorldStyle((s) => s.style) === 'pixel';
