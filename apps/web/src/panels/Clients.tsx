@@ -34,10 +34,14 @@ export function Clients() {
   const [only, pick] = usePersisted<string>('office.clients.squad', '');
   // lista recolhida: vira uma coluna estreita só com a cor de cada cliente
   const [collapsed, setCollapsed] = usePersisted<boolean>('office.clients.collapsed', false);
+  // pausados e encerrados saem dos grupos e vão para o bloco "Inativos", no fim (recolhido)
+  const active = clients.filter((c) => c.status === 'ativo');
+  const inactive = clients.filter((c) => c.status !== 'ativo');
+  const [showInactive, setShowInactive] = usePersisted<boolean>('office.clients.inactive', false);
   const allGroups = sq.squads.length
-    ? [...sq.squads.map((s) => ({ key: s.id, squad: s as Squad | null, items: clients.filter((c) => sq.byClient[c.id] === s.id) })),
-      { key: '-', squad: null, items: clients.filter((c) => !sq.byClient[c.id]) }].filter((g) => g.items.length)
-    : [{ key: '-', squad: null, items: clients }];
+    ? [...sq.squads.map((s) => ({ key: s.id, squad: s as Squad | null, items: active.filter((c) => sq.byClient[c.id] === s.id) })),
+      { key: '-', squad: null, items: active.filter((c) => !sq.byClient[c.id]) }].filter((g) => g.items.length)
+    : [{ key: '-', squad: null, items: active }];
   // filtro: só um squad (ou só os sem squad); um squad que sumiu do mapa volta a mostrar todos
   const filtering = !!only && allGroups.some((g) => g.key === only);
   const groups = filtering ? allGroups.filter((g) => g.key === only) : allGroups;
@@ -89,6 +93,20 @@ export function Clients() {
             ))}
           </div>
         ))}
+        {inactive.length > 0 && (
+          <div className="client-group inactive">
+            <button className="squad-head link" onClick={() => setShowInactive(!showInactive)} aria-expanded={showInactive} title="Clientes pausados ou encerrados (muda no topo do cliente)">
+              <b>Inativos</b> <span className="muted">{inactive.length}</span> <span className="muted small">{showInactive ? 'esconder' : 'mostrar'}</span>
+            </button>
+            {showInactive && inactive.map((c) => (
+              <button key={c.id} className={`client-item ${current?.id === c.id ? 'active' : ''}`} onClick={() => setSel(c.id)}>
+                <span className="dot" style={{ background: c.color, opacity: 0.5 }} />
+                <span className="truncate muted">{c.name}</span>
+                <span className="muted small">{c.status === 'pausado' ? 'pausado' : 'encerrado'}</span>
+              </button>
+            ))}
+          </div>
+        )}
         {clients.length === 0 && <p className="muted small">Nenhum cliente ainda.</p>}
       </aside>
       )}

@@ -151,6 +151,7 @@ export function Team() {
       </section>
 
       {isOwner && <RoomsCard />}
+      {isOwner && <SquadsCard />}
 
       <section>
         <div className="row between" style={{ marginBottom: 4 }}>
@@ -237,6 +238,54 @@ function AgentEditor({ agent, onClose }: { agent: AgentProfile | null; onClose: 
 const FLOORS = ['#e8e4dc', '#f4f4f2', '#1f2023', '#9aa0a6', '#e3e9f2', '#e4f3ee', '#f3e4e4', '#efe6f6'];
 
 /** Salas novas: anexos a leste do prédio, com porta para o vizinho e duas mesas para pessoas. */
+/** Squads: cada um com nome, social media e designer/produção. Grava no squads.json, que as skills e o Office leem. */
+function SquadsCard() {
+  const { office, clients, notify } = useStore();
+  const [data, setData] = useState<{ squads: { id: string; nome: string; socialMedia: string | null; designProducao: string | null }[]; byClient: Record<string, string | null> } | null>(null);
+  const [nome, setNome] = useState(''); const [sm, setSm] = useState(''); const [dp, setDp] = useState('');
+  const url = `/api/offices/${office!.id}/squads`;
+  const load = () => api(url).then(setData).catch(() => setData({ squads: [], byClient: {} }));
+  useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const save = async (s: { id: string; nome: string; socialMedia: string | null; designProducao: string | null }, patch: Partial<typeof s>) => {
+    const next = { ...s, ...patch };
+    if (next.nome.trim().length < 2 || JSON.stringify(next) === JSON.stringify(s)) return;
+    try { await api(`${url}/${s.id}`, { method: 'PUT', body: { nome: next.nome, socialMedia: next.socialMedia || null, designProducao: next.designProducao || null } }); load(); }
+    catch (x) { notify((x as Error).message); }
+  };
+  const count = (id: string) => clients.filter((c) => data?.byClient[c.id] === id && c.status === 'ativo').length;
+  return (
+    <section className="card stack">
+      <div>
+        <h3>Squads</h3>
+        <p className="muted small" style={{ margin: '4px 0 0' }}>Quem atende cada grupo de clientes. Para mudar um cliente de squad, use a engrenagem do cliente. Fica no <code>squads.json</code> das skills (com histórico).</p>
+      </div>
+      {data?.squads.map((s) => (
+        <div key={s.id} className="row gap squad-row">
+          <input aria-label="Nome do squad" defaultValue={s.nome} maxLength={60} onBlur={(e) => save(s, { nome: e.target.value.trim() })} />
+          <input aria-label="Social media" placeholder="Social media" defaultValue={s.socialMedia ?? ''} maxLength={60} onBlur={(e) => save(s, { socialMedia: e.target.value.trim() || null })} />
+          <input aria-label="Designer e produção" placeholder="Design e produção" defaultValue={s.designProducao ?? ''} maxLength={60} onBlur={(e) => save(s, { designProducao: e.target.value.trim() || null })} />
+          <span className="muted small" title="Clientes ativos neste squad">{count(s.id)} cliente(s)</span>
+          <button className="icon" title="Remover o squad" onClick={async () => {
+            const n = count(s.id);
+            if (!confirm(n ? `Remover ${s.nome}? ${n} cliente(s) ficam sem squad.` : `Remover ${s.nome}?`)) return;
+            try { await api(`${url}/${s.id}${n ? '?force=1' : ''}`, { method: 'DELETE' }); load(); } catch (x) { notify((x as Error).message); }
+          }}><Trash2 size={14} /></button>
+        </div>
+      ))}
+      <form className="row gap squad-row" onSubmit={async (e) => {
+        e.preventDefault();
+        try { await api(url, { body: { nome: nome.trim(), socialMedia: sm.trim() || null, designProducao: dp.trim() || null } }); setNome(''); setSm(''); setDp(''); load(); notify('Squad criado'); }
+        catch (x) { notify((x as Error).message); }
+      }}>
+        <input value={nome} minLength={2} maxLength={60} placeholder="Novo squad (ex.: Bia & Léo)" onChange={(e) => setNome(e.target.value)} />
+        <input value={sm} maxLength={60} placeholder="Social media" onChange={(e) => setSm(e.target.value)} />
+        <input value={dp} maxLength={60} placeholder="Design e produção" onChange={(e) => setDp(e.target.value)} />
+        <button className="primary small" disabled={nome.trim().length < 2}><Plus size={13} /> Criar</button>
+      </form>
+    </section>
+  );
+}
+
 function RoomsCard() {
   const { office, rooms, notify, layout } = useStore();
   const [name, setName] = useState('');

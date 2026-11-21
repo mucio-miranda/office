@@ -24,7 +24,7 @@ import { commitAll, importSkills, pushSkills, setRemote, skillsDirOf, skillsStat
 import { detectDirs, mergeDirs, rootProblem } from '../agents/officeSetup.ts';
 import { driveDirs, existingDriveFolders, linkedDriveFolder } from '../clients/drive.ts';
 import { discoverClients } from '../clients/discover.ts';
-import { setClientSquad, squadOfClient, squadsOf } from '../clients/squads.ts';
+import { removeSquad, saveSquad, setClientSquad, squadOfClient, squadsOf } from '../clients/squads.ts';
 import { listSkills } from '../agents/skills.ts';
 import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/sessions.ts';
 import { startTurnover, resumeSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, resetConversation, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
@@ -817,6 +817,51 @@ export async function api(app: FastifyInstance) {
         squads: squads.map(({ match: _m, ...s }) => s),
         byClient: Object.fromEntries(clients.map((c) => [c.id, squadOfClient(squads, c)])),
       };
+    });
+
+    /** Registra a mudança do squads.json no histórico das skills (e envia, se houver cópia remota). */
+    const commitSquads = (office: Office, file: string, message: string) => {
+      try {
+        const dir = skillsDirOf(office);
+        commitAll(dir, `Office: ${message}`, [path.relative(dir, file)]);
+        if (skillsState(office).remote) { try { pushSkills(office); } catch { /* fica para "Enviar agora" */ } }
+      } catch { /* sem histórico git: o arquivo já mudou */ }
+    };
+    const squadBody = z.object({ nome: z.string().trim().min(2).max(60), socialMedia: z.string().trim().max(60).nullable().optional(), designProducao: z.string().trim().max(60).nullable().optional() });
+    // squads: criar, mudar nome e pessoas, remover (o squads.json é o mesmo que as skills leem)
+    r.post('/api/offices/:officeId/squads', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const b = body(squadBody, req, reply);
+      if (!b) return;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', (req.params as any).officeId)!;
+      try {
+        const r = saveSquad(office.rootPath, null, { nome: b.nome, socialMedia: b.socialMedia ?? null, designProducao: b.designProducao ?? null });
+        commitSquads(office, r.file, `squad novo ${b.nome}`);
+        invalidate(office.id, 'clients');
+        return { ok: true, id: r.id };
+      } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+    });
+    r.put('/api/offices/:officeId/squads/:squadId', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const b = body(squadBody, req, reply);
+      if (!b) return;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', (req.params as any).officeId)!;
+      try {
+        const r = saveSquad(office.rootPath, (req.params as any).squadId, { nome: b.nome, socialMedia: b.socialMedia ?? null, designProducao: b.designProducao ?? null });
+        commitSquads(office, r.file, `squad ${b.nome} atualizado`);
+        invalidate(office.id, 'clients');
+        return { ok: true };
+      } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+    });
+    r.delete('/api/offices/:officeId/squads/:squadId', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', (req.params as any).officeId)!;
+      try {
+        const file = removeSquad(office.rootPath, (req.params as any).squadId, (req.query as any).force === '1');
+        commitSquads(office, file, `squad ${(req.params as any).squadId} removido`);
+        invalidate(office.id, 'clients');
+        return { ok: true };
+      } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
     });
 
     // trocar o squad do cliente: grava no squads.json das skills, com registro no histórico (e envio, se houver cópia remota)

@@ -33,3 +33,21 @@ test('squad do cliente: troca no squads.json, guarda as anotações e tira de on
   assert.equal(JSON.parse(readFileSync(file, 'utf8')).squads[0].clientes[0].pasta, 'CLIENTES/OUTROS/NOVO');
   assert.throws(() => setClientSquad(office, novo, 'zzz'), /Squad não encontrado/);
 });
+
+test('squads: cria, muda pessoas e remove (com clientes, só confirmando)', async () => {
+  const { saveSquad, removeSquad } = await import('./squads.ts');
+  const root = mkdtempSync(path.join(tmpdir(), 'squads2-'));
+  mkdirSync(path.join(root, '.claude', 'skills', '_global'), { recursive: true });
+  const file = path.join(root, '.claude', 'skills', '_global', 'squads.json');
+  writeFileSync(file, JSON.stringify({ versao: 1, squads: [{ id: 'a', nome: 'A', clientes: [{ nome: 'X', pasta: 'CLIENTES/X' }] }] }, null, 2));
+  const r = saveSquad(root, null, { nome: 'Bia & Léo', socialMedia: 'Bia', designProducao: 'Léo' });
+  assert.equal(r.id, 'bia-leo');
+  assert.deepEqual(squadsOf(root).map((s) => [s.id, s.socialMedia, s.designProducao]), [['a', null, null], ['bia-leo', 'Bia', 'Léo']]);
+  saveSquad(root, 'bia-leo', { nome: 'Bia & Léo', socialMedia: 'Bia', designProducao: 'Ana' });
+  assert.equal(squadsOf(root).find((s) => s.id === 'bia-leo')!.designProducao, 'Ana');
+  assert.throws(() => removeSquad(root, 'a'), /tem 1 cliente/);
+  removeSquad(root, 'bia-leo');
+  removeSquad(root, 'a', true);
+  assert.equal(squadsOf(root).length, 0);
+  assert.equal(JSON.parse(readFileSync(file, 'utf8')).versao, 1);
+});

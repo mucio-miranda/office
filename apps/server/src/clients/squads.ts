@@ -87,3 +87,47 @@ export function setClientSquad(office: { rootPath: string; driveRoot?: string | 
   cached = null;
   return file;
 }
+
+const squadsFile = (rootPath: string) => path.join(rootPath, '.claude', 'skills', '_global', 'squads.json');
+function readRaw(rootPath: string) {
+  const file = squadsFile(rootPath);
+  let text = '{"versao":1,"squads":[]}';
+  try { text = readFileSync(file, 'utf8').replace(/^\uFEFF/, ''); } catch { /* arquivo novo */ }
+  const raw = JSON.parse(text);
+  if (!Array.isArray(raw.squads)) raw.squads = [];
+  return { file, raw, eol: text.includes('\r\n') ? '\r\n' : '\n' };
+}
+function writeRaw(file: string, raw: unknown, eol: string) {
+  writeFileSync(file, `${JSON.stringify(raw, null, 2).replace(/\n/g, eol)}${eol}`, 'utf8');
+  cached = null;
+  return file;
+}
+const squadSlug = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/&/g, ' ').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'squad';
+
+/** Cria um squad ou muda nome e pessoas de um que existe. Devolve o arquivo e o id. */
+export function saveSquad(rootPath: string, id: string | null, data: { nome: string; socialMedia: string | null; designProducao: string | null }) {
+  const { file, raw, eol } = readRaw(rootPath);
+  let sq = id ? raw.squads.find((x: any) => x.id === id) : null;
+  if (id && !sq) throw new Error('Squad não encontrado.');
+  if (!sq) {
+    let nid = squadSlug(data.nome);
+    for (let i = 2; raw.squads.some((x: any) => x.id === nid); i++) nid = `${squadSlug(data.nome)}-${i}`;
+    sq = { id: nid, clientes: [] };
+    raw.squads.push(sq);
+  }
+  sq.nome = data.nome;
+  sq.social_media = data.socialMedia || null;
+  sq.design_producao = data.designProducao || null;
+  return { file: writeRaw(file, raw, eol), id: sq.id as string };
+}
+
+/** Remove um squad. Com clientes, só com `force` (eles ficam sem squad). */
+export function removeSquad(rootPath: string, id: string, force = false) {
+  const { file, raw, eol } = readRaw(rootPath);
+  const sq = raw.squads.find((x: any) => x.id === id);
+  if (!sq) throw new Error('Squad não encontrado.');
+  const n = Array.isArray(sq.clientes) ? sq.clientes.length : 0;
+  if (n && !force) throw new Error(`${sq.nome} tem ${n} cliente(s). Passe os clientes para outro squad antes, ou confirme que eles ficam sem squad.`);
+  raw.squads = raw.squads.filter((x: any) => x.id !== id);
+  return writeRaw(file, raw, eol);
+}
