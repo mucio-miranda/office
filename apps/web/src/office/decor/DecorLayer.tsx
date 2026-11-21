@@ -54,8 +54,8 @@ function MaqueteDecor({ d, it, p }: { d: DecorDef; it: DecorItem; p: ScenePalett
   );
 }
 
-function DecorPiece({ it, outline, onDown, onOver, onOut }: {
-  it: DecorItem; outline: string | null; onDown?: (e: any) => void; onOver?: (e: any) => void; onOut?: () => void;
+function DecorPiece({ it, outline, onDown, onOver, onOut, onClick }: {
+  it: DecorItem; outline: string | null; onDown?: (e: any) => void; onOver?: (e: any) => void; onOut?: () => void; onClick?: (e: any) => void;
 }) {
   const p = usePixel();
   const scene = useScene();
@@ -68,7 +68,7 @@ function DecorPiece({ it, outline, onDown, onOver, onOut }: {
   if (it.wall) { const far = farSides(quarter); if ((it.wall === 'fundo' && !far.z0) || (it.wall === 'esquerda' && !far.x0)) return null; }
   const { pos, rotY } = placement(it);
   return (
-    <group position={pos} rotation={[0, rotY, 0]} onPointerDown={onDown} onPointerOver={onOver} onPointerOut={onOut}>
+    <group position={pos} rotation={[0, rotY, 0]} onPointerDown={onDown} onPointerOver={onOver} onPointerOut={onOut} onClick={onClick}>
       <OutlineColor color={outline}>{pixel ? d.render(p, it.color) : <MaqueteDecor d={d} it={it} p={scene} />}</OutlineColor>
     </group>
   );
@@ -268,6 +268,8 @@ export function DecorLayer() {
         const s = [...seats].sort((a, b) => Math.hypot(a.x - player.x, a.z - player.z) - Math.hypot(b.x - player.x, b.z - player.z))[0];
         walkAndSit(s, s.dir);
       },
+      // o clique do mesmo gesto não pode chegar ao chão (viraria "andar até aqui" e cancelaria o sentar)
+      onClick: (e: any) => e.stopPropagation(),
       onOver: (e: any) => { e.stopPropagation(); document.body.style.cursor = 'pointer'; },
       onOut: () => { document.body.style.cursor = ''; },
     };

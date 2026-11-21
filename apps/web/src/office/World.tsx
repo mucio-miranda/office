@@ -126,6 +126,22 @@ export function walkAndSit(p: Vec2, dir: number) {
   player.sitOnArrive = { x: p.x, z: p.z, dir };
 }
 
+/**
+ * Clique numa mesa de pessoa: a sua, senta; livre, fica com ela e senta; de outra pessoa, só anda até perto.
+ * Devolve se tratou o clique.
+ */
+function clickDesk(f: Furniture) {
+  const st = useStore.getState();
+  const hd = HUMAN_DESKS.find((d) => Math.abs(d.x - f.x) < 0.05 && Math.abs(d.z - f.z) < 0.05);
+  if (!hd) return false;
+  const seat = deskSeat(hd);
+  const owner = st.members.find((m) => m.desk === hd.id);
+  if (owner && owner.id !== st.user?.id) return false;
+  if (owner) { walkAndSit(seat, Math.PI); return true; }
+  st.claimDesk(hd.id).then((ok) => { if (ok) walkAndSit(seat, Math.PI); });
+  return true;
+}
+
 function sitAt(d: HumanDesk) {
   const seat = deskSeat(d);
   player.x = seat.x; player.z = seat.z; player.dir = Math.PI;
@@ -397,7 +413,9 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
     cur.current.moving = target.current.moving;
     cur.current.seated = target.current.seated;
   });
-  return <Avatar anchorId={`user:${pr.userId}`} color={pr.color} look={pr.look} p={p} getState={() => cur.current} />;
+  // clicar na pessoa abre a conversa direta com ela
+  return <Avatar anchorId={`user:${pr.userId}`} color={pr.color} look={pr.look} p={p} getState={() => cur.current}
+    onClick={() => { if (!droneBlocksClick()) useStore.getState().open('pessoa', pr.userId); }} />;
 }
 
 /**
@@ -815,7 +833,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       ) : f.kind === 'moodboard' ? (
         <MoodboardWall key={i} f={f} p={p} />
       ) : (
-        <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; walkTo({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
+        <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => { if (droneBlocksClick()) return; if (ff.kind === 'mesa' && clickDesk(ff)) return; walkTo({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff); }} />
       ))}
       <DecorLayer />
       <DeskMarkers />

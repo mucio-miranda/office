@@ -13,7 +13,8 @@ export function FurnitureMesh(props: { f: Furniture; p: ScenePalette; onUse?: (f
 
 function MaqueteFurniture({ f, p, onUse }: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void }) {
   const [hover, setHover] = useState(false);
-  const interactive = !!(f.panel || f.label);
+  // mesa também responde ao clique: sentar na sua ou ficar com uma livre
+  const interactive = !!(f.panel || f.label) || f.kind === 'mesa';
   const handlers = interactive
     ? {
         onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; },

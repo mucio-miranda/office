@@ -46,7 +46,8 @@ export function Plant({ p, pos, scale = 1 }: { p: PixelPalette; pos: V3; scale?:
 export function PixelFurniture({ f, onUse }: { f: Furniture; onUse?: (f: Furniture) => void }) {
   const p = usePixel();
   const [hover, setHover] = useState(false);
-  const interactive = !!(f.panel || f.label);
+  // mesa também responde ao clique: sentar na sua ou ficar com uma livre
+  const interactive = !!(f.panel || f.label) || f.kind === 'mesa';
   const handlers = interactive
     ? {
         onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; },
