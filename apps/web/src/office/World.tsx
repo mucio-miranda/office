@@ -10,7 +10,7 @@ import { DecorLayer } from './decor/DecorLayer';
 import { useDecor } from './decor/state';
 import { seatWorkers, sittable } from './seats';
 import { copaSpot, copaSpots, releaseCopaSpot, workerPhase } from './npc';
-import { quarterOf, rotateView, snapView, useView, viewRot } from './view';
+import { holdView, quarterOf, rotateView, tiltView, useView, viewRot } from './view';
 import { pad } from '../lib/gamepad';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
@@ -79,7 +79,7 @@ export const beacon = { on: false, x: 0, z: 0 };
  * Altura da câmera em relação à distância horizontal. Maquete: 1,15. Pixel: isométrico 2:1 do Habbo
  * (elevação de 30°, altura = tan 30° × √2), em que as linhas do piso sobem 1 pixel a cada 2.
  */
-const camHeight = () => (useWorldStyle.getState().style === 'pixel' ? Math.tan(Math.PI / 6) * Math.SQRT2 : 1.15);
+const camHeight = () => (useWorldStyle.getState().style === 'pixel' ? Math.tan(Math.PI / 6) * Math.SQRT2 : 1.15) * viewRot.elev;
 /** Seno da elevação (para converter o arraste em pixels em metros no chão). */
 const sinElev = () => camHeight() / Math.hypot(1, camHeight());
 /** Tamanho do pixel da arte no tema Pixel, em pixels da tela (1:1, como nos quartos do Habbo). */
@@ -359,6 +359,7 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     cam.cx = camTarget.current.x;
     cam.cz = camTarget.current.z;
     if (!viewRot.dragging && Math.abs(viewRot.target - cam.angle) > 1e-4) cam.angle += (viewRot.target - cam.angle) * Math.min(1, dt * 9);
+    if (Math.abs(viewRot.elevTarget - viewRot.elev) > 1e-4) viewRot.elev += (viewRot.elevTarget - viewRot.elev) * Math.min(1, dt * 9);
     const q = quarterOf(cam.angle);
     if (q !== useView.getState().quarter) useView.setState({ quarter: q });
     const d = 30;
@@ -670,6 +671,8 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       if (e.key === 'Escape') recenter();
       // Q gira o escritório (Shift+Q para o outro lado); no Decorar ele fica no lado de sempre
       if (e.key.toLowerCase() === 'q' && !e.ctrlKey && !e.metaKey && !e.altKey && !useDecor.getState().editing) { rotateView(e.shiftKey ? 1 : -1); return; }
+      // PageUp / PageDown: sobe e desce a câmera
+      if ((e.key === 'PageUp' || e.key === 'PageDown') && !useDecor.getState().editing) { e.preventDefault(); tiltView(e.key === 'PageUp' ? 1.15 : 1 / 1.15); return; }
       keys.add(e.key.toLowerCase());
     };
     const up = (e: KeyboardEvent) => {
@@ -705,14 +708,14 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
     // arrastar: Espaço + botão esquerdo, ou botão direito ou do meio a qualquer momento (o avatar fica parado)
     let last: { x: number; y: number } | null = null;
     let moved = 0;
-    // Ctrl (ou Alt) + arrastar com o botão esquerdo: gira o escritório; ao soltar, encaixa no lado mais perto
-    let spin: { x: number; angle: number } | null = null;
+    // Ctrl (ou Alt) + arrastar com o botão esquerdo: para os lados gira livre, para cima e para baixo sobe e desce a câmera
+    let spin: { x: number; y: number; angle: number; elev: number } | null = null;
     const pdown = (e: PointerEvent) => {
       if ((e.target as HTMLElement)?.tagName !== 'CANVAS') return;
       if (e.button === 0 && (e.ctrlKey || e.altKey) && !useDecor.getState().editing) {
         e.preventDefault();
         e.stopPropagation();
-        spin = { x: e.clientX, angle: cam.angle };
+        spin = { x: e.clientX, y: e.clientY, angle: cam.angle, elev: viewRot.elevTarget };
         viewRot.dragging = true;
         cam.dragging = true;
         document.body.style.cursor = 'grabbing';
@@ -726,7 +729,12 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       useStore.setState({ droneDragging: true });
     };
     const pmove = (e: PointerEvent) => {
-      if (spin) { cam.angle = spin.angle + (e.clientX - spin.x) * 0.008; return; }
+      if (spin) {
+        cam.angle = spin.angle + (e.clientX - spin.x) * 0.008;
+        viewRot.elevTarget = Math.min(2.6, Math.max(0.45, spin.elev * Math.exp((e.clientY - spin.y) * 0.006)));
+        viewRot.elev = viewRot.elevTarget;
+        return;
+      }
       if (!last) return;
       const dx = e.clientX - last.x, dy = e.clientY - last.y;
       last = { x: e.clientX, y: e.clientY };
@@ -737,7 +745,8 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       if (spin) {
         spin = null;
         viewRot.dragging = false;
-        snapView(cam.angle);
+        holdView(cam.angle);
+        tiltView(1);
         document.body.style.cursor = '';
         cam.justDragged = true;
         setTimeout(() => { cam.dragging = false; cam.justDragged = false; }, 0);

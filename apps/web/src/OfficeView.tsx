@@ -3,7 +3,7 @@ import { MAX_WORKERS, WORKER_IDLE_HOURS, canSeeFinance, isWorkerVisible } from '
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
-  LocateFixed, Navigation, RotateCcw, RotateCw, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
+  LocateFixed, Navigation, RotateCcw, RotateCw, ChevronUp, ChevronDown, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
   Plus, PanelLeftClose, PanelLeftOpen, ListChecks, Download, Send,
 } from 'lucide-react';
@@ -11,7 +11,7 @@ import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
-import { rotateView } from './office/view';
+import { resetView, rotateView, tiltView } from './office/view';
 import { clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
 import { PadHints } from './lib/PadHints';
 import { Tour, startTour, tourSeen } from './office/Tour';
@@ -129,6 +129,7 @@ export function OfficeView() {
     if (b === 'A') { near?.action(); return; }
     if (b === 'X' && near?.alt) { near.alt.action(); return; }
     if (b === 'B' || b === 'X') { recenter(); return; }
+    if (b === 'RS') { resetView(); return; }
     if (b === 'LB') { rotateView(-1); return; }
     if (b === 'RB') { rotateView(1); return; }
     if (b === 'UP') { goToMyDesk(); return; }
@@ -439,6 +440,9 @@ function WorldHud() {
       <span className="pill view-rot">
         <button className="icon tiny" onClick={() => rotateView(-1)} title="Girar o escritório (Q) · ou Ctrl + arrastar"><RotateCcw size={13} /></button>
         <button className="icon tiny" onClick={() => rotateView(1)} title="Girar para o outro lado (Shift+Q) · ou Ctrl + arrastar"><RotateCw size={13} /></button>
+        <button className="icon tiny" onClick={() => tiltView(1.18)} title="Subir a câmera (PageUp) · ou Ctrl + arrastar para cima/baixo"><ChevronUp size={13} /></button>
+        <button className="icon tiny" onClick={() => tiltView(1 / 1.18)} title="Descer a câmera (PageDown)"><ChevronDown size={13} /></button>
+        <button className="icon tiny" onClick={resetView} title="Vista padrão (ângulo e altura de sempre)"><Compass size={13} /></button>
       </span>
       <span className="spacer" />
       <span className="pill stats">
