@@ -10,6 +10,7 @@ import { DecorLayer } from './decor/DecorLayer';
 import { useDecor } from './decor/state';
 import { seatWorkers } from './seats';
 import { quarterOf, rotateView, snapView, useView, viewRot } from './view';
+import { pad } from '../lib/gamepad';
 import { Avatar } from './Avatar';
 import { LabelProjector, registerAnchor } from './Labels';
 import { FurnitureMesh } from './Furniture';
@@ -218,7 +219,12 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       if (keys.has('a') || keys.has('arrowleft')) ix -= 1;
       if (keys.has('d') || keys.has('arrowright')) ix += 1;
     }
-    const speed = 5.2 * (keys.has('shift') ? 1.8 : 1);
+    // controle: o analógico esquerdo anda (devagar com pouca inclinação, corre no fundo ou com L3)
+    let padMag = 1;
+    if (active && !typing() && (pad.lx || pad.ly)) { ix += pad.lx; iz += pad.ly; padMag = Math.max(0.35, Math.min(1, Math.hypot(pad.lx, pad.ly))); }
+    if (active && (pad.rx || pad.ry)) panBy(-pad.rx * 900 * dt, -pad.ry * 900 * dt);
+    if (active && (pad.lt || pad.rt)) cam.zoom = Math.min(110, Math.max(9, cam.zoom * Math.exp((pad.rt - pad.lt) * dt * 1.8)));
+    const speed = 5.2 * (keys.has('shift') || pad.run ? 1.8 : 1) * padMag;
     let dx = 0, dz = 0;
     if (ix || iz) {
       stopWalking();

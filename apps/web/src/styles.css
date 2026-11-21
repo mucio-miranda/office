@@ -1412,6 +1412,14 @@ label.check input { width: auto; height: auto; }
 .emoji-custom input { flex: 1; min-width: 0; }
 .view-rot { display: inline-flex; gap: 2px; padding: 2px 4px; }
 .view-rot .icon { width: 26px; height: 24px; }
+.pad-hints { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); z-index: 70; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px 14px;
+  max-width: calc(100vw - 32px); padding: 8px 14px; border-radius: 12px; background: rgba(15, 16, 20, .78); color: #f4f4f2; font-size: 12.5px; pointer-events: none; backdrop-filter: blur(6px); }
+.pad-hint { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.pad-glyph { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 20px; padding: 0 5px; border-radius: 6px; border: 1.5px solid rgba(255,255,255,.55);
+  font-size: 10.5px; font-weight: 700; line-height: 1; color: #f4f4f2; }
+.pad-glyph.round { width: 22px; height: 22px; min-width: 22px; padding: 0; border-radius: 50%; font-size: 12px; }
+/* foco visível quando o direcional do controle anda pelos painéis */
+body:has(.pad-hints) :focus-visible, body:has(.pad-hints) .main :focus { outline: 3px solid #ffd23f; outline-offset: 2px; }
 .ctx-high { color: var(--warning, #c98a00); }
 .team-idle { padding: 4px 10px 0; font-size: 11px; }
 

@@ -12,12 +12,14 @@ import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { rotateView } from './office/view';
+import { moveFocus, rumble, sendKey, startGamepad, usePad, type PadButton } from './lib/gamepad';
+import { PadHints } from './lib/PadHints';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { HUMAN_DESKS, ROOMS, BOUNDS, isFixedAgent, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
 import { ThemeToggle } from './lib/ui';
 import { DecorUI, enterDecorate } from './office/decor/DecorUI';
-import { canDecorate, useDecor } from './office/decor/state';
+import { canDecorate, setEditing, useDecor } from './office/decor/state';
 import { THEMES, useTheme } from './lib/theme';
 import { defaultWall, useWallTool } from './office/decor/walls';
 import { desktop, type UpdateState } from './lib/desktop';
@@ -90,12 +92,64 @@ export function OfficeView() {
       if (room) { goTo(roomCenter(room)); return; }
       if (k === 'e' && nearby && !useDecor.getState().editing) { nearby.action(); return; }
       if (k === 't' || k === 'enter') { e.preventDefault(); chatRef.current?.focus(); return; }
-      if (k === '[') cam.angle -= Math.PI / 2;
-      if (k === ']') cam.angle += Math.PI / 2;
+      if (k === '[') rotateView(-1);
+      if (k === ']') rotateView(1);
     };
     addEventListener('keydown', onKey);
     return () => removeEventListener('keydown', onKey);
   }, [nearby, palette, open, inWorld]);
+  // controle de videogame: o que cada botão faz depende de onde você está (mapa, painel aberto ou busca)
+  const padCtx = useRef({ nearby, palette, inWorld });
+  padCtx.current = { nearby, palette, inWorld };
+  useEffect(() => startGamepad((b: PadButton) => {
+    const { nearby: near, palette: searching, inWorld: world } = padCtx.current;
+    const st = useStore.getState();
+    const dir = ({ UP: 'up', DOWN: 'down', LEFT: 'left', RIGHT: 'right' } as const)[b as 'UP'];
+    if (searching) {
+      if (b === 'UP' || b === 'DOWN') sendKey(b === 'UP' ? 'ArrowUp' : 'ArrowDown');
+      else if (b === 'A') sendKey('Enter');
+      else if (b === 'B' || b === 'Y') setPalette(false);
+      return;
+    }
+    if (b === 'Y') { setPalette(true); return; }
+    if (b === 'START') { const rafa = st.agents.find(isFixedAgent); if (rafa) open('agente', rafa.id); return; }
+    if (useDecor.getState().editing) { if (b === 'B') setEditing(false); return; }
+    if (!world) {
+      const el = document.activeElement as HTMLElement | null;
+      const typingNow = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT');
+      if (b === 'B') { if (typingNow) el!.blur(); else open(null); return; }
+      if (dir) { moveFocus(dir); return; }
+      if (b === 'A' && el && el !== document.body && !typingNow) el.click();
+      return;
+    }
+    if (b === 'A') { near?.action(); return; }
+    if (b === 'B' || b === 'X') { recenter(); return; }
+    if (b === 'LB') { rotateView(-1); return; }
+    if (b === 'RB') { rotateView(1); return; }
+    if (b === 'UP') { goToMyDesk(); return; }
+    if (b === 'LEFT' || b === 'RIGHT') {
+      // de sala em sala, na ordem das teclas de atalho
+      const list = ROOMS.filter((r) => r.key).sort((x, y) => Number(x.key) - Number(y.key));
+      const here = list.findIndex((r) => r.id === st.myRoom);
+      const next = list[((here < 0 ? 0 : here + (b === 'RIGHT' ? 1 : -1)) + list.length) % list.length];
+      if (next) goTo(roomCenter(next));
+    }
+  }), [open]);
+  // funcionário que passa a precisar de você: o controle vibra
+  useEffect(() => useStore.subscribe((s, prev) => {
+    if (!usePad.getState().active || s.workers === prev.workers) return;
+    if (s.workers.some((w) => w.state === 'aguardando' && prev.workers.find((p) => p.id === w.id)?.state !== 'aguardando')) rumble(220, 0.6);
+  }), []);
+  const padItems: { b: PadButton[]; label: string }[] = palette
+    ? [{ b: ['UP', 'DOWN'], label: 'Escolher' }, { b: ['A'], label: 'Abrir' }, { b: ['B'], label: 'Fechar' }]
+    : !inWorld
+      ? [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['A'], label: 'Selecionar' }, { b: ['B'], label: 'Voltar' }, { b: ['Y'], label: 'Buscar' }]
+      : [
+        ...(nearby ? [{ b: ['A'] as PadButton[], label: nearby.label }] : []),
+        { b: ['LS'], label: 'Andar' }, { b: ['RS'], label: 'Câmera' }, { b: ['LB', 'RB'], label: 'Girar' }, { b: ['LT', 'RT'], label: 'Zoom' },
+        { b: ['LEFT', 'RIGHT'], label: 'Salas' }, { b: ['Y'], label: 'Menu' }, { b: ['START'], label: 'Daily' },
+      ];
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'b') { e.preventDefault(); setNavCollapsed(!navCollapsed); }
@@ -146,6 +200,7 @@ export function OfficeView() {
         </div>
       </main>
       {palette && <Palette onClose={() => setPalette(false)} />}
+      <PadHints items={padItems} />
       <NewDemandHost />
       {toast && <ToastView />}
     </div>
