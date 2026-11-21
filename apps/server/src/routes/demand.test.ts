@@ -328,6 +328,11 @@ test('funcionário = sessão do cliente: nasce com o primeiro pedido, tem nome d
   const jobs = (await call('GET', `${O}/jobs`)).json.filter((j: any) => j.clientId === c.id && j.stage !== 'aprovacao');
   assert.ok(jobs.length && jobs.every((j: any) => j.workerId === titular.id), 'as tarefas do cliente são dele');
   assert.equal(titular.state, 'copa', 'sem trabalho, fica na copa');
+  // nome próprio: dá para trocar, com validação
+  assert.equal((await call('PATCH', `${O}/workers/${titular.id}`, { name: 'Bia' })).status, 200);
+  assert.equal((await call('GET', `${O}/workers`)).json.find((w: any) => w.id === titular.id).name, 'Bia');
+  assert.equal((await call('PATCH', `${O}/workers/${titular.id}`, { name: 'x' })).status, 400, 'nome curto');
+  assert.equal((await call('PATCH', `${O}/workers/${titular.id}`, { name: titular.name })).status, 200, 'volta ao nome da lista');
   const r = await call('POST', `${O}/workers/${titular.id}/arquivar`, {});
   assert.equal(r.status, 200, JSON.stringify(r.json));
   workers = (await call('GET', `${O}/workers`)).json;

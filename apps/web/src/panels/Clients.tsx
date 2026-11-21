@@ -1,7 +1,7 @@
 import { ClientDrive } from './ClientDrive';
 import { canSeeFinance, canWork } from '@office/shared';
 import { useEffect, useState } from 'react';
-import { Archive as ArchiveIcon, Bot, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
+import { Archive as ArchiveIcon, Bot, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, Pencil, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession, type Worker } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
@@ -499,11 +499,27 @@ const STATE_LABEL = { trabalhando: 'trabalhando', aguardando: 'precisa de você'
 
 /** Um funcionário de IA da equipe do cliente: nome, selo IA, papel e onde está. */
 function TeamRow({ w, label, onOpen }: { w: Worker; label: string; onOpen?: () => void }) {
+  const { office, notify } = useStore();
+  const [editing, setEditing] = useState(false);
   const st = w.archivedAt ? 'arquivado' : w.state === 'copa' ? 'livre' : w.state;
+  const save = async (v: string) => {
+    setEditing(false);
+    const name = v.trim();
+    if (name.length < 2 || name === w.name) return;
+    try { await api(`/api/offices/${office!.id}/workers/${w.id}`, { method: 'PATCH', body: { name } }); notify(`Agora é ${name}`); }
+    catch (x) { notify((x as Error).message); }
+  };
   return (
     <div role="listitem" className={`team-row agent-row st-${st} ${w.archivedAt ? 'archived' : ''}`}>
       <span className="avatar" style={{ background: w.color }}>{w.name[0]}<span className="status-dot" /></span>
-      <div className="truncate"><b>{w.name}</b> <span className="who-badge">IA</span><small className="muted truncate">{label}{w.archivedAt ? '' : ` · ${STATE_LABEL[w.state]}`}</small></div>
+      <div className="truncate">
+        {editing
+          ? <input autoFocus defaultValue={w.name} maxLength={30} aria-label="Nome do funcionário" style={{ height: 26 }}
+              onBlur={(e) => save(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditing(false); }} />
+          : <><b>{w.name}</b> <span className="who-badge">IA</span></>}
+        <small className="muted truncate">{label}{w.archivedAt ? '' : ` · ${STATE_LABEL[w.state]}`}</small>
+      </div>
+      {!w.archivedAt && canWork(office!.role) && !editing && <button className="icon" title="Mudar o nome" aria-label={`Mudar o nome de ${w.name}`} onClick={() => setEditing(true)}><Pencil size={13} /></button>}
       {onOpen && <button className="ghost small" onClick={onOpen}>Conversar</button>}
     </div>
   );

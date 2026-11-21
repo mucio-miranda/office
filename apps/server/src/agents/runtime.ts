@@ -395,7 +395,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
   }
   const mcpIds = Object.keys(mcp.servers);
   const sysFile = path.join(dir, 'system.md');
-  writeFileSync(sysFile, systemPrompt(agent, office, mcp.hints), 'utf8');
+  // o funcionário do cliente tem nome próprio (titular ou ajudante): é com ele que a IA se apresenta
+  writeFileSync(sysFile, systemPrompt(helper?.name ? { ...agent, name: helper.name } : agent, office, mcp.hints), 'utf8');
 
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',

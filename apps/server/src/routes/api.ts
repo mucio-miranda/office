@@ -1549,6 +1549,22 @@ export async function api(app: FastifyInstance) {
       const e = startTurnover(officeId, id, `user:${req.user.id}`, now().slice(0, 7));
       return e ? reply.code(409).send({ error: e }) : { ok: true };
     });
+    // nome do funcionário de um cliente (titular ou ajudante): a IA passa a se apresentar com ele
+    r.patch('/api/offices/:officeId/workers/:id', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ name: z.string().trim().min(2).max(30) }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      const w = one<Worker>('SELECT * FROM workers WHERE id = ? AND office_id = ?', id, officeId);
+      if (!w) return reply.code(404).send({ error: 'Funcionário não encontrado' });
+      const twin = all<{ id: string; name: string }>('SELECT id, name FROM workers WHERE office_id = ? AND archived_at IS NULL AND id != ?', officeId, id)
+        .find((x) => x.name.toLocaleLowerCase('pt-BR') === b.name.toLocaleLowerCase('pt-BR'));
+      if (twin) return reply.code(409).send({ error: `Já existe um funcionário chamado ${twin.name}.` });
+      update('workers', id, { name: b.name });
+      logActivity(officeId, `user:${req.user.id}`, 'renomeou o funcionário', `${w.name} → ${b.name}`);
+      invalidate(officeId, 'workers');
+      return { ok: true };
+    });
     r.post('/api/offices/:officeId/workers/:id/arquivar', async (req, reply) => {
       if (!requireWorker(req, reply)) return;
       const { officeId, id } = req.params as any;
