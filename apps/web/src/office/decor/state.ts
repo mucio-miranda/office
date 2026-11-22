@@ -279,17 +279,19 @@ export function updateItem(id: string, patch: Partial<DecorItem>) {
 }
 
 /**
- * Troca a mesa fixa selecionada por uma do catálogo (ou volta à original com `as` vazio). A mesa nova assume a função
+ * Troca a mesa selecionada (fixa ou do catálogo) por outra do catálogo (a fixa volta à original com `as` vazio). A mesa nova assume a função
  * da antiga: o dono (a pessoa ou o funcionário de função) senta na primeira cadeira e as outras ficam para quem
  * trabalha ou está em pausa. Se não couber no lugar, tenta girar; sem espaço, avisa.
  */
 export function swapDesk(id: string, as: string | undefined) {
   const s = useDecor.getState();
   const it = s.items.find((i) => i.id === id);
-  if (!it || !DEF[it.kind]?.fixed) return false;
+  const fixed = !!it && !!DEF[it.kind]?.fixed;
+  // mesa do catálogo já colocada: troca o tipo dela; mesa fixa: guarda a escolhida em `as`
+  if (!it || (!fixed && DEF[it.kind]?.cat !== 'mesas') || (!fixed && !as)) return false;
   for (let k = 0; k < 4; k++) {
-    const next: DecorItem = { ...it, rot: (it.rot + k) % 4, as, color: undefined };
-    if (!as) delete next.as;
+    const next: DecorItem = fixed ? { ...it, rot: (it.rot + k) % 4, as, color: undefined } : { ...it, rot: (it.rot + k) % 4, kind: as!, color: undefined };
+    if (fixed && !as) delete next.as;
     if (fits(next, s.items)) { commit(s.items.map((i) => (i.id === id ? next : i))); return true; }
   }
   useStore.getState().notify('Esta mesa não cabe aí. Mova a mesa para um lugar mais livre e tente de novo.');
@@ -314,7 +316,7 @@ export function removeSelected() {
   const s = useDecor.getState();
   if (!s.sel) return;
   // mesa fixa: só move e gira (quem tem mesa continua com ela)
-  if (DEF[s.items.find((i) => i.id === s.sel)?.kind ?? '']?.fixed) return useStore.getState().notify('Esta mesa é fixa: dá para mover e girar, não remover.');
+  if (DEF[s.items.find((i) => i.id === s.sel)?.kind ?? '']?.fixed && !s.sel.startsWith('mesa-agente:')) return useStore.getState().notify('Esta mesa é fixa: dá para mover e girar, não remover.');
   commit(s.items.filter((i) => i.id !== s.sel));
   useDecor.setState({ sel: null });
 }

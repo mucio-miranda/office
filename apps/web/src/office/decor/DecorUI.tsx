@@ -167,18 +167,20 @@ function Inspector() {
   if (!d) return null;
   const color = sel.color ?? d.colors?.[0];
   const fixedDesk = !!DEF[sel.kind]?.fixed && sel.kind !== 'fixo';
+  // toda mesa é trocável: a fixa guarda a escolha e a do catálogo vira o tipo novo
+  const isDesk = fixedDesk || d.cat === 'mesas';
   return (
     <div className="decor-inspector">
       <Thumb kind={d.kind} />
       <div className="decor-info">
         <b>{d.name}</b>
         <span className="muted">Arraste para mover</span>
-        {fixedDesk && (
+        {isDesk && (
           <div className="desk-swap">
             <span className="muted">Trocar por:</span>
-            <button className={`ghost small ${!sel.as ? 'on' : ''}`} onClick={() => swapDesk(sel.id, undefined)} title="Voltar à mesa original">Original</button>
+            {fixedDesk && <button className={`ghost small ${!sel.as ? 'on' : ''}`} onClick={() => swapDesk(sel.id, undefined)} title="Voltar à mesa original">Original</button>}
             {CATALOG.filter((c) => c.cat === 'mesas' && !c.fixed && c.seats?.length).map((c) => (
-              <button key={c.kind} className={`ghost small ${sel.as === c.kind ? 'on' : ''}`} onClick={() => swapDesk(sel.id, c.kind)} title={`${c.name} · ${c.seats!.length} ${c.seats!.length > 1 ? 'lugares' : 'lugar'}`}>
+              <button key={c.kind} className={`ghost small ${(fixedDesk ? sel.as : sel.kind) === c.kind ? 'on' : ''}`} onClick={() => swapDesk(sel.id, c.kind)} title={`${c.name} · ${c.seats!.length} ${c.seats!.length > 1 ? 'lugares' : 'lugar'}`}>
                 <Thumb kind={c.kind} />
               </button>
             ))}
@@ -196,7 +198,7 @@ function Inspector() {
       <div className="decor-actions">
         {d.place !== 'parede' && <button className="ghost small" onClick={rotateSelected} title="Girar (R)"><RotateCw size={14} /> Girar</button>}
         <button className="ghost small" onClick={duplicateSelected} title="Duplicar (Ctrl D)"><Copy size={14} /> Duplicar</button>
-        <button className="ghost small danger" onClick={removeSelected} title="Remover (Delete)" disabled={fixedDesk}><Trash2 size={14} /> Remover</button>
+        <button className="ghost small danger" onClick={removeSelected} title={sel.id.startsWith('mesa-agente:') ? 'Voltar a mesa ao lugar de origem (Delete)' : 'Remover (Delete)'} disabled={fixedDesk && !sel.id.startsWith('mesa-agente:')}><Trash2 size={14} /> Remover</button>
       </div>
     </div>
   );

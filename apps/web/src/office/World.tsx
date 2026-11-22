@@ -21,7 +21,7 @@ import { ClientArchive, cabinets, openArchive } from './Archive';
 import { MoodboardWall } from './MoodboardWall';
 
 const MAQUETE_WALL: Record<string, string> = { branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f', vidro: '#bfe6f5', 'vidro-fume': '#39444c' };
-import { agentSeat, buildingRect, deskDir, deskItemFor, fixoItemFor, DESK_DIRS, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+import { agentDeskItemFor, agentDir, agentOverridden, agentSeat, buildingRect, deskDir, deskItemFor, fixoItemFor, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -523,7 +523,7 @@ function WorkerNPC({ w, spot, p }: { w: Worker; spot: WorkerSpot; p: ScenePalett
 export function AgentNPC({ a, p }: { a: AgentProfile; p: ScenePalette }) {
   const open = useStore((s) => s.open);
   const desk = agentSeat(a);
-  const dir = a.seat ? Math.PI : DESK_DIRS[a.room] ?? Math.PI;
+  const dir = agentDir(a);
   const state = useMemo(() => ({ x: desk.x, z: desk.z, dir, moving: false }), [desk.x, desk.z, dir]);
   return (
     <Avatar anchorId={`agent:${a.id}`} seated typing={a.status === 'trabalhando'} color={a.color} look={a.look} p={p}
@@ -853,7 +853,19 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         </>
       )}
       <Floor p={p} />
-      {agents.filter((a) => a.seat).map((a) => <FurnitureMesh key={`mesa-${a.id}`} f={{ kind: 'mesa', x: a.seat!.x, z: a.seat!.z - 1.1, solid: true }} p={p} onUse={() => {}} />)}
+      {agents.filter((a) => a.seat && !agentOverridden(a.id)).map((a) => (
+        <FurnitureMesh key={`mesa-${a.id}`} f={{ kind: 'mesa', x: a.seat!.x, z: a.seat!.z - 1.1, solid: true }} p={p} onUse={() => {}} onGrab={(_f, e) => {
+          // mesa própria do funcionário: no Decorar vira peça editável (mover, girar, trocar) como as outras
+          const ds = useDecor.getState();
+          if (!ds.editing || ds.placing || e.button !== 0 || e.ctrlKey || e.altKey || useStore.getState().drone || usePlan.getState().on) return;
+          const it = agentDeskItemFor(a);
+          if (!it) return;
+          e.stopPropagation();
+          if (!ds.items.some((x) => x.id === it.id)) commit([...ds.items, it]);
+          useDecor.setState({ sel: it.id });
+          grabItem(it.id);
+        }} />
+      ))}
       {FURNITURE.map((f, i) => f.kind === 'arquivo' ? (
         <ClientArchive key={i} f={f} p={p} onUse={(x, id) => { if (droneBlocksClick()) return; walkTo({ x, z: f.z + 1.3 }); openArchive(id); }} />
       ) : f.kind === 'moodboard' ? (

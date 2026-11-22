@@ -402,11 +402,21 @@ export const OBJECT_TAG: Partial<Record<NonNullable<PanelId> | 'cafe', string>> 
   demandas: '📋', calendario: '📅', financeiro: '💰', video: '🎬', moodboard: '🖼️', arquivo: '🗄️', equipe: '👥', atividade: '📰', cafe: '☕',
 };
 
-export const agentSeat = (a: { room: string; seat?: Vec2 | null }): Vec2 => {
+/** Funcionário com mesa própria que foi mexida no Decorar: onde ele senta e para onde olha (peça `mesa-agente:<id>`). */
+const agentOver: Record<string, { seat: Vec2; dir: number }> = {};
+export const agentOverridden = (id: string) => !!agentOver[id];
+export const agentSeat = (a: { id?: string; room: string; seat?: Vec2 | null }): Vec2 => {
+  if (a.id && agentOver[a.id]) return agentOver[a.id].seat;
   if (a.seat) return a.seat;
   if (DESKS[a.room]) return DESKS[a.room];
   const r = ROOMS.find((x) => x.id === a.room);
   return r ? roomCenter(r) : SPAWN;
+};
+
+/** Para onde olha o funcionário sentado na mesa dele. */
+export const agentDir = (a: { id?: string; room: string; seat?: Vec2 | null }): number => {
+  const o = a.id ? agentOver[a.id] : undefined;
+  return o ? o.dir : a.seat ? Math.PI : DESK_DIRS[a.room] ?? Math.PI;
 };
 
 export function roomAt(p: Vec2): Room | null {
@@ -586,10 +596,17 @@ export function setWallStyles(map: Record<string, WallType>) {
 }
 
 /** Mesas dos funcionários que não usam a mesa padrão da sala. */
-export function setAgentDesks(agents: { seat?: Vec2 | null }[]) {
-  agentDesks = agents.filter((a) => a.seat).map((a) => FURN_BOX({ kind: 'mesa', x: a.seat!.x, z: a.seat!.z - 1.1 }));
+let lastAgents: { id?: string; seat?: Vec2 | null }[] = [];
+export function setAgentDesks(agents: { id?: string; seat?: Vec2 | null }[]) {
+  lastAgents = agents;
+  // a mesa mexida no Decorar já vale como peça da decoração: não conta duas vezes
+  agentDesks = agents.filter((a) => a.seat && !(a.id && agentOver[a.id])).map((a) => FURN_BOX({ kind: 'mesa', x: a.seat!.x, z: a.seat!.z - 1.1 }));
   rebuildSolids();
 }
+
+/** A mesa própria de um funcionário contratado, clicada no Decorar: a peça editável dela. */
+export const agentDeskItemFor = (a: { id: string; seat?: Vec2 | null }): { id: string; kind: string; x: number; z: number; rot: number } | null =>
+  a.seat ? { id: `mesa-agente:${a.id}`, kind: DESK_KIND, x: a.seat.x, z: a.seat.z - 1.1, rot: 0 } : null;
 
 /** O prédio de agora (o contorno original, aumentado para a frente e para a direita pela Planta). */
 export const buildingRect = (): Rect => ({ x0: BOUNDS.x0, z0: BOUNDS.z0, x1: MAIN.x1, z1: BOUNDS.z1 });
@@ -664,6 +681,9 @@ export function setDeskItems(items: { id: string; kind: string; x: number; z: nu
   if (JSON.stringify(next) === JSON.stringify(deskItems) && JSON.stringify(fixo) === JSON.stringify(fixoItems)) return;
   deskItems = next;
   fixoItems = fixo;
+  for (const k of Object.keys(agentOver)) delete agentOver[k];
+  for (const it of next) if (it.id.startsWith('mesa-agente:')) agentOver[it.id.slice(12)] = { seat: deskSeat(it), dir: deskDir(it) };
+  setAgentDesks(lastAgents);
   applyDesks();
 }
 
