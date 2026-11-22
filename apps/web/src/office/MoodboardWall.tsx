@@ -6,6 +6,7 @@ import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import type { ScenePalette } from '../lib/theme';
 import { MOODBOARD, MOODBOARD_SLOTS, type Furniture } from './layout';
+import { objLabelId, setObjHover } from './Labels';
 
 /**
  * Cavaletes de moodboard no estúdio de design: cada um mostra as imagens de verdade de um nicho ou cliente, nas cores
@@ -66,8 +67,8 @@ function Easel({ s, x, officeId, p }: { s: MoodboardSummary; x: number; officeId
   const wood = hover ? p.hover : '#8a6a4a';
   return (
     <group position={[x, 0, 0]}
-      onPointerOver={(e) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; }}
-      onPointerOut={() => { setHover(false); document.body.style.cursor = ''; }}
+      onPointerOver={(e) => { e.stopPropagation(); setHover(true); setObjHover(objLabelId(MOODBOARD)); document.body.style.cursor = 'pointer'; }}
+      onPointerOut={() => { setHover(false); setObjHover(null); document.body.style.cursor = ''; }}
       onClick={(e) => { e.stopPropagation(); useStore.getState().open('moodboard', s.key); }}>
       <mesh position={[0, 0.62 + h / 2, 0]} castShadow><boxGeometry args={[w + 0.14, h + 0.14, 0.08]} /><meshStandardMaterial color={wood} roughness={0.85} /></mesh>
       <mesh position={[0, 0.62 + h / 2, 0.045]}><planeGeometry args={[w, h]} /><meshBasicMaterial map={tex} toneMapped={false} /></mesh>

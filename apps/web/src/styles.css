@@ -1483,3 +1483,4 @@ body { cursor: var(--cur-arrow), default; }
 .desk-swap button { height: 34px; padding: 0 6px; }
 .desk-swap button.on { background: var(--accent); border-color: var(--foreground); }
 .desk-swap button canvas, .desk-swap button img { width: 28px; height: 28px; }
+.label-mode { white-space: nowrap; width: max-content; cursor: var(--cur-hand), pointer; }

@@ -3,9 +3,9 @@ import { Vector3 } from 'three';
 import { useStore } from '../lib/store';
 import { useWorldStyle } from '../lib/theme';
 import { isWorkerVisible } from '@office/shared';
-import { DESKS, FURNITURE, OBJECT_TAG, ROOMS, isFixedAgent } from './layout';
+import { DESKS, FURNITURE, OBJECT_TAG, ROOMS, isFixedAgent, roomAt } from './layout';
 import { workerPhase } from './npc';
-import { busyState, useOnlyWorking } from './view';
+import { busyState, useLabelMode, useOnlyWorking } from './view';
 
 /**
  * Rótulos (nomes, balões de status e nomes das salas) em DOM puro, fora do Canvas.
@@ -20,19 +20,32 @@ export const registerAnchor = (id: string, a: Anchor) => {
   return () => { anchors.delete(id); };
 };
 
+/** Móvel sob o mouse (o nome dele aparece mesmo com os nomes escondidos). */
+let hoverId: string | null = null;
+export const objLabelId = (f: { kind: string; x: number; z: number }) => `obj:${f.kind}:${f.x}:${f.z}`;
+export const setObjHover = (id: string | null) => { hoverId = id; };
+
 /** Altura do rótulo acima do chão: o avatar em pixel art é maior que o peão da maquete. */
 const head = () => (useWorldStyle.getState().style === 'pixel' ? 2.1 : 1.75);
 const v = new Vector3();
 
 /** Fica dentro do Canvas: projeta as âncoras e move os elementos. */
-export function LabelProjector() {
+export function LabelProjector({ viewer }: { viewer: () => { x: number; z: number } }) {
   const { camera, size } = useThree();
   useFrame(() => {
+    const mode = useLabelMode.getState().mode;
     for (const [id, el] of elements) {
       const a = anchors.get(id);
       if (!a) { el.style.display = 'none'; continue; }
       const p = a();
       if (p.hidden) { el.style.display = 'none'; continue; }
+      // nomes de móveis e salas: conforme o modo (sempre, só perto e sob o mouse, ou só sob o mouse)
+      const room = id.startsWith('room:');
+      if (mode !== 'todos' && (room || id.startsWith('obj:'))) {
+        const me = viewer();
+        const show = id === hoverId || (mode === 'perto' && (room ? roomAt(me)?.id === id.slice(5) : Math.hypot(p.x - me.x, p.z - me.z) < 5));
+        if (!show) { el.style.display = 'none'; continue; }
+      }
       v.set(p.x, p.y ?? head(), p.z).project(camera);
       if (v.z > 1) { el.style.display = 'none'; continue; }
       const x = (v.x * 0.5 + 0.5) * size.width;

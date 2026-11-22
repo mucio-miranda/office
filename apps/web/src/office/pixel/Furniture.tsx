@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { Furniture } from '../layout';
+import { objLabelId, setObjHover } from '../Labels';
 import { usePixel, type PixelPalette } from '../../lib/theme';
 import { OutlineColor, PBlob, PBox, PCyl, leafTexture, screenTexture, shade, woodTexture } from './kit';
 
@@ -50,8 +51,8 @@ export function PixelFurniture({ f, onUse, onGrab }: { f: Furniture; onUse?: (f:
   const interactive = !!(f.panel || f.label) || f.kind === 'mesa';
   const handlers = interactive
     ? {
-        onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; },
-        onPointerOut: () => { setHover(false); document.body.style.cursor = ''; },
+        onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); setObjHover(objLabelId(f)); document.body.style.cursor = 'pointer'; },
+        onPointerOut: () => { setHover(false); setObjHover(null); document.body.style.cursor = ''; },
         onPointerDown: (e: any) => onGrab?.(f, e),
         onClick: (e: any) => { e.stopPropagation(); onUse?.(f); },
       }

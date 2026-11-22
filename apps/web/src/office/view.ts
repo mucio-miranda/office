@@ -33,6 +33,17 @@ export const useOnlyWorking = create<{ on: boolean; set: (on: boolean) => void }
   on: (() => { try { return localStorage.getItem(KEY_WORKING) === '1'; } catch { return false; } })(),
   set: (on) => { try { localStorage.setItem(KEY_WORKING, on ? '1' : '0'); } catch { /* sem armazenamento */ } set({ on }); },
 }));
+/**
+ * Nomes dos móveis e das salas no mapa: `todos` sempre; `perto` só os de perto de você (e a sala em que está) e o do móvel
+ * sob o mouse; `mouse` só o do móvel sob o mouse. Gente e funcionários sempre têm nome. Lembrado neste navegador.
+ */
+export type LabelMode = 'todos' | 'perto' | 'mouse';
+const KEY_LABELS = 'office.labelMode';
+export const LABEL_MODES: LabelMode[] = ['todos', 'perto', 'mouse'];
+export const useLabelMode = create<{ mode: LabelMode; set: (m: LabelMode) => void }>((set) => ({
+  mode: (() => { try { const v = localStorage.getItem(KEY_LABELS); return LABEL_MODES.includes(v as LabelMode) ? (v as LabelMode) : 'perto'; } catch { return 'perto'; } })(),
+  set: (mode) => { try { localStorage.setItem(KEY_LABELS, mode); } catch { /* sem armazenamento */ } set({ mode }); },
+}));
 export const busyState = (s: string) => s === 'trabalhando' || s === 'aguardando';
 
 /** Lado mais perto do giro atual (muda quais paredes sobem e quais decorações de parede aparecem). */

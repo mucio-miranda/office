@@ -4,6 +4,7 @@ import { useStore } from '../lib/store';
 import { usePixel, useWorldStyle, type ScenePalette } from '../lib/theme';
 import { OutlineColor, PBox, canvasTexture, shade } from './pixel/kit';
 import { ARCHIVE, ARCHIVE_SLOTS, type Furniture } from './layout';
+import { objLabelId, setObjHover } from './Labels';
 
 /**
  * Arquivo dos clientes: uma fileira de arquivos de aço na parede do fundo da redação, um por cliente, com a
@@ -66,8 +67,8 @@ function CabinetMesh({ c, tag, pixel, sp, onUse }: { c: Cabinet; tag: string; pi
   const p = usePixel();
   const [hover, setHover] = useState(false);
   const handlers = {
-    onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; },
-    onPointerOut: () => { setHover(false); document.body.style.cursor = ''; },
+    onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); setObjHover(objLabelId(ARCHIVE)); document.body.style.cursor = 'pointer'; },
+    onPointerOut: () => { setHover(false); setObjHover(null); document.body.style.cursor = ''; },
     onClick: (e: any) => { e.stopPropagation(); onUse(); },
   };
   const w = ARCHIVE.w / ARCHIVE_SLOTS - 0.12, d = ARCHIVE.d, h = 1.05;

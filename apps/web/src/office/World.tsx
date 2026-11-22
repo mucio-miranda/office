@@ -891,7 +891,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       {agents.filter(isFixedAgent).filter((a) => !onlyWorking || busyState(a.status)).map((a) => <AgentNPC key={a.id} a={a} p={p} />)}
       {Object.values(presences).map((pr) => <Remote key={pr.userId} pr={pr} p={p} />)}
       {ready && <Player onNearby={onNearby} p={p} active={active} />}
-      <LabelProjector />
+      <LabelProjector viewer={() => player} />
     </Canvas>
   );
 }

@@ -5,13 +5,13 @@ import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, RotateCcw, RotateCw, ChevronUp, ChevronDown, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
-  Plus, PanelLeftClose, PanelLeftOpen, ListChecks, Download, Send,
+  Tag, Plus, PanelLeftClose, PanelLeftOpen, ListChecks, Download, Send,
 } from 'lucide-react';
 import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
-import { resetView, rotateView, tiltView, useOnlyWorking } from './office/view';
+import { resetView, rotateView, tiltView, useLabelMode, LABEL_MODES, useOnlyWorking } from './office/view';
 import { HOLD_MS, padPointerDown, padPointerMove, padPointerUp, padPressing, clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
 import { PadHints } from './lib/PadHints';
 import { Tour, startTour, tourSeen } from './office/Tour';
@@ -427,6 +427,21 @@ function TeamList({ onNavigate }: { onNavigate: () => void }) {
   );
 }
 
+const LABEL_TEXT = { todos: 'Nomes: todos', perto: 'Nomes: perto', mouse: 'Nomes: mouse' } as const;
+const LABEL_HELP = {
+  todos: 'Mostra sempre o nome de todos os móveis e salas. Clique para mostrar só os de perto.',
+  perto: 'Mostra o nome dos móveis perto de você e da sala em que está (e de qualquer móvel sob o mouse). Clique para mostrar só ao passar o mouse.',
+  mouse: 'Os nomes dos móveis e das salas só aparecem ao passar o mouse sobre o móvel. Clique para mostrar todos.',
+} as const;
+/** Botão do mapa: quantos nomes de móveis e salas aparecem (todos, só os de perto, só ao passar o mouse). */
+function LabelModeButton() {
+  const { mode, set } = useLabelMode();
+  const next = LABEL_MODES[(LABEL_MODES.indexOf(mode) + 1) % LABEL_MODES.length];
+  return (
+    <button className="pill label-mode" onClick={() => set(next)} title={LABEL_HELP[mode]}><Tag size={13} /> {LABEL_TEXT[mode]}</button>
+  );
+}
+
 /** Caixinha do mapa: mostrar só os funcionários trabalhando ou esperando você. */
 function OnlyWorkingToggle() {
   const { on, set } = useOnlyWorking();
@@ -471,6 +486,7 @@ function WorldHud() {
       <span className="pill"><Circle size={8} fill="currentColor" /> {room ? room.label : 'Área externa'}</span>
       {canDecorate() && <button className="pill decor-btn" onClick={enterDecorate} title="Decorar o escritório (X)"><Paintbrush size={13} /> Decorar</button>}
       <OnlyWorkingToggle />
+      <LabelModeButton />
       <span className="pill view-rot">
         <button className="icon tiny" onClick={() => rotateView(-1)} title="Girar o escritório (Q) · ou Ctrl + arrastar"><RotateCcw size={13} /></button>
         <button className="icon tiny" onClick={() => rotateView(1)} title="Girar para o outro lado (Shift+Q) · ou Ctrl + arrastar"><RotateCw size={13} /></button>
