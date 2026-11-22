@@ -7,6 +7,7 @@ import { useTheme, useWorldStyle, usePixel } from '../../lib/theme';
 import { useStore } from '../../lib/store';
 import { CATALOG, CATEGORIES, DEF, skinOf, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
+import { rotateView, tiltView } from '../view';
 import { ROOMS, baseCustomized, customRects } from '../layout';
 import { isBase, rectOf, redoPlan, resetBasePlan, undoPlan, usePlan } from './plan';
 import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, allWalls, applyWall, defaultWall, dividerWall, openOffice, saveWalls, setOpenOffice, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
@@ -210,6 +211,12 @@ function TopBar() {
       <span className="pill decor-pill"><Paintbrush size={13} /> Decorando</span>
       <span className={`decor-save ${saving}`}>{saving === 'salvando' ? 'Salvando…' : saving === 'erro' ? 'Não salvou' : 'Tudo salvo'}</span>
       <span className="spacer" />
+      <span className="pill view-rot" title="Girar o mapa">
+        <button className="icon tiny" onClick={() => rotateView(-1)} title="Girar o mapa (Q) · ou Ctrl + arrastar"><RotateCcw size={13} /></button>
+        <button className="icon tiny" onClick={() => rotateView(1)} title="Girar para o outro lado (Shift+Q) · ou Ctrl + arrastar"><RotateCw size={13} /></button>
+        <button className="icon tiny" onClick={() => tiltView(1.18)} title="Subir a câmera (PageUp)"><ChevronUp size={13} /></button>
+        <button className="icon tiny" onClick={() => tiltView(1 / 1.18)} title="Descer a câmera (PageDown)"><ChevronDown size={13} /></button>
+      </span>
       <button className="ghost small pill" onClick={undo} disabled={!canUndo} title="Desfazer (Ctrl Z)"><Undo2 size={14} /></button>
       <button className="ghost small pill" onClick={redo} disabled={!canRedo} title="Refazer (Ctrl Y)"><Redo2 size={14} /></button>
       <button className="ghost small pill" onClick={() => { if (confirm('Voltar à decoração padrão do Office? Dá para desfazer depois.')) restoreDefault(); }} title="Decoração padrão">

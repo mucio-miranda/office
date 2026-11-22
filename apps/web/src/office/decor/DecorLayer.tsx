@@ -244,7 +244,8 @@ export function DecorLayer() {
       }
     };
     const down = (e: PointerEvent) => {
-      if (e.button !== 0 || (e.target as HTMLElement)?.tagName !== 'CANVAS' || useStore.getState().drone) return;
+      // Ctrl/Alt + arrastar gira o mapa (não pega nem solta peça)
+      if (e.button !== 0 || e.ctrlKey || e.altKey || (e.target as HTMLElement)?.tagName !== 'CANVAS' || useStore.getState().drone) return;
       const s = useDecor.getState();
       downAt = { x: e.clientX, y: e.clientY };
       if (s.placing) {
@@ -302,7 +303,7 @@ export function DecorLayer() {
   const handlers = (it: DecorItem) => !editing ? sitHandlers(it) : editing ? {
     onDown: (e: any) => {
       // na Planta, o clique passa para a camada das salas
-      if (e.button !== 0 || useDecor.getState().placing || useStore.getState().drone || usePlan.getState().on) return;
+      if (e.button !== 0 || e.ctrlKey || e.altKey || useDecor.getState().placing || useStore.getState().drone || usePlan.getState().on) return;
       e.stopPropagation();
       hitItem.current = true;
       dragId.current = it.id;

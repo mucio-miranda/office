@@ -714,10 +714,10 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         return;
       }
       if (e.key === 'Escape') recenter();
-      // Q gira o escritório (Shift+Q para o outro lado); no Decorar ele fica no lado de sempre
-      if (e.key.toLowerCase() === 'q' && !e.ctrlKey && !e.metaKey && !e.altKey && !useDecor.getState().editing) { rotateView(e.shiftKey ? 1 : -1); return; }
+      // Q gira o escritório (Shift+Q para o outro lado), também no Decorar
+      if (e.key.toLowerCase() === 'q' && !e.ctrlKey && !e.metaKey && !e.altKey) { rotateView(e.shiftKey ? 1 : -1); return; }
       // PageUp / PageDown: sobe e desce a câmera
-      if ((e.key === 'PageUp' || e.key === 'PageDown') && !useDecor.getState().editing) { e.preventDefault(); tiltView(e.key === 'PageUp' ? 1.15 : 1 / 1.15); return; }
+      if (e.key === 'PageUp' || e.key === 'PageDown') { e.preventDefault(); tiltView(e.key === 'PageUp' ? 1.15 : 1 / 1.15); return; }
       keys.add(e.key.toLowerCase());
     };
     const up = (e: KeyboardEvent) => {
@@ -757,7 +757,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
     let spin: { x: number; y: number; angle: number; elev: number } | null = null;
     const pdown = (e: PointerEvent) => {
       if ((e.target as HTMLElement)?.tagName !== 'CANVAS') return;
-      if (e.button === 0 && (e.ctrlKey || e.altKey) && !useDecor.getState().editing) {
+      if (e.button === 0 && (e.ctrlKey || e.altKey)) {
         e.preventDefault();
         e.stopPropagation();
         spin = { x: e.clientX, y: e.clientY, angle: cam.angle, elev: viewRot.elevTarget };
@@ -862,7 +862,7 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
         <FurnitureMesh key={i} f={f} p={p} onGrab={(ff, e) => {
           // no Decorar, segurar e arrastar uma mesa (ou móvel fixo) já a move, sem precisar clicar antes
           const ds = useDecor.getState();
-          if (!ds.editing || ds.placing || e.button !== 0 || useStore.getState().drone || usePlan.getState().on) return;
+          if (!ds.editing || ds.placing || e.button !== 0 || e.ctrlKey || e.altKey || useStore.getState().drone || usePlan.getState().on) return;
           const it = deskItemFor(ff) ?? fixoItemFor(ff);
           if (!it) return;
           e.stopPropagation();
