@@ -162,6 +162,8 @@ export interface Office {
   driveRoot: string | null;
   /** Pasta que recebe uma segunda cópia do backup do banco. */
   backupDir: string | null;
+  /** Modelo dos funcionários (sonnet gasta menos limite da assinatura); vazio = o padrão do Claude Code. */
+  defaultModel?: string | null;
   theme: OfficeTheme;
   createdAt: string;
 }

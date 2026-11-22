@@ -716,7 +716,7 @@ export async function api(app: FastifyInstance) {
 
     r.patch('/api/offices/:officeId', async (req, reply) => {
       if (!requireOwner(req, reply)) return;
-      const b = body(z.object({ name: z.string().min(2).optional(), rootPath: z.string().optional(), extraDirs: z.array(z.string()).optional(), driveRoot: z.string().nullable().optional(), backupDir: z.string().nullable().optional(), theme: z.any().optional() }), req, reply);
+      const b = body(z.object({ name: z.string().min(2).optional(), rootPath: z.string().optional(), extraDirs: z.array(z.string()).optional(), driveRoot: z.string().nullable().optional(), backupDir: z.string().nullable().optional(), defaultModel: z.enum(['sonnet', 'opus']).nullable().optional(), theme: z.any().optional() }), req, reply);
       if (!b) return;
       for (const dir of [b.rootPath, ...(b.extraDirs ?? []), b.driveRoot, b.backupDir].filter(Boolean) as string[])
         if (!existsSync(dir) || !statSync(dir).isDirectory()) return reply.code(400).send({ error: `A pasta ${dir} não existe.` });

@@ -704,10 +704,10 @@ export function publishReminders() {
 
 const REFRESH = '## Conversa nova';
 /** Contexto (tokens relidos a cada passo) a partir do qual o próximo pedido começa uma conversa limpa. */
-export const REFRESH_TOKENS = 100_000;
+export const REFRESH_TOKENS = 60_000;
 /** Parada há mais disto e ainda grande: também recomeça. */
 export const REFRESH_IDLE_HOURS = 24;
-export const REFRESH_IDLE_TOKENS = 50_000;
+export const REFRESH_IDLE_TOKENS = 35_000;
 
 /** A memória do cliente: lida sozinha pelo Claude Code em toda conversa aberta na pasta dele (Office e terminal). */
 export function memoryFile(office: Office, client: Client) {

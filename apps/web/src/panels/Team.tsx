@@ -106,6 +106,7 @@ export function Team() {
         </div>
       </section>}
 
+      {isOwner && <ModelCard />}
       {isOwner && <SkillsCard />}
       {isOwner && <BackupCard />}
 
@@ -238,6 +239,28 @@ function AgentEditor({ agent, onClose }: { agent: AgentProfile | null; onClose: 
 const FLOORS = ['#e8e4dc', '#f4f4f2', '#1f2023', '#9aa0a6', '#e3e9f2', '#e4f3ee', '#f3e4e4', '#efe6f6'];
 
 /** Salas novas: anexos a leste do prédio, com porta para o vizinho e duas mesas para pessoas. */
+/** Modelo dos funcionários: o Sonnet gasta bem menos do limite da assinatura (bom num plano Pro). */
+function ModelCard() {
+  const { office, notify, enterOffice } = useStore();
+  const cur = office?.defaultModel ?? '';
+  return (
+    <section className="card stack">
+      <div>
+        <h3>Modelo dos funcionários</h3>
+        <p className="muted small" style={{ margin: '4px 0 0' }}>Vale para todos os pedidos. O Sonnet gasta bem menos do limite da assinatura e dá conta da maior parte do trabalho; o Opus é para quando precisar do máximo. O daily report usa sempre o Sonnet.</p>
+      </div>
+      <select value={cur} onChange={async (e) => {
+        try { await api(`/api/offices/${office!.id}`, { method: 'PATCH', body: { defaultModel: e.target.value || null } }); await enterOffice(office!.id); notify('Modelo atualizado: vale a partir do próximo pedido'); }
+        catch (x) { notify((x as Error).message); }
+      }}>
+        <option value="">Padrão do Claude Code</option>
+        <option value="sonnet">Sonnet (gasta menos)</option>
+        <option value="opus">Opus (o mais capaz)</option>
+      </select>
+    </section>
+  );
+}
+
 /** Squads: cada um com nome, social media e designer/produção. Grava no squads.json, que as skills e o Office leem. */
 function SquadsCard() {
   const { office, clients, notify } = useStore();

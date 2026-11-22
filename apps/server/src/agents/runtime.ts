@@ -79,7 +79,7 @@ const browserWaiting = new Set<string>();
 const clientNameOf = (jobId: string) => one<{ name: string }>('SELECT c.name FROM jobs j JOIN clients c ON c.id = j.client_id WHERE j.id = ?', jobId)?.name;
 
 /** Teto de contexto dos funcionários, em tokens. */
-export const COMPACT_WINDOW = 200_000;
+export const COMPACT_WINDOW = 120_000;
 /** Limite semanal da assinatura a partir do qual a conversa avisa (uma vez por semana e por faixa). */
 export const LIMIT_ALERTS = [0.8, 0.95];
 const limitAlerted = new Set<string>();
@@ -407,7 +407,9 @@ async function start(jobId: string, typed: string, resume: boolean) {
     '--allowedTools', ...(reviewer ? ['Read', 'Glob', 'Grep'] : agent.allowedTools), ...mcpIds.map((id) => `mcp__${id}`),
     '--disallowedTools', ...deniedTools(office.rootPath),
   ];
-  if (job.model) args.push('--model', job.model);
+  // o modelo da tarefa (o daily vai no Sonnet) ou, sem ele, o escolhido para o escritório
+  const model = job.model ?? office.defaultModel ?? null;
+  if (model) args.push('--model', model);
   if (lean) args.push('--strict-mcp-config', '--tools', 'Read', 'Write');
   if (mcpIds.length) {
     const mcpFile = path.join(dir, 'mcp.json');

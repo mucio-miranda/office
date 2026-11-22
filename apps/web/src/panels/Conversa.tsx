@@ -243,8 +243,8 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
         </button>
         <span className="spacer" />
         {!!active?.contextTokens && (
-          <span className={`muted small mono ${active.contextTokens > 150_000 ? 'ctx-high' : ''}`}
-            title="Tamanho da conversa: o funcionário relê isso a cada passo. Perto de 200 mil, ela é resumida sozinha e segue.">
+          <span className={`muted small mono ${active.contextTokens > 60_000 ? 'ctx-high' : ''}`}
+            title="Tamanho da conversa: o funcionário relê isso a cada passo. Acima de 60 mil, o próximo pedido começa uma conversa nova com a memória do cliente.">
             contexto {Math.round(active.contextTokens / 1000)} mil
           </span>
         )}
