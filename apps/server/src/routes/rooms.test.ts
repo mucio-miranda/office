@@ -153,3 +153,21 @@ test('planta das salas originais: salva as sete, confere e volta à de sempre', 
   assert.equal((await call('PUT', `${O}/baseRooms`, owner, { rooms: [] })).status, 200, 'volta à planta original');
   assert.equal((await call('GET', `${O}/baseRooms`, owner)).json.length, 0);
 });
+
+test('decoração: peças em salas novas do leste (x até ~50) e cor "multi" salvam, e o que vem junto não se perde', async () => {
+  const item = (id: string, over: object = {}) => ({ id, kind: 'mesa-pessoa', x: 10, z: 10, rot: 1, ...over });
+  const items = [
+    item('a', { x: 48.5, z: -19 }),                       // Sala de Múcio / Hall, além de x = 40
+    item('b', { kind: 'armarios', color: 'multi' }),      // o catálogo oferece "colorido"
+    item('c', { color: '#aabbcc' }),
+    item('mesa:video-1', { as: 'mesa-l' }),               // mesa fixa trocada por uma do catálogo
+  ];
+  assert.equal((await call('PUT', `${O}/layout`, owner, { items })).status, 200);
+  const back = (await call('GET', `${O}/layout`, owner)).json as any[];
+  assert.equal(back.length, 4);
+  assert.equal(back.find((i) => i.id === 'a').x, 48.5);
+  assert.equal(back.find((i) => i.id === 'mesa:video-1').as, 'mesa-l');
+  // continua recusando lixo de verdade
+  assert.equal((await call('PUT', `${O}/layout`, owner, { items: [item('x', { rot: 7 })] })).status, 400);
+  assert.equal((await call('PUT', `${O}/layout`, owner, { items: [item('x', { x: 900 })] })).status, 400);
+});

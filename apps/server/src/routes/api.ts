@@ -701,8 +701,9 @@ export async function api(app: FastifyInstance) {
       if (membership(officeId, req.user.id)?.role === 'convidado') return reply.code(403).send({ error: 'Convidados não mudam a decoração.' });
       const item = z.object({
         id: z.string().min(1).max(64), kind: z.string().regex(/^[a-z0-9-]{1,40}$/),
-        x: z.number().min(-40).max(40), z: z.number().min(-40).max(40), rot: z.number().int().min(0).max(3),
-        color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), wall: z.enum(['fundo', 'esquerda']).optional(),
+        // a Planta aumenta o prédio (salas novas passam de x = 49): o limite acompanha, sem aceitar lixo
+        x: z.number().min(-200).max(200), z: z.number().min(-200).max(200), rot: z.number().int().min(0).max(3),
+        color: z.string().regex(/^(#[0-9a-f]{6}|multi)$/i).optional(), wall: z.enum(['fundo', 'esquerda']).optional(),
         as: z.string().regex(/^[a-z0-9-]{1,40}$/).optional(),
       });
       const b = body(z.object({ items: z.array(item).max(800).nullable() }), req, reply);
