@@ -407,8 +407,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
     '--allowedTools', ...(reviewer ? ['Read', 'Glob', 'Grep'] : agent.allowedTools), ...mcpIds.map((id) => `mcp__${id}`),
     '--disallowedTools', ...deniedTools(office.rootPath),
   ];
-  // o modelo da tarefa (o daily vai no Sonnet) ou, sem ele, o escolhido para o escritório
-  const model = job.model ?? office.defaultModel ?? null;
+  // o modelo da tarefa (o daily vai no Sonnet); senão o escolhido na conversa do cliente; senão o do escritório
+  const model = job.model ?? client?.model ?? office.defaultModel ?? null;
   if (model) args.push('--model', model);
   if (lean) args.push('--strict-mcp-config', '--tools', 'Read', 'Write');
   if (mcpIds.length) {

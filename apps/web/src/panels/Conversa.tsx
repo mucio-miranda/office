@@ -1,9 +1,9 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { HelperRequests } from './HelperRequests';
-import { ArrowUp, ChevronDown, History, Reply, Square, Wrench } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, History, Reply, Sparkles, Square, Wrench } from 'lucide-react';
 import { desktop } from '../lib/desktop';
 import { LimitBadge } from './LimitBadge';
-import { canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage } from '@office/shared';
+import { MODEL_CHOICES, canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { useDraft } from '../lib/draft';
 import { api, mediaUrl } from '../lib/api';
@@ -306,6 +306,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
             <div className="row gap conversa-actions">
               <span className="muted small">{attach.sending ? `Anexando ${attach.sending} arquivo${attach.sending > 1 ? 's' : ''}…` : newRequest ? 'Vai como pedido novo, em outro cartão' : running ? 'Enter envia: ele lê no próximo passo, sem parar o que está fazendo' : 'Enter envia · / mostra os comandos · arraste ou cole arquivos'}</span>
               <span className="spacer" />
+              <ModelPicker c={c} />
               {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
               <div className="send-group">
                 <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> Enviar</button>
@@ -322,6 +323,56 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
         </>
       )}
       {open && <ReviewDesk d={open} onClose={() => setOpenDemand(null)} />}
+    </div>
+  );
+}
+
+/** Modelo da conversa, como no app do Claude: abre uma lista com o que cada um faz. Vale a partir da próxima mensagem. */
+function ModelPicker({ c }: { c: Client }) {
+  const { office, notify } = useStore();
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent) => { if (!box.current?.contains(e.target as Node)) setOpen(false); };
+    const esc = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
+    document.addEventListener('mousedown', close);
+    document.addEventListener('keydown', esc);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', esc); };
+  }, [open]);
+  const own = c.model ?? null;
+  const inherited = office?.defaultModel ?? null;
+  const shown = own ?? inherited;
+  const label = MODEL_CHOICES.find((m) => m.id === shown)?.label ?? 'Padrão';
+  const pick = async (id: 'haiku' | 'sonnet' | 'opus' | null) => {
+    setOpen(false);
+    if (id === own) return;
+    try {
+      await api(`/api/offices/${office!.id}/clients/${c.id}`, { method: 'PATCH', body: { model: id } });
+      notify(id ? `Esta conversa agora usa o ${MODEL_CHOICES.find((m) => m.id === id)?.label}. Vale a partir da próxima mensagem.` : 'Esta conversa volta a usar o modelo do escritório.');
+    } catch (x) { notify((x as Error).message); }
+  };
+  if (!canWork(office!.role)) return null;
+  return (
+    <div className="model-picker" ref={box}>
+      <button type="button" className="ghost small" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((v) => !v)} title="Modelo desta conversa">
+        <Sparkles size={13} /> {label} <ChevronDown size={12} />
+      </button>
+      {open && (
+        <div className="model-pop" role="listbox" aria-label="Modelo desta conversa">
+          {MODEL_CHOICES.map((m) => (
+            <button key={m.id} type="button" role="option" aria-selected={own === m.id} className={own === m.id ? 'on' : ''} onClick={() => pick(m.id)}>
+              <span className="model-name"><b>{m.label}</b>{own === m.id && <Check size={14} />}</span>
+              <small>{m.hint}</small>
+            </button>
+          ))}
+          <button type="button" role="option" aria-selected={own === null} className={own === null ? 'on' : ''} onClick={() => pick(null)}>
+            <span className="model-name"><b>Padrão do escritório</b>{own === null && <Check size={14} />}</span>
+            <small>{inherited ? `Hoje: ${MODEL_CHOICES.find((m) => m.id === inherited)?.label}. ` : 'Hoje: o padrão do Claude Code. '}Muda na aba Equipe.</small>
+          </button>
+          <p className="muted small model-note">Trocar no meio da conversa faz a primeira mensagem seguinte reprocessar o histórico (gasta um pouco mais uma vez).</p>
+        </div>
+      )}
     </div>
   );
 }

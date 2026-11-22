@@ -8,7 +8,10 @@ import Fastify, { type FastifyInstance } from 'fastify';
 // Claude de mentira: responde na hora, sem gastar nada
 const dataDir = mkdtempSync(path.join(tmpdir(), 'office-demand-'));
 const fake = path.join(dataDir, 'fake-claude.mjs');
-writeFileSync(fake, `const id = '11111111-2222-4333-8444-555555555555';
+const argsLog = path.join(dataDir, 'args.log');
+writeFileSync(fake, `import { appendFileSync } from 'node:fs';
+appendFileSync(${JSON.stringify(argsLog)}, JSON.stringify(process.argv.slice(2)) + '\\n');
+const id = '11111111-2222-4333-8444-555555555555';
 process.stdout.write(JSON.stringify({ type: 'system', subtype: 'init', session_id: id }) + '\\n');
 process.stdout.write(JSON.stringify({ type: 'assistant', message: { content: [{ type: 'text', text: 'Feito.' }] } }) + '\\n');
 process.stdout.write(JSON.stringify({ type: 'result', result: 'Feito.', total_cost_usd: 0.01, session_id: id }) + '\\n');`);
@@ -439,4 +442,21 @@ test('conversa longa: memória e resumo antes, depois o pedido segue numa conver
   assert.equal(next.worker_id, titular?.id ?? null, 'com o mesmo funcionário');
   assert.ok(!(db.prepare("SELECT archived_at FROM workers WHERE id = ?").get(titular.id) as any).archived_at, 'ninguém é arquivado');
   await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
+});
+
+test('modelo da conversa: escolhido no cliente, vai para o Claude Code; sem escolha vale o do escritório', async () => {
+  const { readFileSync, existsSync: has } = await import('node:fs');
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando','aguardando')").all().length));
+  assert.equal((await call('PATCH', `${O}/clients/${c.id}`, { model: 'gpt' })).status, 400, 'só haiku, sonnet ou opus');
+  assert.equal((await call('PATCH', `${O}/clients/${c.id}`, { model: 'haiku' })).status, 200);
+  assert.equal((await call('GET', `${O}/clients`)).json[0].model, 'haiku');
+  const modelArg = () => (has(argsLog) ? readFileSync(argsLog, 'utf8').trim().split('\n').map((l) => JSON.parse(l) as string[]) : []).at(-1)?.join(' ') ?? '';
+  const n0 = has(argsLog) ? readFileSync(argsLog, 'utf8').trim().split('\n').length : 0;
+  assert.equal((await call('POST', `${O}/clients/${c.id}/conversa`, { text: 'só um oi' })).status, 200);
+  await wait(() => (has(argsLog) ? readFileSync(argsLog, 'utf8').trim().split('\n').length : 0) > n0);
+  assert.match(modelArg(), /--model haiku/, 'a conversa usa o modelo escolhido');
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando','aguardando')").all().length));
+  assert.equal((await call('PATCH', `${O}/clients/${c.id}`, { model: null })).status, 200, 'volta ao padrão');
+  assert.equal((await call('GET', `${O}/clients`)).json[0].model, null);
 });

@@ -191,6 +191,8 @@ const MIGRATIONS: string[] = [
      x0 REAL NOT NULL, z0 REAL NOT NULL, x1 REAL NOT NULL, z1 REAL NOT NULL, PRIMARY KEY (office_id, room_id));`,
   // modelo dos funcionários (sonnet para gastar menos do limite de um plano Pro)
   `ALTER TABLE offices ADD COLUMN default_model TEXT;`,
+  // modelo escolhido na conversa de cada cliente
+  `ALTER TABLE clients ADD COLUMN model TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

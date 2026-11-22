@@ -151,6 +151,13 @@ export interface Member extends User {
   desk: string | null;
 }
 
+/** Modelos que dá para escolher na conversa (os apelidos do Claude Code, que sempre apontam para o mais novo de cada família). */
+export const MODEL_CHOICES = [
+  { id: 'haiku', label: 'Haiku', hint: 'O mais leve e rápido: perguntas, listas, organizar pastas. Gasta pouquíssimo limite.' },
+  { id: 'sonnet', label: 'Sonnet', hint: 'Equilibrado: dá conta da maior parte do trabalho gastando bem menos limite.' },
+  { id: 'opus', label: 'Opus', hint: 'O mais capaz: estratégia, direção de arte e trabalhos difíceis. Gasta mais limite.' },
+] as const;
+
 export interface Office {
   id: ID;
   name: string;
@@ -195,6 +202,8 @@ export interface Client {
   briefing: Briefing;
   /** Quem aprova as peças na esteira: uma pessoa ou o gerente de IA. */
   approvalMode: 'humano' | 'ia';
+  /** Modelo desta conversa (haiku, sonnet, opus); vazio = o do escritório. */
+  model?: 'haiku' | 'sonnet' | 'opus' | null;
   /** A conversa contínua do cliente: a sessão do Claude Code que passa de um pedido para o outro. */
   sessionId?: string | null;
   sessionCost?: number;

@@ -779,6 +779,7 @@ export async function api(app: FastifyInstance) {
       status: z.enum(['ativo', 'pausado', 'encerrado']).default('ativo'), color: z.string().optional(),
       postDays: z.array(z.number().int().min(0).max(6)).max(7).optional(),
       approvalMode: z.enum(['humano', 'ia']).default('humano'), briefing: briefingSchema.optional(),
+      model: z.enum(['haiku', 'sonnet', 'opus']).nullable().optional(),
       niche: z.string().regex(/^[a-z0-9-]{1,60}$/).nullable().optional(),
       kind: z.enum(['cliente', 'projeto']).optional(),
     });
