@@ -6,7 +6,8 @@ import { type AgentProfile, type Presence, type Vec2, type Worker } from '@offic
 import { useStore, showEmote } from '../lib/store';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/theme';
 import { PixelRoom } from './pixel/Room';
-import { DecorLayer } from './decor/DecorLayer';
+import { DecorLayer, grabItem } from './decor/DecorLayer';
+import { usePlan } from './decor/plan';
 import { commit, useDecor } from './decor/state';
 import { seatWorkers, sittable } from './seats';
 import { copaSpots, idleSpot, leisureSpots, releaseIdleSpot, workerPhase, type IdleSpot } from './npc';
@@ -856,7 +857,17 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       ) : f.kind === 'moodboard' ? (
         <MoodboardWall key={i} f={f} p={p} />
       ) : (
-        <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => {
+        <FurnitureMesh key={i} f={f} p={p} onGrab={(ff, e) => {
+          // no Decorar, segurar e arrastar uma mesa (ou móvel fixo) já a move, sem precisar clicar antes
+          const ds = useDecor.getState();
+          if (!ds.editing || ds.placing || e.button !== 0 || useStore.getState().drone || usePlan.getState().on) return;
+          const it = deskItemFor(ff) ?? fixoItemFor(ff);
+          if (!it) return;
+          e.stopPropagation();
+          if (!ds.items.some((x) => x.id === it.id)) commit([...ds.items, it]);
+          useDecor.setState({ sel: it.id });
+          grabItem(it.id);
+        }} onUse={(ff) => {
           // no Decorar, a mesa fixa vira peça editável (mover e girar) e já fica selecionada
           if (useDecor.getState().editing) {
             // mesa ou qualquer móvel fixo: vira peça editável (ou seleciona a que já existe)

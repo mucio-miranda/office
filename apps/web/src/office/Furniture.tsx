@@ -7,11 +7,11 @@ import { PixelFurniture } from './pixel/Furniture';
  * Móveis em estilo "maquete de arquitetura": volumes simples, tons neutros,
  * sem texturas. A cor de destaque só aparece no hover de algo interativo.
  */
-export function FurnitureMesh(props: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void }) {
-  return useWorldStyle((s) => s.style) === 'pixel' ? <PixelFurniture f={props.f} onUse={props.onUse} /> : <MaqueteFurniture {...props} />;
+export function FurnitureMesh(props: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void; onGrab?: (f: Furniture, e: any) => void }) {
+  return useWorldStyle((s) => s.style) === 'pixel' ? <PixelFurniture f={props.f} onUse={props.onUse} onGrab={props.onGrab} /> : <MaqueteFurniture {...props} />;
 }
 
-function MaqueteFurniture({ f, p, onUse }: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void }) {
+function MaqueteFurniture({ f, p, onUse, onGrab }: { f: Furniture; p: ScenePalette; onUse?: (f: Furniture) => void; onGrab?: (f: Furniture, e: any) => void }) {
   const [hover, setHover] = useState(false);
   // mesa também responde ao clique: sentar na sua ou ficar com uma livre
   const interactive = !!(f.panel || f.label) || f.kind === 'mesa';
@@ -19,6 +19,7 @@ function MaqueteFurniture({ f, p, onUse }: { f: Furniture; p: ScenePalette; onUs
     ? {
         onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; },
         onPointerOut: () => { setHover(false); document.body.style.cursor = ''; },
+        onPointerDown: (e: any) => onGrab?.(f, e),
         onClick: (e: any) => { e.stopPropagation(); onUse?.(f); },
       }
     : {};

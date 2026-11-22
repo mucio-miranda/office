@@ -43,7 +43,7 @@ export function Plant({ p, pos, scale = 1 }: { p: PixelPalette; pos: V3; scale?:
  * Móveis fixos em pixel art, no mesmo lugar e com o mesmo clique da maquete: mesas com monitor, teclado e
  * caneca, cadeiras de escritório, quadros, TVs, balcões e cofre. A decoração editável fica em decor/catalog.
  */
-export function PixelFurniture({ f, onUse }: { f: Furniture; onUse?: (f: Furniture) => void }) {
+export function PixelFurniture({ f, onUse, onGrab }: { f: Furniture; onUse?: (f: Furniture) => void; onGrab?: (f: Furniture, e: any) => void }) {
   const p = usePixel();
   const [hover, setHover] = useState(false);
   // mesa também responde ao clique: sentar na sua ou ficar com uma livre
@@ -52,6 +52,7 @@ export function PixelFurniture({ f, onUse }: { f: Furniture; onUse?: (f: Furnitu
     ? {
         onPointerOver: (e: any) => { e.stopPropagation(); setHover(true); document.body.style.cursor = 'pointer'; },
         onPointerOut: () => { setHover(false); document.body.style.cursor = ''; },
+        onPointerDown: (e: any) => onGrab?.(f, e),
         onClick: (e: any) => { e.stopPropagation(); onUse?.(f); },
       }
     : {};

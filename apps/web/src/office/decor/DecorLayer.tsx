@@ -20,6 +20,10 @@ const C_SEL = '#4dd2ff';
 const C_OK = '#7cfc8a';
 const C_BAD = '#ff4d4d';
 
+/** Começa a arrastar uma peça que acabou de virar editável (mesa ou móvel fixo pego direto no mapa). */
+let grabHook: ((id: string) => void) | null = null;
+export const grabItem = (id: string) => grabHook?.(id);
+
 const snap = (v: number, step = 0.25) => Math.round(v / step) * step;
 
 /** Posição e giro de uma peça no mundo (itens de parede ficam rentes à parede, de frente para a sala). */
@@ -171,6 +175,7 @@ export function DecorLayer() {
   const [hover, setHover] = useState<string | null>(null);
   const { camera, gl } = useThree();
   const hitItem = useRef(false);
+  grabHook = (id) => { hitItem.current = true; dragId.current = id; };
 
   useEffect(() => {
     if (!editing) return;
