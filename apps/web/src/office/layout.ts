@@ -637,11 +637,27 @@ let planSeats: Record<string, Vec2> = Object.fromEntries(Object.entries(DESKS).m
 let deskBase: { human: HumanDesk[]; seats: Record<string, Vec2>; furniture: Furniture[] } | null = null;
 const near2 = (a: Vec2, b: Vec2, d = 0.05) => Math.abs(a.x - b.x) < d && Math.abs(a.z - b.z) < d;
 
+/**
+ * A mesa de cada sala (a do Rafa, do Vic, da Duda, do Theo, da copa): a mesa mais perto do ponto atrás da cadeira. Não dá para
+ * contar com "cadeira = mesa + 1,1 m", porque a Planta recoloca a mesa e a cadeira separadamente quando redimensiona uma sala.
+ */
+function roomDesks(furn: Furniture[], seats: Record<string, Vec2>, human: Vec2[]): [string, Furniture][] {
+  const out: [string, Furniture][] = [];
+  const free = furn.filter((m) => m.kind === 'mesa' && !human.some((h) => near2(h, m)));
+  for (const [room, s] of Object.entries(seats)) {
+    let best: Furniture | null = null, bd = 2.5;
+    for (const m of free) { const d = Math.hypot(m.x - s.x, m.z - (s.z - 1.1)); if (d < bd) { bd = d; best = m; } }
+    if (best) out.push([room, best]);
+  }
+  return out;
+}
+
 function applyDesks() {
   if (!deskBase) return;
   const human = deskBase.human.map((d) => ({ ...d }));
   const furn = [...deskBase.furniture];
   const drop = (c: Vec2) => { const i = furn.findIndex((f) => f.kind === 'mesa' && near2(f, c)); if (i >= 0) furn.splice(i, 1); };
+  const roomMesa = new Map(roomDesks(deskBase.furniture, deskBase.seats, deskBase.human));
   for (const k of Object.keys(DESK_DIRS)) delete DESK_DIRS[k];
   for (const [room, seat] of Object.entries(deskBase.seats)) DESKS[room] = { ...seat };
   for (const it of deskItems) {
@@ -654,7 +670,8 @@ function applyDesks() {
       const room = it.id.slice(10);
       const seat = deskBase.seats[room];
       if (!seat) continue;
-      drop({ x: seat.x, z: seat.z - 1.1 });
+      const mesa = roomMesa.get(room);
+      if (mesa) drop(mesa);
       DESKS[room] = deskSeat(it);
       DESK_DIRS[room] = deskDir(it);
     }
@@ -699,7 +716,7 @@ export function deskItemFor(f: Furniture): { id: string; kind: string; x: number
   if (f.kind !== 'mesa') return null;
   const hd = HUMAN_DESKS.find((d) => near2(d, f));
   if (hd) return { id: `mesa:${hd.id}`, kind: DESK_KIND, x: f.x, z: f.z, rot: hd.rot ?? 0 };
-  const room = Object.entries(DESKS).find(([, s]) => near2({ x: s.x, z: s.z - 1.1 }, f))?.[0];
+  const room = roomDesks(FURNITURE, planSeats, HUMAN_DESKS).find(([, m]) => near2(m, f))?.[0];
   return room ? { id: `mesa-sala:${room}`, kind: DESK_KIND, x: f.x, z: f.z, rot: 0 } : null;
 }
 

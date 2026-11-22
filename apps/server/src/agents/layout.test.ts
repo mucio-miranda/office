@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { CustomRoom } from '@office/shared';
 import { wallsOfRoomIn } from '../../../web/src/office/decor/wallsOfRoom.ts';
-import { BOUNDS, HUMAN_DESKS, ROOMS, SPAWN, WALLS, agentSeat, styleOf, canSetPiece, lineKeys, normalizeWalls, wallRuns, blocked, deskSeat, findDeskSpot, findPath, freeSpotNear, setAgentDesks, setCustomRooms, setWallStyles } from '../../../web/src/office/layout.ts';
+import { BOUNDS, HUMAN_DESKS, ROOMS, SPAWN, WALLS, agentSeat, styleOf, canSetPiece, lineKeys, normalizeWalls, wallRuns, blocked, deskSeat, findDeskSpot, findPath, freeSpotNear, setAgentDesks, setBaseRooms, setCustomRooms, setWallStyles, FURNITURE, deskItemFor, setDeskItems, DESKS } from '../../../web/src/office/layout.ts';
 
 /** A planta é do cliente, mas é lógica pura e sem teste própria na web: rotas e colisão se testam aqui. */
 const room = (slot: number): CustomRoom => ({ id: `sala-${slot}`, officeId: 'o', name: `Sala ${slot}`, emoji: '🚪', floor: '#eeeeee', slot });
@@ -182,5 +182,30 @@ test('escritório aberto: as paredes entre as salas somem e voltam, as de fora f
   assert.ok(blocked({ x: fora.x, z: fora.z }));
   setWallStyles(all);
   assert.equal(styleOf(all, reuniao.key), 'vidro-fume', 'desligado, o acabamento volta');
+  reset();
+});
+
+test('mesas de sala (Rafa, Vic, Duda, Theo, copa) continuam editáveis depois que a Planta remaneja e redimensiona as salas', () => {
+  // as salas do prédio de verdade: a Planta mexeu em quase todas, e mesa e cadeira são recolocadas separadamente
+  setBaseRooms([
+    { roomId: 'recepcao', x0: -9, z0: -4, x1: 9, z1: 32 }, { roomId: 'gerencia', x0: -9, z0: -21, x1: 9, z1: -4 },
+    { roomId: 'video', x0: 9, z0: -21, x1: 27, z1: 0 }, { roomId: 'design', x0: 9, z0: 0, x1: 27, z1: 32 },
+    { roomId: 'copy', x0: -28, z0: -21, x1: -9, z1: -4 }, { roomId: 'reuniao', x0: -28, z0: 18, x1: -9, z1: 32 },
+    { roomId: 'copa', x0: -28, z0: -4, x1: -9, z1: 18 },
+  ]);
+  setCustomRooms([]);
+  const mesas = FURNITURE.filter((f) => f.kind === 'mesa');
+  const ids = mesas.map((f) => deskItemFor(f)?.id);
+  assert.ok(ids.every(Boolean), `mesa sem peça editável: ${JSON.stringify(ids)}`);
+  for (const room of ['gerencia', 'video', 'design', 'copy', 'copa']) assert.ok(ids.includes(`mesa-sala:${room}`), room);
+  // mover as cinco: cada uma sai da lista dos móveis e a cadeira vai junto
+  const moved = mesas.map((f) => deskItemFor(f)!).filter((i) => i.id.startsWith('mesa-sala:')).map((i) => ({ ...i, x: i.x + 1, z: i.z + 1 }));
+  setDeskItems(moved);
+  assert.equal(FURNITURE.filter((f) => f.kind === 'mesa').length, mesas.length - 5);
+  const copy = moved.find((i) => i.id === 'mesa-sala:copy')!;
+  assert.deepEqual([DESKS.copy.x, DESKS.copy.z], [copy.x, copy.z + 1.1]);
+  setDeskItems([]);
+  assert.equal(FURNITURE.filter((f) => f.kind === 'mesa').length, mesas.length);
+  setBaseRooms([]);
   reset();
 });
