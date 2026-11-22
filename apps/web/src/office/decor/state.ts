@@ -5,7 +5,8 @@ import { api } from '../../lib/api';
 import {
   BOUNDS, DESKS, DOOR_ZONES, FIXO_KIND, FURNITURE, FURN_BOX, HUMAN_DESKS, SPAWN, WALL_BOXES, baseFurniture, deskSeat, roomAt, setDecorSolids, setDeskItems, type Box,
 } from '../layout';
-import { DEF, footprint, type DecorDef } from './catalog';
+import { DEF, footprint, skinOf, type DecorDef } from './catalog';
+import { ownerSeat } from '../seats';
 import { resetView } from '../view';
 
 /** Face de dentro das paredes do fundo, onde encostam os itens de parede. */
@@ -71,7 +72,7 @@ export const DEFAULT_DECOR: DecorItem[] = [
 
 // ---------------------------------------------------------------- geometria
 
-export const itemBox = (it: DecorItem, d: DecorDef = DEF[it.kind]): Box => {
+export const itemBox = (it: DecorItem, d: DecorDef = skinOf(it)!): Box => {
   // móvel fixo: a pegada é a do próprio móvel, no lugar e giro novos
   if (it.kind === FIXO_KIND) { const f = baseFurniture(it.id); if (f) return FURN_BOX({ ...f, x: it.x, z: it.z, rot: (f.rot ?? 0) + (it.rot * Math.PI) / 2 }); }
   const [w, dd] = footprint(d, it.rot);
@@ -126,7 +127,7 @@ export function fits(it: DecorItem, items: DecorItem[]) {
       return s.a0 < os.a1 - 0.02 && s.a1 > os.a0 + 0.02 && s.y0 < os.y1 - 0.02 && s.y1 > os.y0 + 0.02;
     });
   }
-  const b = itemBox(it, d);
+  const b = itemBox(it);
   if (b.x0 < BOUNDS.x0 + 0.06 || b.x1 > BOUNDS.x1 - 0.06 || b.z0 < BOUNDS.z0 + 0.06 || b.z1 > BOUNDS.z1 - 0.06) return false;
   if (d.place === 'alto') return true;
   if (WALL_BOXES.some((w) => overlap(b, w))) return false;
@@ -135,7 +136,7 @@ export function fits(it: DecorItem, items: DecorItem[]) {
   if (fixedBoxes(it.kind === FIXO_KIND ? it.id : undefined).some((f) => overlap(b, f, 0.02)) || DOOR_ZONES.some((z) => overlap(b, z)) || (!d.fixed && seatBoxes().some((s) => overlap(b, s)))) return false;
   return !items.some((o) => {
     const od = DEF[o.kind];
-    return o.id !== it.id && od?.place === 'chao' && overlap(b, itemBox(o, od), 0.02);
+    return o.id !== it.id && od?.place === 'chao' && overlap(b, itemBox(o), 0.02);
   });
 }
 
@@ -168,7 +169,9 @@ export const useDecor = create<DecorState>(() => ({
 
 const solidsOf = (items: DecorItem[]) => items.filter((it) => DEF[it.kind]?.place === 'chao').map((it) => itemBox(it));
 setDecorSolids(solidsOf(DEFAULT_DECOR));
-useDecor.subscribe((s, prev) => { if (s.items !== prev.items) { setDeskItems(s.items); setDecorSolids(solidsOf(s.items)); } });
+/** Mesas fixas com a cadeira do dono: na trocada por uma do catálogo, a primeira cadeira dela. */
+const withOwnerSeat = (it: DecorItem) => { const o = ownerSeat(it); return o ? { ...it, seat: { x: o.x, z: o.z }, dir: o.dir } : it; };
+useDecor.subscribe((s, prev) => { if (s.items !== prev.items) { setDeskItems(s.items.map(withOwnerSeat)); setDecorSolids(solidsOf(s.items)); } });
 
 /** Alterações ainda não confirmadas pelo servidor: enquanto houver, a recarga do servidor não pisa no rascunho. */
 let pending = 0;
@@ -273,6 +276,24 @@ export function updateItem(id: string, patch: Partial<DecorItem>) {
   if (!fits(next, s.items)) return false;
   commit(s.items.map((i) => (i.id === id ? next : i)));
   return true;
+}
+
+/**
+ * Troca a mesa fixa selecionada por uma do catálogo (ou volta à original com `as` vazio). A mesa nova assume a função
+ * da antiga: o dono (a pessoa ou o funcionário de função) senta na primeira cadeira e as outras ficam para quem
+ * trabalha ou está em pausa. Se não couber no lugar, tenta girar; sem espaço, avisa.
+ */
+export function swapDesk(id: string, as: string | undefined) {
+  const s = useDecor.getState();
+  const it = s.items.find((i) => i.id === id);
+  if (!it || !DEF[it.kind]?.fixed) return false;
+  for (let k = 0; k < 4; k++) {
+    const next: DecorItem = { ...it, rot: (it.rot + k) % 4, as, color: undefined };
+    if (!as) delete next.as;
+    if (fits(next, s.items)) { commit(s.items.map((i) => (i.id === id ? next : i))); return true; }
+  }
+  useStore.getState().notify('Esta mesa não cabe aí. Mova a mesa para um lugar mais livre e tente de novo.');
+  return false;
 }
 
 export function rotateSelected() {

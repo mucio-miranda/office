@@ -131,7 +131,7 @@ export function walkAndSit(p: Vec2, dir: number) {
  * Clique numa mesa de pessoa: a sua, senta; livre, fica com ela e senta; de outra pessoa, só anda até perto.
  * Devolve se tratou o clique.
  */
-function clickDesk(f: Furniture) {
+export function clickDesk(f: Furniture) {
   const st = useStore.getState();
   const hd = HUMAN_DESKS.find((d) => Math.abs(d.x - f.x) < 0.05 && Math.abs(d.z - f.z) < 0.05);
   if (!hd) return false;
@@ -321,10 +321,12 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
       player.x = next.x; player.z = next.z;
       player.dir = Math.atan2(dx, dz);
     }
+    const startedMoving = moving && !player.moving;
     player.moving = moving;
     if (moving && player.seated) { player.seated = false; player.dirty = true; }
-    // andar devolve a câmera para você
-    if (moving && !cam.follow) recenter();
+    // começar a andar pelo teclado devolve a câmera para você; andar sozinho (clique no chão) ou com o drone ligado não:
+    // senão o arraste da câmera (drone ou botão direito) seria desfeito a cada quadro enquanto o avatar anda
+    if (startedMoving && (ix || iz) && !cam.follow && !cam.dragging && !useStore.getState().drone) recenter();
 
     const room = roomAt(player);
     if ((room?.id ?? null) !== lastRoom.current) {

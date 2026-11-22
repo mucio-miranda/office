@@ -55,7 +55,8 @@ export function PixelFurniture({ f, onUse, onGrab }: { f: Furniture; onUse?: (f:
         onPointerDown: (e: any) => onGrab?.(f, e),
         onClick: (e: any) => { e.stopPropagation(); onUse?.(f); },
       }
-    : {};
+    // móvel sem painel nem rótulo (o balcão da copa, por exemplo): fora do Decorar não faz nada, mas dá para pegar e mover lá
+    : { onPointerDown: (e: any) => onGrab?.(f, e) };
 
   const body = (() => {
     switch (f.kind) {

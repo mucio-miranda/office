@@ -1,5 +1,5 @@
 import type { DecorItem, Vec2, Worker } from '@office/shared';
-import { DEF } from './decor/catalog';
+import { DEF, skinOf } from './decor/catalog';
 import { DESKS, DESK_DIRS, ROOMS, roomAt, roomCenter } from './layout';
 
 /**
@@ -19,6 +19,26 @@ function place(it: DecorItem, s: { x: number; z: number; back?: boolean }): Seat
   return { key: `${it.id}:${s.x}:${s.z}`, x, z, dir, room: roomAt({ x, z })?.id ?? null };
 }
 
+/** Mesa fixa trocada por uma do catálogo? */
+const swapped = (it: DecorItem) => !!it.as && !!DEF[it.kind]?.fixed && skinOf(it) !== DEF[it.kind];
+
+/**
+ * Onde senta o dono de uma mesa fixa trocada por uma do catálogo (a primeira cadeira dela): a pessoa da mesa ou o
+ * funcionário de função da sala. Sem troca, null (vale a cadeira padrão da mesa).
+ */
+export function ownerSeat(it: DecorItem): { x: number; z: number; dir: number } | null {
+  const first = swapped(it) ? skinOf(it)?.seats?.[0] : undefined;
+  if (!first) return null;
+  const s = place(it, first);
+  return { x: s.x, z: s.z, dir: s.dir };
+}
+
+/** Cadeiras de uma peça para quem trabalha ou está em pausa: na mesa fixa trocada, as que sobram depois da do dono. */
+const spareSeats = (it: DecorItem): Seat[] => {
+  const all = skinOf(it)?.seats ?? [];
+  return (swapped(it) ? all.slice(1) : all).map((s) => place(it, s));
+};
+
 /** Peças de sentar do Decorar (cadeiras, sofás, pufes…): o lugar é o meio da peça. */
 export const CHAIR_KINDS = new Set(['cadeira', 'banqueta', 'poltrona', 'pufe', 'sofa', 'sofa-curvo', 'banco-jardineira', 'arquibancada']);
 
@@ -26,7 +46,7 @@ export const CHAIR_KINDS = new Set(['cadeira', 'banqueta', 'poltrona', 'pufe', '
 export function sittable(items: DecorItem[]): Seat[] {
   const chairs = items.filter((it) => !it.wall && CHAIR_KINDS.has(it.kind))
     .map((it): Seat => ({ key: `${it.id}:c`, x: it.x, z: it.z, dir: (it.rot * Math.PI) / 2, room: roomAt(it)?.id ?? null }));
-  const desks = items.flatMap((it) => (it.wall ? [] : (DEF[it.kind]?.seats ?? []).map((s) => place(it, s))));
+  const desks = items.flatMap((it) => (it.wall ? [] : spareSeats(it)));
   return [...desks, ...chairs];
 }
 
@@ -34,12 +54,12 @@ export function sittable(items: DecorItem[]): Seat[] {
 export function seatsOf(it: DecorItem): Seat[] {
   if (it.wall) return [];
   if (CHAIR_KINDS.has(it.kind)) return [{ key: `${it.id}:c`, x: it.x, z: it.z, dir: (it.rot * Math.PI) / 2, room: roomAt(it)?.id ?? null }];
-  return (DEF[it.kind]?.seats ?? []).map((s) => place(it, s));
+  return (skinOf(it)?.seats ?? []).map((s) => place(it, s));
 }
 
 export function allSeats(items: DecorItem[]): Seat[] {
   const fixed = Object.entries(DESKS).map(([room, p]): Seat => ({ key: `sala:${room}`, x: p.x, z: p.z, dir: DESK_DIRS[room] ?? Math.PI, room }));
-  const decor = items.flatMap((it) => (it.wall ? [] : (DEF[it.kind]?.seats ?? []).map((s) => place(it, s))));
+  const decor = items.flatMap((it) => (it.wall ? [] : spareSeats(it)));
   return [...fixed, ...decor];
 }
 

@@ -1479,3 +1479,7 @@ body { cursor: var(--cur-arrow), default; }
   filter: drop-shadow(0 2px 3px rgba(0,0,0,.35)); transition: opacity .2s; }
 :root { --cur-pad: url("data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20width='24'%20height='24'%20viewBox='0%200%2024%2024'%3E%3Cpath%20d='M4%202.5%20L4%2019%20L8.4%2015%20L11.3%2021.4%20L14.2%2020.1%20L11.4%2013.9%20L17.4%2013.6%20Z'%20fill='%23ffd23f'%20stroke='%23171717'%20stroke-width='1.6'%20stroke-linejoin='round'/%3E%3C/svg%3E"); }
 .pad-hover { outline: 3px solid #ffd23f !important; outline-offset: 2px; }
+.desk-swap { display: flex; align-items: center; gap: 4px; flex-wrap: wrap; max-width: 360px; }
+.desk-swap button { height: 34px; padding: 0 6px; }
+.desk-swap button.on { background: var(--accent); border-color: var(--foreground); }
+.desk-swap button canvas, .desk-swap button img { width: 28px; height: 28px; }

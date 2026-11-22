@@ -296,7 +296,11 @@ export interface Furniture {
  * Mesas das pessoas: ao lado dos funcionários de IA de cada área e duas na recepção.
  * `x,z` é o centro da mesa; a cadeira fica em `z + 1.1`, de frente para o monitor (como as dos funcionários).
  */
-export interface HumanDesk { id: string; room: RoomId; x: number; z: number; /** quartos de volta (o Decorar gira a mesa) */ rot?: number }
+export interface HumanDesk {
+  id: string; room: RoomId; x: number; z: number; /** quartos de volta (o Decorar gira a mesa) */ rot?: number;
+  /** Mesa trocada por uma do catálogo: onde a pessoa senta e para onde olha (sem isso, a cadeira padrão). */
+  seat?: Vec2; dir?: number;
+}
 export const HUMAN_DESKS: HumanDesk[] = [
   { id: 'redacao-1', room: 'copy', x: -22.8, z: -9.75 },
   { id: 'redacao-2', room: 'copy', x: -13.2, z: -9.75 },
@@ -307,12 +311,13 @@ export const HUMAN_DESKS: HumanDesk[] = [
   { id: 'recepcao-2', room: 'recepcao', x: 5.4, z: 6.3 },
 ];
 /** A cadeira fica atrás da mesa, a 1,1 m, e gira junto com ela. */
-export const deskSeat = (d: { x: number; z: number; rot?: number }): Vec2 => {
+export const deskSeat = (d: { x: number; z: number; rot?: number; seat?: Vec2 }): Vec2 => {
+  if (d.seat) return d.seat;
   const t = ((d.rot ?? 0) * Math.PI) / 2;
   return { x: d.x + 1.1 * Math.sin(t), z: d.z + 1.1 * Math.cos(t) };
 };
 /** Para onde olha quem senta na mesa (para o monitor). */
-export const deskDir = (d: { rot?: number }) => ((d.rot ?? 0) * Math.PI) / 2 + Math.PI;
+export const deskDir = (d: { rot?: number; dir?: number }) => d.dir ?? ((d.rot ?? 0) * Math.PI) / 2 + Math.PI;
 
 /**
  * Arquivo dos clientes: fileira de arquivos de aço na parede do fundo da redação, abaixo das janelas (um armário
@@ -605,7 +610,8 @@ export const customRects = new Map<string, Rect>();
 export const DESK_KIND = 'mesa-pessoa';
 /** Qualquer outro móvel fixo (quadro, cofre, balcão, TVs…) mexido no Decorar: peça `fixo` com o id = chave do móvel. */
 export const FIXO_KIND = 'fixo';
-let deskItems: { id: string; x: number; z: number; rot: number }[] = [];
+type DeskItem = { id: string; x: number; z: number; rot: number; seat?: Vec2; dir?: number };
+let deskItems: DeskItem[] = [];
 let fixoItems: { id: string; x: number; z: number; rot: number }[] = [];
 /** O móvel de uma chave, como a planta põe (para desenhar a prévia ao arrastar). */
 export const baseFurniture = (key: string) => deskBase?.furniture.find((f) => f.key === key) ?? FURNITURE.find((f) => f.key === key);
@@ -626,7 +632,7 @@ function applyDesks() {
       const d = human.find((h) => h.id === it.id.slice(5));
       if (!d) continue;
       drop(d);
-      d.x = it.x; d.z = it.z; d.rot = it.rot;
+      d.x = it.x; d.z = it.z; d.rot = it.rot; d.seat = it.seat; d.dir = it.dir;
     } else if (it.id.startsWith('mesa-sala:')) {
       const room = it.id.slice(10);
       const seat = deskBase.seats[room];
@@ -652,8 +658,8 @@ function applyDesks() {
 }
 
 /** A decoração mudou: aplica as mesas fixas que foram mexidas (posição e giro). */
-export function setDeskItems(items: { id: string; kind: string; x: number; z: number; rot: number }[]) {
-  const pick = (k: string) => items.filter((i) => i.kind === k).map((i) => ({ id: i.id, x: i.x, z: i.z, rot: i.rot }));
+export function setDeskItems(items: { id: string; kind: string; x: number; z: number; rot: number; seat?: Vec2; dir?: number }[]) {
+  const pick = (k: string) => items.filter((i) => i.kind === k).map((i) => ({ id: i.id, x: i.x, z: i.z, rot: i.rot, seat: i.seat, dir: i.dir }));
   const next = pick(DESK_KIND), fixo = pick(FIXO_KIND);
   if (JSON.stringify(next) === JSON.stringify(deskItems) && JSON.stringify(fixo) === JSON.stringify(fixoItems)) return;
   deskItems = next;

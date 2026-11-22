@@ -5,13 +5,13 @@ import * as THREE from 'three';
 import { Check, ChevronDown, ChevronUp, Copy, Paintbrush, Redo2, RotateCcw, RotateCw, Search, Trash2, Undo2 } from 'lucide-react';
 import { useTheme, useWorldStyle, usePixel } from '../../lib/theme';
 import { useStore } from '../../lib/store';
-import { CATALOG, CATEGORIES, DEF, type DecorCat } from './catalog';
+import { CATALOG, CATEGORIES, DEF, skinOf, type DecorCat } from './catalog';
 import { floorMaterialTexture } from '../pixel/floors';
 import { ROOMS, baseCustomized, customRects } from '../layout';
 import { isBase, rectOf, redoPlan, resetBasePlan, undoPlan, usePlan } from './plan';
 import { WALL_FINISHES, WALL_LABEL, WALL_OPTIONS, allWalls, applyWall, defaultWall, dividerWall, openOffice, saveWalls, setOpenOffice, setDefaultWall, setDividerWall, useWallTool, wallsOfRoom, type WallMode } from './walls';
 import {
-  canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, undo, updateItem, useDecor,
+  canDecorate, duplicateSelected, redo, removeSelected, restoreDefault, rotateSelected, setEditing, startPlacing, swapDesk, undo, updateItem, useDecor,
 } from './state';
 
 /** Entra no modo Decorar (no tema Pixel, onde as peças aparecem com todos os detalhes). */
@@ -162,15 +162,27 @@ function Inspector() {
     );
   }
   if (!sel) return null;
-  const d = DEF[sel.kind];
+  const d = skinOf(sel);
   if (!d) return null;
   const color = sel.color ?? d.colors?.[0];
+  const fixedDesk = !!DEF[sel.kind]?.fixed && sel.kind !== 'fixo';
   return (
     <div className="decor-inspector">
-      <Thumb kind={sel.kind} />
+      <Thumb kind={d.kind} />
       <div className="decor-info">
         <b>{d.name}</b>
         <span className="muted">Arraste para mover</span>
+        {fixedDesk && (
+          <div className="desk-swap">
+            <span className="muted">Trocar por:</span>
+            <button className={`ghost small ${!sel.as ? 'on' : ''}`} onClick={() => swapDesk(sel.id, undefined)} title="Voltar à mesa original">Original</button>
+            {CATALOG.filter((c) => c.cat === 'mesas' && !c.fixed && c.seats?.length).map((c) => (
+              <button key={c.kind} className={`ghost small ${sel.as === c.kind ? 'on' : ''}`} onClick={() => swapDesk(sel.id, c.kind)} title={`${c.name} · ${c.seats!.length} ${c.seats!.length > 1 ? 'lugares' : 'lugar'}`}>
+                <Thumb kind={c.kind} />
+              </button>
+            ))}
+          </div>
+        )}
         {d.colors && (
           <div className="decor-swatches">
             {d.colors.map((c) => (
@@ -183,7 +195,7 @@ function Inspector() {
       <div className="decor-actions">
         {d.place !== 'parede' && <button className="ghost small" onClick={rotateSelected} title="Girar (R)"><RotateCw size={14} /> Girar</button>}
         <button className="ghost small" onClick={duplicateSelected} title="Duplicar (Ctrl D)"><Copy size={14} /> Duplicar</button>
-        <button className="ghost small danger" onClick={removeSelected} title="Remover (Delete)"><Trash2 size={14} /> Remover</button>
+        <button className="ghost small danger" onClick={removeSelected} title="Remover (Delete)" disabled={fixedDesk}><Trash2 size={14} /> Remover</button>
       </div>
     </div>
   );

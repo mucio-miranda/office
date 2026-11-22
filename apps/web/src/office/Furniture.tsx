@@ -22,7 +22,8 @@ function MaqueteFurniture({ f, p, onUse, onGrab }: { f: Furniture; p: ScenePalet
         onPointerDown: (e: any) => onGrab?.(f, e),
         onClick: (e: any) => { e.stopPropagation(); onUse?.(f); },
       }
-    : {};
+    // móvel sem painel nem rótulo (o balcão da copa, por exemplo): fora do Decorar não faz nada, mas dá para pegar e mover lá
+    : { onPointerDown: (e: any) => onGrab?.(f, e) };
   const mat = (c: string) => <meshStandardMaterial color={hover && interactive ? p.hover : c} roughness={0.9} metalness={0} />;
   const box = (pos: [number, number, number], size: [number, number, number], c: string, key?: string | number) => (
     <mesh key={key} position={pos} castShadow receiveShadow>

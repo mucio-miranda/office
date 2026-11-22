@@ -1403,4 +1403,9 @@ CATALOG.push(
 export const DEF: Record<string, DecorDef> = Object.fromEntries(CATALOG.map((d) => [d.kind, d]));
 
 /** Pegada no chão já com o giro (quartos de volta). */
+/** A definição que vale para desenhar, medir e sentar: a mesa fixa trocada usa a do catálogo escolhida em `as`. */
+export const skinOf = (it: { kind: string; as?: string }): DecorDef | undefined => {
+  const base = DEF[it.kind];
+  return base?.fixed && it.as && DEF[it.as] && !DEF[it.as].fixed ? DEF[it.as] : base;
+};
 export const footprint = (d: DecorDef, rot: number): [number, number] => (rot % 2 ? [d.size[1], d.size[0]] : d.size);

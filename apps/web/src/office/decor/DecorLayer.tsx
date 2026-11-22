@@ -8,11 +8,11 @@ import { BOUNDS, FIXO_KIND, FURN_BOX, baseFurniture, roomAt, type FurnitureKind 
 import { PixelFurniture } from '../pixel/Furniture';
 import { usePlan } from './plan';
 import { seatsOf } from '../seats';
-import { droneBlocksClick, player, walkAndSit } from '../World';
+import { clickDesk, droneBlocksClick, player, walkAndSit } from '../World';
 import { farSides, useView } from '../view';
 import { FurnitureMesh } from '../Furniture';
 import { OutlineColor } from '../pixel/kit';
-import { DEF, footprint, type DecorDef } from './catalog';
+import { DEF, footprint, skinOf, type DecorDef } from './catalog';
 import { WALL_TOP, backZ, fits, leftX, placeGhost, useDecor, commit } from './state';
 
 const C_HOVER = '#ffe066';
@@ -65,7 +65,7 @@ function DecorPiece({ it, outline, onDown, onOver, onOut, onClick }: {
   const p = usePixel();
   const scene = useScene();
   const pixel = useWorldStyle((s) => s.style) === 'pixel';
-  const d = DEF[it.kind];
+  const d = skinOf(it);
   const quarter = useView((s) => s.quarter);
   // o piso de sala é desenhado pelo próprio chão (PixelRoom)
   if (!d || d.place === 'sala') return null;
@@ -98,7 +98,7 @@ function DecorPiece({ it, outline, onDown, onOver, onOut, onClick }: {
 
 /** Marca da pegada da prévia: verde se cabe, vermelha se não. */
 function Footprint({ it, ok }: { it: DecorItem; ok: boolean }) {
-  const d = DEF[it.kind];
+  const d = skinOf(it);
   if (!d) return null;
   const color = ok ? C_OK : C_BAD;
   if (d.place === 'sala') {
@@ -208,7 +208,7 @@ export function DecorLayer() {
     };
     /** Prévia na posição do cursor: peça nova (placing) ou a que está sendo arrastada. */
     const preview = (base: DecorItem) => {
-      const d = DEF[base.kind];
+      const d = skinOf(base);
       if (!d) return null;
       if (d.place === 'parede') {
         const w = wallPoint(d);
@@ -288,6 +288,8 @@ export function DecorLayer() {
       onDown: (e: any) => {
         if (e.button !== 0 || droneBlocksClick()) return;
         e.stopPropagation();
+        // mesa de pessoa (trocada por outra do catálogo): mesmo clique da mesa original (ficar com ela e sentar)
+        if (it.id.startsWith('mesa:') && clickDesk({ kind: 'mesa', x: it.x, z: it.z })) return;
         const s = [...seats].sort((a, b) => Math.hypot(a.x - player.x, a.z - player.z) - Math.hypot(b.x - player.x, b.z - player.z))[0];
         walkAndSit(s, s.dir);
       },

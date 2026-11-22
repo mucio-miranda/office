@@ -703,6 +703,7 @@ export async function api(app: FastifyInstance) {
         id: z.string().min(1).max(64), kind: z.string().regex(/^[a-z0-9-]{1,40}$/),
         x: z.number().min(-40).max(40), z: z.number().min(-40).max(40), rot: z.number().int().min(0).max(3),
         color: z.string().regex(/^#[0-9a-f]{6}$/i).optional(), wall: z.enum(['fundo', 'esquerda']).optional(),
+        as: z.string().regex(/^[a-z0-9-]{1,40}$/).optional(),
       });
       const b = body(z.object({ items: z.array(item).max(800).nullable() }), req, reply);
       if (!b) return;

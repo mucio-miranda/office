@@ -757,6 +757,8 @@ export interface DecorItem {
   rot: number;
   color?: string;
   wall?: 'fundo' | 'esquerda';
+  /** Só na mesa fixa: tipo da mesa do catálogo que ficou no lugar dela (visual, tamanho e cadeiras). */
+  as?: string;
 }
 
 export interface Vec2 {
