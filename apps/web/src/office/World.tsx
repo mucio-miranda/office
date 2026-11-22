@@ -20,7 +20,7 @@ import { ClientArchive, cabinets, openArchive } from './Archive';
 import { MoodboardWall } from './MoodboardWall';
 
 const MAQUETE_WALL: Record<string, string> = { branca: '#f3f3f1', preta: '#1f2023', concreto: '#a3a29d', madeira: '#99693f', vidro: '#bfe6f5', 'vidro-fume': '#39444c' };
-import { agentSeat, buildingRect, deskDir, deskItemFor, DESK_DIRS, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
+import { agentSeat, buildingRect, deskDir, deskItemFor, fixoItemFor, DESK_DIRS, isFixedAgent, roleOf, workerSpot, wallRuns, FURNITURE, HUMAN_DESKS, distToFurniture, ROOMS, SPAWN, WALL_H, blocked, deskSeat, findPath, freeSpotNear, roomAt, step, tileAt, type Furniture, type HumanDesk } from './layout';
 
 /** Estado do jogador fora do React: atualizado a cada quadro sem re-render. */
 export const player = {
@@ -858,7 +858,14 @@ export function World({ onNearby, active }: { onNearby: (n: Nearby | null) => vo
       ) : (
         <FurnitureMesh key={i} f={f} p={p} onUse={(ff) => {
           // no Decorar, a mesa fixa vira peça editável (mover e girar) e já fica selecionada
-          if (useDecor.getState().editing) { const it = deskItemFor(ff); if (it) { commit([...useDecor.getState().items, it]); useDecor.setState({ sel: it.id }); } return; }
+          if (useDecor.getState().editing) {
+            // mesa ou qualquer móvel fixo: vira peça editável (ou seleciona a que já existe)
+            const it = deskItemFor(ff) ?? fixoItemFor(ff);
+            if (!it) return;
+            if (!useDecor.getState().items.some((x) => x.id === it.id)) commit([...useDecor.getState().items, it]);
+            useDecor.setState({ sel: it.id });
+            return;
+          }
           if (droneBlocksClick()) return; if (ff.kind === 'mesa' && clickDesk(ff)) return; walkTo({ x: ff.x, z: ff.z + 1.4 }); useFurniture(ff);
         }} />
       ))}

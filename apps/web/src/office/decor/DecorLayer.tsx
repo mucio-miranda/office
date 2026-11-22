@@ -4,7 +4,8 @@ import * as THREE from 'three';
 import type { DecorItem } from '@office/shared';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../../lib/theme';
 import { useStore } from '../../lib/store';
-import { BOUNDS, roomAt, type FurnitureKind } from '../layout';
+import { BOUNDS, FIXO_KIND, FURN_BOX, baseFurniture, roomAt, type FurnitureKind } from '../layout';
+import { PixelFurniture } from '../pixel/Furniture';
 import { usePlan } from './plan';
 import { seatsOf } from '../seats';
 import { droneBlocksClick, player, walkAndSit } from '../World';
@@ -64,6 +65,23 @@ function DecorPiece({ it, outline, onDown, onOver, onOut, onClick }: {
   const quarter = useView((s) => s.quarter);
   // o piso de sala é desenhado pelo próprio chão (PixelRoom)
   if (!d || d.place === 'sala') return null;
+  // móvel fixo mexido: o mapa desenha o móvel; aqui só a prévia ao arrastar e uma caixa para pegar e marcar
+  if (it.kind === FIXO_KIND) {
+    const f = baseFurniture(it.id);
+    if (!f) return null;
+    const rot = (f.rot ?? 0) + (it.rot * Math.PI) / 2;
+    const b = FURN_BOX({ ...f, x: 0, z: 0, rot: 0 });
+    const ghost = it.id === 'ghost' || outline === C_OK || outline === C_BAD;
+    return (
+      <group position={[it.x, 0, it.z]} rotation={[0, rot, 0]} onPointerDown={onDown} onPointerOver={onOver} onPointerOut={onOut} onClick={onClick}>
+        {ghost && <PixelFurniture f={{ ...f, x: 0, z: 0, rot: 0, panel: undefined, label: undefined }} />}
+        <mesh position={[0, 0.6, 0]}>
+          <boxGeometry args={[b.x1 - b.x0 + 0.1, 1.2, b.z1 - b.z0 + 0.1]} />
+          <meshBasicMaterial color={outline ?? '#ffffff'} transparent opacity={outline ? 0.22 : 0} depthWrite={false} />
+        </mesh>
+      </group>
+    );
+  }
   // decoração de parede: só aparece quando a parede dela está do lado de longe (é ali que ela sobe inteira)
   if (it.wall) { const far = farSides(quarter); if ((it.wall === 'fundo' && !far.z0) || (it.wall === 'esquerda' && !far.x0)) return null; }
   const { pos, rotY } = placement(it);

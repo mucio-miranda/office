@@ -343,7 +343,9 @@ async function start(jobId: string, typed: string, resume: boolean) {
   const helper = job.workerId ? one<{ role: string; name: string }>('SELECT role, name FROM workers WHERE id = ?', job.workerId) : undefined;
   const isHelper = helper?.role === 'ajudante';
   const conversation = client && !reviewer && !isHelper ? client : undefined;
-  const session = conversation?.sessionId ?? (resume ? job.sessionId : null);
+  // na conversa do cliente vale a sessão atual dele: depois de uma conversa nova (sessionId vazio), um pedido antigo que
+  // estava em aberto continua na conversa nova, e não reabre a antiga (que era justamente a grande)
+  const session = conversation ? conversation.sessionId ?? null : (resume ? job.sessionId : null);
   // sem sessão para retomar, a mensagem precisa levar o pedido inteiro junto
   const input = !session && typed !== job.prompt ? `${job.prompt}\n\n${typed}` : typed;
   // quanto a sessão retomada já tinha custado, para somar só o que esta rodada gastou

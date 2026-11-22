@@ -3,7 +3,7 @@ import { uid, type DecorItem } from '@office/shared';
 import { useStore } from '../../lib/store';
 import { api } from '../../lib/api';
 import {
-  BOUNDS, DESKS, DOOR_ZONES, FURNITURE, FURN_BOX, HUMAN_DESKS, SPAWN, WALL_BOXES, deskSeat, roomAt, setDecorSolids, setDeskItems, type Box,
+  BOUNDS, DESKS, DOOR_ZONES, FIXO_KIND, FURNITURE, FURN_BOX, HUMAN_DESKS, SPAWN, WALL_BOXES, baseFurniture, deskSeat, roomAt, setDecorSolids, setDeskItems, type Box,
 } from '../layout';
 import { DEF, footprint, type DecorDef } from './catalog';
 import { resetView } from '../view';
@@ -72,6 +72,8 @@ export const DEFAULT_DECOR: DecorItem[] = [
 // ---------------------------------------------------------------- geometria
 
 export const itemBox = (it: DecorItem, d: DecorDef = DEF[it.kind]): Box => {
+  // móvel fixo: a pegada é a do próprio móvel, no lugar e giro novos
+  if (it.kind === FIXO_KIND) { const f = baseFurniture(it.id); if (f) return FURN_BOX({ ...f, x: it.x, z: it.z, rot: (f.rot ?? 0) + (it.rot * Math.PI) / 2 }); }
   const [w, dd] = footprint(d, it.rot);
   return { x0: it.x - w / 2, z0: it.z - dd / 2, x1: it.x + w / 2, z1: it.z + dd / 2 };
 };
@@ -86,7 +88,7 @@ const overlap = (a: Box, b: Box, m = 0) => a.x0 < b.x1 - m && a.x1 > b.x0 + m &&
 /** Calculados na hora: a Planta e o Decorar mudam as mesas e os móveis de lugar. */
 const seatBoxes = () => [...Object.values(DESKS), ...HUMAN_DESKS.map(deskSeat), SPAWN].map((s) => ({ x0: s.x - 0.35, x1: s.x + 0.35, z0: s.z - 0.35, z1: s.z + 0.35 }));
 /** Móveis fixos, com a cadeira das mesas e as da mesa de reunião. */
-const fixedBoxes = (): Box[] => FURNITURE.filter((f) => f.solid).map((f) => {
+const fixedBoxes = (except?: string): Box[] => FURNITURE.filter((f) => f.solid && f.key !== except).map((f) => {
   const b = FURN_BOX(f);
   if (f.kind === 'mesa') return { ...b, z1: b.z1 + 0.85 };
   if (f.kind === 'mesa-reuniao') return { ...b, z0: b.z0 - 0.75, z1: b.z1 + 0.75 };
@@ -130,7 +132,7 @@ export function fits(it: DecorItem, items: DecorItem[]) {
   if (WALL_BOXES.some((w) => overlap(b, w))) return false;
   if (d.place === 'piso') return true;
   // a mesa fixa sendo mexida não esbarra na própria cadeira
-  if (fixedBoxes().some((f) => overlap(b, f, 0.02)) || DOOR_ZONES.some((z) => overlap(b, z)) || (!d.fixed && seatBoxes().some((s) => overlap(b, s)))) return false;
+  if (fixedBoxes(it.kind === FIXO_KIND ? it.id : undefined).some((f) => overlap(b, f, 0.02)) || DOOR_ZONES.some((z) => overlap(b, z)) || (!d.fixed && seatBoxes().some((s) => overlap(b, s)))) return false;
   return !items.some((o) => {
     const od = DEF[o.kind];
     return o.id !== it.id && od?.place === 'chao' && overlap(b, itemBox(o, od), 0.02);

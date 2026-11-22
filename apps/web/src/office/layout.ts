@@ -285,6 +285,8 @@ export interface Furniture {
   panel?: PanelId;
   label?: string;
   solid?: boolean;
+  /** Identidade estável do móvel (o Decorar guarda onde ele foi parar e o giro por ela). */
+  key?: string;
 }
 
 /**
@@ -436,6 +438,8 @@ const MAIN = { rooms: [...ROOMS], furniture: [...FURNITURE], desks: [...HUMAN_DE
 // ---------------------------------------------------------------- salas originais na Planta (etapa 2)
 
 /** A planta de sempre, guardada para voltar a ela e para levar os móveis junto quando uma sala muda. */
+// cada móvel original ganha uma chave estável (para o Decorar mover e girar)
+MAIN.furniture.forEach((f, i) => { if (!f.key) f.key = `fixo:${f.kind}:${i}`; });
 const ORIG = {
   rooms: MAIN.rooms.map((r) => ({ ...r })),
   furniture: MAIN.furniture.map((f) => ({ ...f })),
@@ -599,7 +603,12 @@ export const customRects = new Map<string, Rect>();
  * `mesa-pessoa` da decoração, com id `mesa:<mesa da pessoa>` ou `mesa-sala:<sala>`. Sem peça, ficam onde a planta põe.
  */
 export const DESK_KIND = 'mesa-pessoa';
+/** Qualquer outro móvel fixo (quadro, cofre, balcão, TVs…) mexido no Decorar: peça `fixo` com o id = chave do móvel. */
+export const FIXO_KIND = 'fixo';
 let deskItems: { id: string; x: number; z: number; rot: number }[] = [];
+let fixoItems: { id: string; x: number; z: number; rot: number }[] = [];
+/** O móvel de uma chave, como a planta põe (para desenhar a prévia ao arrastar). */
+export const baseFurniture = (key: string) => deskBase?.furniture.find((f) => f.key === key) ?? FURNITURE.find((f) => f.key === key);
 /** Lugar dos funcionários na mesa de cada sala pela planta (sem as mesas mexidas no Decorar). */
 let planSeats: Record<string, Vec2> = Object.fromEntries(Object.entries(DESKS).map(([k, v]) => [k, { ...v }]));
 let deskBase: { human: HumanDesk[]; seats: Record<string, Vec2>; furniture: Furniture[] } | null = null;
@@ -627,6 +636,14 @@ function applyDesks() {
       DESK_DIRS[room] = deskDir(it);
     }
   }
+  // móveis fixos mexidos: mesma peça, outro lugar e giro (o arquivo e os moodboards só mudam de lugar)
+  for (const it of fixoItems) {
+    const i = furn.findIndex((f) => f.key === it.id);
+    if (i < 0) continue;
+    const f = furn[i];
+    if (f === ARCHIVE || f === MOODBOARD) { Object.assign(f, { x: it.x, z: it.z }); continue; }
+    furn[i] = { ...f, x: it.x, z: it.z, rot: (f.rot ?? 0) + (it.rot * Math.PI) / 2 };
+  }
   HUMAN_DESKS.length = 0;
   HUMAN_DESKS.push(...human);
   FURNITURE.length = 0;
@@ -636,10 +653,19 @@ function applyDesks() {
 
 /** A decoração mudou: aplica as mesas fixas que foram mexidas (posição e giro). */
 export function setDeskItems(items: { id: string; kind: string; x: number; z: number; rot: number }[]) {
-  const next = items.filter((i) => i.kind === DESK_KIND).map((i) => ({ id: i.id, x: i.x, z: i.z, rot: i.rot }));
-  if (JSON.stringify(next) === JSON.stringify(deskItems)) return;
+  const pick = (k: string) => items.filter((i) => i.kind === k).map((i) => ({ id: i.id, x: i.x, z: i.z, rot: i.rot }));
+  const next = pick(DESK_KIND), fixo = pick(FIXO_KIND);
+  if (JSON.stringify(next) === JSON.stringify(deskItems) && JSON.stringify(fixo) === JSON.stringify(fixoItems)) return;
   deskItems = next;
+  fixoItems = fixo;
   applyDesks();
+}
+
+/** Móvel fixo clicado no Decorar (que não é mesa): a peça editável dele. */
+export function fixoItemFor(f: Furniture): { id: string; kind: string; x: number; z: number; rot: number } | null {
+  if (!f.key || f.kind === 'mesa') return null;
+  const cur = fixoItems.find((i) => i.id === f.key);
+  return { id: f.key, kind: FIXO_KIND, x: f.x, z: f.z, rot: cur?.rot ?? 0 };
 }
 
 /** Mesa fixa clicada no Decorar: a peça editável correspondente (ou null, se não é mesa de pessoa nem de sala). */
@@ -688,13 +714,13 @@ export function setCustomRooms(list: CustomRoom[]) {
   HUMAN_DESKS.length = 0;
   HUMAN_DESKS.push(...MAIN.desks, ...desks);
   FURNITURE.length = 0;
-  FURNITURE.push(...MAIN.furniture, ...desks.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true })));
+  FURNITURE.push(...MAIN.furniture, ...desks.map((d): Furniture => ({ kind: 'mesa', x: d.x, z: d.z, solid: true, key: `mesa:${d.id}` })));
   BOUNDS.x1 = rects.reduce((m, { rect }) => Math.max(m, rect.x1), MAIN.x1);
   COLS = Math.round((BOUNDS.x1 - BOUNDS.x0) / CELL);
   ROWS = Math.round((BOUNDS.z1 - BOUNDS.z0) / CELL);
   // guarda a planta das mesas e reaplica as que foram mexidas no Decorar
   deskBase = { human: HUMAN_DESKS.map((d) => ({ ...d })), seats: Object.fromEntries(Object.entries(planSeats).map(([k, v]) => [k, { ...v }])), furniture: [...FURNITURE] };
-  if (deskItems.length) applyDesks(); else rebuildSolids();
+  if (deskItems.length || fixoItems.length) applyDesks(); else rebuildSolids();
 }
 
 /**

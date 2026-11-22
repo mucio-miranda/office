@@ -491,6 +491,11 @@ export const CATALOG: DecorDef[] = [
     ),
   },
   {
+    // móvel fixo do escritório mexido no Decorar (quadro, cofre, balcão, TVs…): o próprio mapa desenha o móvel
+    kind: 'fixo', name: 'Móvel fixo', cat: 'escritorio', size: [1, 1], h: 1.2, place: 'chao', fixed: true,
+    render: () => null,
+  },
+  {
     kind: 'mesa-pessoa', name: 'Mesa de trabalho (fixa)', cat: 'mesas', size: [2.2, 1.1], h: 1.4, place: 'chao', fixed: true,
     render: () => <PixelFurniture f={{ kind: 'mesa', x: 0, z: 0 }} />,
   },
