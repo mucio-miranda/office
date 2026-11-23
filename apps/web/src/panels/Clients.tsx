@@ -1,7 +1,7 @@
 import { ClientDrive } from './ClientDrive';
 import { canSeeFinance, canWork } from '@office/shared';
 import { useEffect, useState } from 'react';
-import { Archive as ArchiveIcon, Bot, ChevronRight, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, Pencil, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
+import { Archive as ArchiveIcon, Bot, ChevronRight, FolderInput, FolderOpen, FolderPlus, History, PanelLeftClose, Pencil, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession, type Worker } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
@@ -141,24 +141,33 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   const base = `/api/offices/${office!.id}/clients/${c.id}`;
   // a equipe deste cliente: o titular (a conversa contínua), ajudantes e quem já trabalhou aqui
   const team = workers.filter((w) => w.clientId === c.id);
-  const titular = team.find((w) => w.role === 'titular' && !w.archivedAt);
   const helpers = team.filter((w) => w.role === 'ajudante' && !w.archivedAt);
-  const past = team.filter((w) => w.archivedAt).sort((a, b) => (b.archivedAt ?? '').localeCompare(a.archivedAt ?? ''));
   const patch = (body: Partial<Client>) => api(base, { method: 'PATCH', body });
   const mine = demands.filter((d) => d.clientId === c.id);
   const rafa = agents.find((a) => a.slug === 'gerente');
   const [tab, setTab] = useState<Tab>('conversa');
   const [settings, setSettings] = useState(false);
   const [sessions, setSessions] = useState<ClientSession[]>([]);
-  // null = a sessão atual; um id = uma sessão anterior, só para ler até alguém continuar nela
+  // null = a sessão escolhida; um id = uma conversa anterior (Office ou terminal), só para ler até alguém continuar nela
   const [view, setView] = useState<string | null>(null);
-  const [confirmReset, setConfirmReset] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+  // as sessões abertas do cliente (uma por demanda): quem espera você primeiro, depois quem está trabalhando
+  const order = (w: Worker) => (w.state === 'aguardando' ? 0 : w.state === 'trabalhando' ? 1 : 2);
+  const openSessions = team.filter((w) => w.role === 'titular' && !w.archivedAt)
+    .sort((a, b) => order(a) - order(b) || (b.lastJobAt ?? b.createdAt).localeCompare(a.lastJobAt ?? a.createdAt));
+  const [sel, setSel] = useState<string | null>(null);
+  const session = openSessions.find((w) => w.id === sel) ?? openSessions[0] ?? null;
+  // ao entrar no cliente, abre a que precisa de você (ou a última que andou)
+  useEffect(() => { setSel(openSessions[0]?.id ?? null); setView(null); }, [c.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [creating, setCreating] = useState(false);
+  const [newTitle, setNewTitle] = useState('');
+  const [carry, setCarry] = useState(false);
+  const [renaming, setRenaming] = useState<string | null>(null);
+  const [renameText, setRenameText] = useState('');
   const clientJobs = jobs.filter((j) => j.clientId === c.id);
   // rodando ou na fila = trabalhando de verdade; aguardando = parou e espera sua aprovação (nada roda)
   const jobRunning = clientJobs.some((j) => j.status === 'rodando' || j.status === 'fila');
   const jobWaiting = !jobRunning && clientJobs.some((j) => j.status === 'aguardando');
-  const busy = jobRunning || jobWaiting;
   useEffect(() => {
     api<ClientSession[]>(`${base}/sessoes`).then(setSessions).catch(() => setSessions([]));
   }, [base, c.sessionId, clientJobs.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -172,10 +181,11 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   };
   const resume = async (id: string) => {
     try {
-      await api(`${base}/sessoes/${id}/retomar`, { body: {} });
+      const w = await api<Worker>(`${base}/sessoes/${id}/retomar`, { body: {} });
+      setSel(w.id);
       setView(null);
       setTab('conversa');
-      notify('A próxima mensagem continua essa sessão');
+      notify('A conversa virou uma sessão aberta do cliente');
     } catch (x) { notify((x as Error).message); }
   };
   const archive = async (id: string, archived: boolean) => {
@@ -186,14 +196,28 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
       notify(archived ? 'Sessão arquivada. Fica em "Arquivadas", no fim da lista.' : 'Sessão de volta à lista');
     } catch (x) { notify((x as Error).message); }
   };
-  const reset = async () => {
+  const createSession = async (e?: React.FormEvent) => {
+    e?.preventDefault();
     try {
-      await api(`${base}/conversa/nova`, { body: {} });
+      const w = await api<Worker>(`${base}/conversa/nova`, { body: { title: newTitle.trim() || null, levarResumo: carry } });
+      setSel(w.id);
       setView(null);
-      setTab('conversa');
-      notify(titular ? `${titular.name} foi arquivado. O próximo pedido chama outro funcionário, com conversa nova.` : 'O próximo pedido começa uma conversa nova');
+      setCreating(false);
+      setNewTitle('');
+      setCarry(false);
     } catch (x) { notify((x as Error).message); }
-    setConfirmReset(false);
+  };
+  const renameSession = async (w: Worker) => {
+    try { await api(`/api/offices/${office!.id}/workers/${w.id}`, { method: 'PATCH', body: { title: renameText.trim() || null } }); }
+    catch (x) { notify((x as Error).message); }
+    setRenaming(null);
+  };
+  const archiveSession = async (w: Worker) => {
+    try {
+      await api(`/api/offices/${office!.id}/workers/${w.id}/arquivar`, { body: {} });
+      if (sel === w.id) setSel(null);
+      notify('Sessão arquivada. A conversa continua no Histórico.');
+    } catch (x) { notify((x as Error).message); }
   };
   const running = mine.some((d) => d.pipeline?.[0] === 'briefing' && d.status !== 'entregue');
   const hasBriefing = !!c.briefing?.feitoEm || BRIEFING_FIELDS.some((x) => c.briefing?.[x.key]);
@@ -217,7 +241,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   };
   const tabs: { id: Tab; label: string; count?: number; alert?: boolean }[] = [
     { id: 'conversa', label: 'Conversa' },
-    { id: 'sessoes', label: 'Equipe', count: team.filter((w) => !w.archivedAt).length },
+    { id: 'sessoes', label: 'Histórico' },
     { id: 'briefing', label: 'Briefing', alert: !hasBriefing },
     { id: 'demandas', label: 'Demandas', count: openDemands.length },
     { id: 'arquivos', label: 'Arquivos' },
@@ -282,52 +306,66 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
       </nav>
 
       {tab === 'conversa' && (
-        <Conversa c={c} view={view} setView={setView} sessions={sessions} resume={resume}
-          onSessions={() => setTab('sessoes')} onInterview={interview} onBriefing={() => setTab('briefing')} />
+        <div className="conversa-split">
+          <aside className="session-col" aria-label={`Sessões de ${c.name}`}>
+            {canWork(office!.role) && (creating ? (
+              <form className="session-new" onSubmit={createSession}>
+                <input autoFocus value={newTitle} maxLength={60} placeholder="Nome da sessão (a demanda)" aria-label="Nome da sessão"
+                  onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setCreating(false)} />
+                <label className="small muted"><input type="checkbox" checked={carry} onChange={(e) => setCarry(e.target.checked)} /> levar o resumo da última conversa</label>
+                <div className="row gap"><button type="submit" className="small">Abrir</button><button type="button" className="ghost small" onClick={() => setCreating(false)}>Cancelar</button></div>
+              </form>
+            ) : (
+              <button type="button" className="small session-add" onClick={() => setCreating(true)}><Plus size={13} /> Nova sessão</button>
+            ))}
+            <div className="session-rows" role="list">
+              {openSessions.map((w) => {
+                const label = w.state === 'aguardando' ? 'esperando você' : w.state === 'trabalhando' ? 'rodando' : 'parada';
+                return (
+                  <div key={w.id} role="listitem" className={`session-row st-${w.state} ${session?.id === w.id && !view ? 'on' : ''}`}>
+                    {renaming === w.id ? (
+                      <form className="session-rename" onSubmit={(e) => { e.preventDefault(); renameSession(w); }}>
+                        <input autoFocus value={renameText} maxLength={60} aria-label="Novo nome da sessão" onChange={(e) => setRenameText(e.target.value)}
+                          onBlur={() => renameSession(w)} onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)} />
+                      </form>
+                    ) : (
+                      <button type="button" className="session-pick" onClick={() => { setSel(w.id); setView(null); }}>
+                        <span className="row gap"><span className="status-dot" /><b className="truncate">{w.title ?? w.name}</b></span>
+                        <span className="muted small">{label}{w.lastJobAt ? ` · ${when(w.lastJobAt)}` : ''}</span>
+                      </button>
+                    )}
+                    {canWork(office!.role) && renaming !== w.id && (
+                      <span className="session-tools">
+                        <button type="button" className="icon" title="Renomear" aria-label={`Renomear ${w.title ?? w.name}`} onClick={() => { setRenaming(w.id); setRenameText(w.title ?? ''); }}><Pencil size={12} /></button>
+                        <button type="button" className="icon" disabled={w.state === 'trabalhando'} title={w.state === 'trabalhando' ? 'Pare o trabalho antes de arquivar' : 'Arquivar: sai da lista (nada é apagado)'} aria-label={`Arquivar ${w.title ?? w.name}`} onClick={() => archiveSession(w)}><ArchiveIcon size={12} /></button>
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+              {openSessions.length === 0 && <p className="muted small">Nenhuma sessão aberta. O primeiro pedido abre uma, ou use "Nova sessão".</p>}
+            </div>
+          </aside>
+          <Conversa c={c} session={session} view={view} setView={setView} sessions={sessions} resume={resume}
+            onSessions={() => setTab('sessoes')} onInterview={interview} onBriefing={() => setTab('briefing')} />
+        </div>
       )}
       {tab === 'sessoes' && (
         <div className="card">
           <div className="card-head">
-            <h4>Equipe de {c.name}</h4>
-            {confirmReset ? (
-              <div className="row gap">
-                <span className="muted small">{titular ? `${titular.name} é arquivado e deixa de lembrar a conversa; o próximo pedido chama outro funcionário.` : 'A conversa atual é esquecida.'}{jobWaiting ? ' A aprovação que ele está esperando é encerrada (o pedido continua na demanda).' : ''}</span>
-                <button className="ghost small" onClick={() => setConfirmReset(false)}>Manter</button>
-                <button className="small" onClick={reset}>Trocar</button>
-              </div>
-            ) : (
-              <button className="ghost small" disabled={(!c.sessionId && !titular) || jobRunning} title={jobRunning ? 'Espere o trabalho atual terminar' : undefined} onClick={() => setConfirmReset(true)}><MessageSquarePlus size={13} /> Trocar de funcionário (conversa nova)</button>
-            )}
+            <h4>Histórico de {c.name}</h4>
+            <span className="muted small">Conversas do Office e do terminal nesta pasta. "Continuar" abre a conversa como uma sessão do cliente.</span>
           </div>
-          <div className="team-list" role="list">
-            {titular ? (
-              <TeamRow w={titular} label="Titular · a conversa contínua" onOpen={() => { setView(null); setTab('conversa'); }} />
-            ) : <p className="muted small">Ainda sem funcionário. O primeiro pedido na conversa chama um.</p>}
-            {helpers.map((w) => <TeamRow key={w.id} w={w} label="Ajudante" />)}
-            {past.length > 0 && (
-              <details className="team-past">
-                <summary className="muted small">Já trabalharam aqui · {past.length}</summary>
-                {past.map((w) => <TeamRow key={w.id} w={w} label={`${w.role === 'titular' ? 'Titular' : 'Ajudante'} até ${new Date(w.archivedAt!).toLocaleDateString('pt-BR')}`} />)}
-              </details>
-            )}
-          </div>
-          {titular && c.sessionId && (
-            <div className="row gap" style={{ padding: '2px 0 6px' }}>
-              {titular.handoff && <span className="muted small truncate" title={titular.handoff}>Assumiu com a passagem: {titular.handoff.split(/[\\/]/).pop()}</span>}
-            </div>
-          )}
+          {helpers.length > 0 && <div className="team-list" role="list">{helpers.map((w) => <TeamRow key={w.id} w={w} label="Ajudante" />)}</div>}
           <div className="section-label" style={{ padding: '6px 0 0' }}>Sessões desta pasta (Office e terminal)</div>
           <div className="session-list" role="list">
-            <button type="button" role="listitem" className={`session-item ${view === null ? 'on' : ''}`} onClick={() => { setView(null); setTab('conversa'); }}>
-              <b>Sessão atual</b><span className="muted small">{c.sessionId ? 'o funcionário lembra desta conversa' : 'o próximo pedido começa uma sessão nova'}</span>
-            </button>
-            {sessions.filter((s) => !s.current && !s.archivedAt).map((s) => (
+            {sessions.filter((s) => !s.archivedAt && !openSessions.some((w) => w.sessionId === s.id)).map((s) => (
               <div key={s.id} role="listitem" className={`session-item row ${view === s.id ? 'on' : ''}`}>
                 <button type="button" className="session-open" onClick={() => { setView(s.id); setTab('conversa'); }}>
                   <span className="row gap">{s.origin === 'terminal' ? <Terminal size={12} /> : <History size={12} />}<b className="truncate">{s.title}</b></span>
                   <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)}{s.people.length ? ` · ${s.people.join(', ')}` : ''}</span>
                 </button>
-                <button type="button" className="ghost small" disabled={busy} title={busy ? 'Espere o trabalho atual terminar' : 'A próxima mensagem continua nesta sessão'} onClick={() => resume(s.id)}>Continuar</button>
+                <button type="button" className="ghost small" title="Abre esta conversa como uma sessão do cliente" onClick={() => resume(s.id)}>Continuar</button>
                 {canWork(office!.role) && <button type="button" className="icon" title="Arquivar: sai da lista (nada é apagado)" aria-label={`Arquivar ${s.title}`} onClick={() => archive(s.id, true)}><ArchiveIcon size={13} /></button>}
               </div>
             ))}

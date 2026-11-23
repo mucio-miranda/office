@@ -27,7 +27,7 @@ import { discoverClients } from '../clients/discover.ts';
 import { removeSquad, saveSquad, setClientSquad, squadOfClient, squadsOf } from '../clients/squads.ts';
 import { listSkills } from '../agents/skills.ts';
 import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/sessions.ts';
-import { startTurnover, resumeSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, resetConversation, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { startTurnover, newSession, resumeAsSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
 import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef, setNicheFont } from '../clients/references.ts';
@@ -950,6 +950,8 @@ export async function api(app: FastifyInstance) {
       if (!requireWorker(req, reply)) return;
       const b = body(z.object({
         text: z.string().trim().min(1).max(20000), newRequest: z.boolean().default(false), interrupt: z.boolean().default(false),
+        // a sessão do cliente em que o pedido entra (várias podem estar abertas); sem ela, a mais nova
+        workerId: z.string().max(40).nullable().optional(),
         // demanda aberta pelo mapa: já sai com quem faz, processo, prazo e prioridade
         demand: z.object({
           title: z.string().trim().max(80).optional(), dueDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
@@ -959,18 +961,20 @@ export async function api(app: FastifyInstance) {
       if (!b) return;
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
-      const err = clientMessage(officeId, id, b.text, `user:${req.user.id}`, b.demand ?? b.newRequest, b.interrupt);
+      const err = clientMessage(officeId, id, b.text, `user:${req.user.id}`, b.demand ?? b.newRequest, b.interrupt, false, b.workerId);
       if (err) return reply.code(409).send({ error: err });
       return { ok: true };
     });
+    // sessão nova do cliente (uma por demanda): as outras continuam abertas
     r.post('/api/offices/:officeId/clients/:id/conversa/nova', async (req, reply) => {
       if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ title: z.string().trim().max(60).nullable().optional(), levarResumo: z.boolean().default(false) }), req, reply);
+      if (!b) return;
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
-      const err = resetConversation(id);
-      if (err) return reply.code(409).send({ error: err });
-      invalidate(officeId, 'clients');
-      return { ok: true };
+      const r = newSession(officeId, id, `user:${req.user.id}`, b.title, b.levarResumo);
+      if (r.error) return reply.code(409).send({ error: r.error });
+      return r.worker;
     });
 
     // calendário de conteúdo: posts de cada cliente, ligados à demanda que os produz
@@ -1209,7 +1213,9 @@ export async function api(app: FastifyInstance) {
       const { officeId, id, sid } = req.params as any;
       const found = clientCwd(officeId, id);
       if (!found || !SESSION_ID.test(sid)) return reply.code(404).send({ error: 'Sessão não encontrada' });
-      if (b.archived && sid === found.c.sessionId) return reply.code(409).send({ error: 'Esta é a sessão atual. Use "Conversa nova" para começar outra antes de arquivar.' });
+      if (b.archived && one("SELECT id FROM workers WHERE client_id = ? AND session_id = ? AND role = 'titular' AND archived_at IS NULL", id, sid)) {
+        return reply.code(409).send({ error: 'Esta conversa está aberta como sessão do cliente. Arquive a sessão na lista.' });
+      }
       if (b.archived) db.prepare('INSERT OR REPLACE INTO archived_sessions (client_id, session_id, archived_at, archived_by) VALUES (?, ?, ?, ?)').run(id, sid, new Date().toISOString(), req.user.name);
       else db.prepare('DELETE FROM archived_sessions WHERE client_id = ? AND session_id = ?').run(id, sid);
       logActivity(officeId, `user:${req.user.id}`, b.archived ? 'arquivou uma sessão' : 'desarquivou uma sessão', `${found.c.name}: ${sid}`);
@@ -1228,12 +1234,12 @@ export async function api(app: FastifyInstance) {
       const { officeId, id, sid } = req.params as any;
       const found = clientCwd(officeId, id);
       if (!found || !SESSION_ID.test(sid) || !sessionFile(found.cwd, sid)) return reply.code(404).send({ error: 'Sessão não encontrada' });
-      const err = resumeSession(id, sid);
-      if (err) return reply.code(409).send({ error: err });
+      // a conversa antiga (do terminal ou do Office) vira uma sessão aberta do cliente
+      const r = resumeAsSession(officeId, id, sid, `user:${req.user.id}`, listSessions(found.cwd).find((x) => x.id === sid)?.title?.slice(0, 60));
       db.prepare('DELETE FROM archived_sessions WHERE client_id = ? AND session_id = ?').run(id, sid); // continuar nela desarquiva
       logActivity(officeId, `user:${req.user.id}`, 'retomou uma sessão', `${found.c.name}: ${sid}`);
-      invalidate(officeId, 'clients');
-      return { ok: true };
+      invalidate(officeId, 'workers');
+      return r.worker;
     });
 
     // o que os funcionários sugerem guardar: vale para todos só depois que o dono aprova
@@ -1662,13 +1668,21 @@ export async function api(app: FastifyInstance) {
     // nome do funcionário de um cliente (titular ou ajudante): a IA passa a se apresentar com ele
     r.patch('/api/offices/:officeId/workers/:id', async (req, reply) => {
       if (!requireWorker(req, reply)) return;
-      const b = body(z.object({ name: z.string().trim().min(2).max(30) }), req, reply);
+      const b = body(z.object({ name: z.string().trim().min(2).max(30).optional(), title: z.string().trim().max(60).nullable().optional() }), req, reply);
       if (!b) return;
       const { officeId, id } = req.params as any;
       const w = one<Worker>('SELECT * FROM workers WHERE id = ? AND office_id = ?', id, officeId);
       if (!w) return reply.code(404).send({ error: 'Funcionário não encontrado' });
+      // nome da sessão (a demanda): livre, pode repetir entre clientes
+      if (b.title !== undefined) {
+        update('workers', id, { title: b.title || null });
+        invalidate(officeId, 'workers');
+        if (!b.name) return { ok: true };
+      }
+      const name = b.name;
+      if (!name) return reply.code(400).send({ error: 'Nada para mudar.' });
       const twin = all<{ id: string; name: string }>('SELECT id, name FROM workers WHERE office_id = ? AND archived_at IS NULL AND id != ?', officeId, id)
-        .find((x) => x.name.toLocaleLowerCase('pt-BR') === b.name.toLocaleLowerCase('pt-BR'));
+        .find((x) => x.name.toLocaleLowerCase('pt-BR') === name.toLocaleLowerCase('pt-BR'));
       if (twin) return reply.code(409).send({ error: `Já existe um funcionário chamado ${twin.name}.` });
       update('workers', id, { name: b.name });
       logActivity(officeId, `user:${req.user.id}`, 'renomeou o funcionário', `${w.name} → ${b.name}`);
@@ -1681,8 +1695,7 @@ export async function api(app: FastifyInstance) {
       const w = one<Worker>('SELECT * FROM workers WHERE id = ? AND office_id = ?', id, officeId);
       if (!w) return reply.code(404).send({ error: 'Funcionário não encontrado' });
       if (one("SELECT id FROM jobs WHERE worker_id = ? AND status IN ('fila','rodando','aguardando')", id)) return reply.code(409).send({ error: `${w.name} ainda está trabalhando. Pare a tarefa antes.` });
-      // titular arquivado = conversa encerrada: o próximo pedido do cliente chama outro funcionário
-      if (w.role === 'titular') { const e = resetConversation(w.clientId); if (e) return reply.code(409).send({ error: e }); }
+      // sessão arquivada sai da lista do cliente; as outras sessões dele continuam como estão
       return archiveWorker(id);
     });
 

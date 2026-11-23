@@ -195,6 +195,16 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE clients ADD COLUMN model TEXT;`,
   // tarefa arquivada no painel do funcionário: sai da lista, nada é apagado
   `ALTER TABLE jobs ADD COLUMN archived_at TEXT;`,
+  // sessões do cliente (23/11/2026): cada titular é uma sessão com a sua conversa do Claude Code, e um cliente pode ter
+  // várias abertas; a demanda lembra em que sessão nasceu. A sessão atual de cada cliente passa para o titular mais novo.
+  `ALTER TABLE workers ADD COLUMN session_id TEXT;
+   ALTER TABLE workers ADD COLUMN session_cost REAL NOT NULL DEFAULT 0;
+   ALTER TABLE workers ADD COLUMN title TEXT;
+   ALTER TABLE demands ADD COLUMN worker_id TEXT;
+   UPDATE workers SET session_id = (SELECT c.session_id FROM clients c WHERE c.id = workers.client_id),
+     session_cost = COALESCE((SELECT c.session_cost FROM clients c WHERE c.id = workers.client_id), 0)
+   WHERE role = 'titular' AND archived_at IS NULL
+     AND id = (SELECT w2.id FROM workers w2 WHERE w2.client_id = workers.client_id AND w2.role = 'titular' AND w2.archived_at IS NULL ORDER BY w2.created_at DESC LIMIT 1);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

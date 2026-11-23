@@ -1499,3 +1499,29 @@ body { cursor: var(--cur-arrow), default; }
 .job-archive-all, .job-archived-toggle { align-self: flex-start; margin: 4px 2px; }
 .job-archived-toggle svg { transition: transform .15s ease; transform: rotate(-90deg); }
 .job-archived-toggle svg.open { transform: none; }
+
+/* sessões do cliente: lista à esquerda, a conversa da escolhida à direita (uma sessão por demanda) */
+.conversa-split { flex: 1; min-height: 0; display: flex; gap: 10px; }
+.conversa-split > .conversa { flex: 1; min-width: 0; }
+.session-col { width: 220px; flex: none; display: flex; flex-direction: column; gap: 8px; min-height: 0; }
+.session-add { justify-content: center; }
+.session-new { display: flex; flex-direction: column; gap: 6px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius); }
+.session-new label { display: flex; align-items: center; gap: 6px; }
+.session-rows { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; min-height: 0; }
+.session-row { display: flex; align-items: center; gap: 2px; border-radius: 8px; min-width: 0; }
+.session-row:hover, .session-row.on { background: var(--muted); }
+.session-pick { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; height: auto;
+  background: transparent; border: 0; text-align: left; white-space: normal; justify-content: flex-start; }
+.session-pick .row { max-width: 100%; min-width: 0; }
+.session-pick b { font-weight: 600; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-row .status-dot { flex: none; }
+.session-row.st-copa .status-dot { background: var(--muted-foreground, #888); opacity: .5; }
+.session-tools { display: flex; opacity: 0; padding-right: 4px; }
+.session-row:hover .session-tools, .session-row.on .session-tools, .session-tools:focus-within { opacity: 1; }
+.session-rename { flex: 1; padding: 4px 6px; }
+.session-rename input { width: 100%; }
+.conversa-bar .session-name { min-width: 0; display: flex; align-items: baseline; gap: 4px; }
+@media (max-width: 760px) {
+  .conversa-split { flex-direction: column; }
+  .session-col { width: auto; max-height: 30vh; }
+}

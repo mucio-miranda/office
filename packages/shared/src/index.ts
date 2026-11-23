@@ -396,6 +396,8 @@ export interface Demand {
   id: ID;
   officeId: ID;
   clientId: ID | null;
+  /** Sessão do cliente em que a demanda nasceu: as etapas seguintes continuam nela. */
+  workerId?: ID | null;
   title: string;
   description: string;
   kind: DemandKind;
@@ -845,6 +847,11 @@ export interface Worker {
   handoff?: string | null;
   /** Última vez que um trabalho dele andou (calculado pelo servidor). */
   lastJobAt?: string | null;
+  /** A conversa do Claude Code desta sessão (cada titular é uma sessão do cliente). */
+  sessionId?: string | null;
+  sessionCost?: number;
+  /** Nome da sessão (a demanda), dado ao abrir; sem ele, vale o nome do funcionário. */
+  title?: string | null;
 }
 
 /** Horas sem trabalho depois das quais um funcionário parado some da Equipe e do mapa (continua na aba Equipe do cliente). */
@@ -895,3 +902,18 @@ export interface ClaudeLimit { at?: string; fiveHour?: number | null; sevenDay?:
  */
 export const RETIRED_AGENTS = ['copywriter', 'designer', 'editor-de-video', 'sessao'];
 export const isRetiredAgent = (a: { slug: string; base?: string | null }) => RETIRED_AGENTS.includes(a.base ?? a.slug);
+
+/**
+ * No mapa, cada cliente tem um avatar só, mesmo com várias sessões abertas: o da sessão que mais pede atenção
+ * (trabalhando, depois esperando você, depois a última que andou). Ajudantes continuam aparecendo à parte.
+ */
+export function mapWorkers<T extends Pick<Worker, 'id' | 'clientId' | 'role' | 'state' | 'createdAt' | 'archivedAt'> & { lastJobAt?: string | null }>(workers: T[]): T[] {
+  const rank = (w: T) => (w.state === 'trabalhando' ? 0 : w.state === 'aguardando' ? 1 : 2);
+  const best = new Map<string, T>();
+  for (const w of workers) {
+    if (w.role !== 'titular' || w.archivedAt) continue;
+    const cur = best.get(w.clientId);
+    if (!cur || rank(w) < rank(cur) || (rank(w) === rank(cur) && (w.lastJobAt ?? w.createdAt) > (cur.lastJobAt ?? cur.createdAt))) best.set(w.clientId, w);
+  }
+  return workers.filter((w) => w.role !== 'titular' || best.get(w.clientId)?.id === w.id);
+}

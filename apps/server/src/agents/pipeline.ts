@@ -1,11 +1,11 @@
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
-import { archiveWorker, createWorker, titularOf } from './workers.ts';
+import { archiveWorker, createSession, createWorker, sessionFor, sessionsOf, titularOf } from './workers.ts';
 import { handoffHelper } from './helpers.ts';
 import path from 'node:path';
 import {
   APPROVAL_MARKER, BRIEFING_FIELDS, NETWORK_LABEL, STAGE_AGENT, STAGE_LABEL, processById, uid,
   type AgentJob, type AgentProfile, type Briefing, type CalendarEvent, type Client, type Demand, type DemandKind, type Network, type Office,
-  type Learning, type ProcessDef, type Publish, type ReviewMark, type Stage, type StageLogEntry,
+  type Learning, type ProcessDef, type Publish, type ReviewMark, type Stage, type StageLogEntry, type Worker,
 } from '@office/shared';
 import { all, insert, logActivity, now, one, update } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
@@ -214,7 +214,7 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
   const prompt = stage === 'briefing' && client
     ? (isDraft(fresh) ? draftPrompt(client, office) : briefingPrompt(client, office))
     : `${processPrompt(fresh, proc, office, client)}${feedback ? `\n\n## Ajustes pedidos\n${feedback}` : ''}`;
-  enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, clientId: d.clientId, prompt, display: feedback ?? (d.description || d.title), createdBy: by, stage, cwd: jobCwd(office, client) });
+  enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, clientId: d.clientId, workerId: d.workerId ?? undefined, prompt, display: feedback ?? (d.description || d.title), createdBy: by, stage, cwd: jobCwd(office, client) });
   return null;
 }
 
@@ -291,17 +291,18 @@ export function grantDirs(officeId: string, clientId: string, by: string, text: 
 /** Demanda aberta pelo mapa ou pelo quadro: quem faz, o processo, o prazo e a prioridade vêm junto com o pedido. */
 export interface NewRequest { title?: string; dueDate?: string | null; priority?: Demand['priority']; process?: string | null; agentId?: string | null }
 
-export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest: boolean | NewRequest = false, interrupt = false, noRefresh = false): string | null {
+export function clientMessage(officeId: string, clientId: string, raw: string, by: string, newRequest: boolean | NewRequest = false, interrupt = false, noRefresh = false, workerId?: string | null): string | null {
   const client = getClient(clientId);
   if (!client) return 'Cliente não encontrado.';
   const office = getOffice(officeId);
   const text = expandCommand(raw, listSkills(office.rootPath).map((s) => s.name));
   grantDirs(officeId, clientId, by, raw);
-  // a conversa é a do titular: tarefas de ajudante (sessão própria) ficam de fora
-  const jobs = all<AgentJob>("SELECT * FROM jobs WHERE client_id = ? AND (stage IS NULL OR stage != 'aprovacao') AND (worker_id IS NULL OR worker_id NOT IN (SELECT id FROM workers WHERE role = 'ajudante')) ORDER BY created_at DESC", clientId);
+  // o pedido vai para a sessão escolhida na conversa (várias podem estar abertas); sem escolha, a mais nova
+  const sess = sessionFor(officeId, clientId, workerId, by);
+  const jobs = all<AgentJob>("SELECT * FROM jobs WHERE client_id = ? AND worker_id = ? AND (stage IS NULL OR stage != 'aprovacao') ORDER BY created_at DESC", clientId, sess.id);
   // conversa longa (ou longa e parada): antes do pedido, memória e resumo, e o pedido vai numa conversa limpa
-  if (!noRefresh && !jobs.some((j) => ['fila', 'rodando', 'aguardando'].includes(j.status)) && needsRefresh(client, jobs)) {
-    const e = startRefresh(office, client, raw, by, newRequest);
+  if (!noRefresh && !jobs.some((j) => ['fila', 'rodando', 'aguardando'].includes(j.status)) && needsRefresh(sess.sessionId ?? null, jobs)) {
+    const e = startRefresh(office, client, sess, raw, by, newRequest);
     if (!e) return null;
   }
   try {
@@ -338,7 +339,7 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
   const lastKind = ambiguous ? one<{ kind: DemandKind }>("SELECT kind FROM demands WHERE client_id = ? AND kind != 'outro' ORDER BY created_at DESC LIMIT 1", clientId)?.kind : undefined;
   const kind = ambiguous ? lastKind ?? guessed : guessed;
   const d: Demand = {
-    id: uid(), officeId, clientId, title: (opts.title?.trim() || raw.trim().split(/\r?\n/)[0]).slice(0, 80), description: text,
+    id: uid(), officeId, clientId, workerId: sess.id, title: (opts.title?.trim() || raw.trim().split(/\r?\n/)[0]).slice(0, 80), description: text,
     kind, status: 'a_fazer', priority: opts.priority ?? 'media', assignee: chosen, dueDate: opts.dueDate ?? null, trackedSeconds: 0, timerStartedAt: null,
     position: Date.now(), createdAt: now(), updatedAt: now(), pipeline: proc ? processPipeline(proc) : defaultPipeline(kind), stage: null, auto: true, stageLog: [], reviewRounds: 0, publish: null,
     process: proc?.id ?? null,
@@ -391,6 +392,28 @@ export function resetConversation(clientId: string): string | null {
   const summary = latestSummary(clientId);
   if (client && summary) update('workers', createWorker(client.officeId, clientId, 'titular', null).id, { handoff: summary });
   return null;
+}
+
+/**
+ * Sessão nova do cliente (uma por demanda): as outras continuam abertas e podem rodar junto. Com `carry`, a primeira
+ * mensagem lê o resumo de conversa mais recente do cliente como passagem.
+ */
+export function newSession(officeId: string, clientId: string, by: string, title?: string | null, carry = false) {
+  const client = getClient(clientId);
+  if (!client) return { error: 'Cliente não encontrado.' };
+  const w = createSession(officeId, clientId, by, title, carry ? latestSummary(clientId) : null);
+  logActivity(officeId, by, 'abriu uma sessão', `${client.name}: ${w.title ?? w.name}`);
+  return { worker: w };
+}
+
+/** Continua uma conversa do terminal (ou uma antiga do Office) como uma sessão do cliente. */
+export function resumeAsSession(officeId: string, clientId: string, sessionId: string, by: string, title?: string | null) {
+  const open = sessionsOf(clientId).find((w) => w.sessionId === sessionId);
+  if (open) return { worker: open };
+  const last = one<AgentJob>('SELECT session_cost FROM jobs WHERE client_id = ? AND session_id = ? ORDER BY updated_at DESC LIMIT 1', clientId, sessionId);
+  const w = createSession(officeId, clientId, by, title ?? 'Sessão retomada');
+  update('workers', w.id, { sessionId, sessionCost: last ? last.sessionCost ?? 0 : -1 });
+  return { worker: { ...w, sessionId } };
 }
 
 /** Pasta dos resumos de conversa do cliente (DOCUMENTOS\CONVERSAS). */
@@ -770,9 +793,9 @@ function summaryFile(office: Office, client: Client) {
 }
 
 /** A conversa do cliente passou do ponto: grande, ou parada há mais de um dia e ainda considerável. */
-export function needsRefresh(client: Client, jobs: AgentJob[]) {
-  if (!client.sessionId) return false;
-  const mine = jobs.filter((j) => j.sessionId === client.sessionId);
+export function needsRefresh(sessionId: string | null, jobs: AgentJob[]) {
+  if (!sessionId) return false;
+  const mine = jobs.filter((j) => j.sessionId === sessionId);
   const ctx = mine.reduce((m, j) => Math.max(m, j.contextTokens ?? 0), 0);
   const last = mine[0];
   if (!last || !ctx) return false;
@@ -786,14 +809,12 @@ export function needsRefresh(client: Client, jobs: AgentJob[]) {
  * conversa recomeça limpa (mesmo funcionário) e o pedido segue nela, com o resumo lido antes. O pedido fica guardado
  * na própria tarefa, para não se perder se o Office reiniciar no meio.
  */
-function startRefresh(office: Office, client: Client, raw: string, by: string, newRequest: boolean | NewRequest) {
-  const titular = titularOf(office.id, client.id);
-  if (!titular) return 'sem titular';
-  const last = one<AgentJob>('SELECT agent_id, context_tokens FROM jobs WHERE client_id = ? AND session_id = ? ORDER BY updated_at DESC LIMIT 1', client.id, client.sessionId ?? null);
+function startRefresh(office: Office, client: Client, titular: Worker, raw: string, by: string, newRequest: boolean | NewRequest) {
+  const last = one<AgentJob>('SELECT agent_id, context_tokens FROM jobs WHERE client_id = ? AND session_id = ? ORDER BY updated_at DESC LIMIT 1', client.id, titular.sessionId ?? null);
   const agentId = last?.agentId ?? one<{ id: string }>("SELECT id FROM agents WHERE office_id = ? ORDER BY slug = 'gerente' DESC LIMIT 1", office.id)!.id;
   const mem = memoryFile(office, client);
   const summary = summaryFile(office, client);
-  const pending = Buffer.from(JSON.stringify({ raw, by, newRequest }), 'utf8').toString('base64');
+  const pending = Buffer.from(JSON.stringify({ raw, by, newRequest, workerId: titular.id }), 'utf8').toString('base64');
   enqueueJob({
     officeId: office.id, agentId, demandId: null, clientId: client.id, workerId: titular.id, cwd: jobCwd(office, client), createdBy: by,
     display: `${raw}\n\n(Conversa longa: antes, ${titular.name} atualiza a memória do cliente e o resumo, e segue numa conversa nova.)`,
@@ -825,17 +846,18 @@ function startRefresh(office: Office, client: Client, raw: string, by: string, n
 function finishRefresh(job: AgentJob, ok: boolean) {
   const client = getClient(job.clientId ?? null);
   if (!client) return;
-  let pending: { raw: string; by: string; newRequest: boolean | NewRequest } | null = null;
+  let pending: { raw: string; by: string; newRequest: boolean | NewRequest; workerId?: string } | null = null;
   try { pending = JSON.parse(Buffer.from(job.prompt.match(/pedido-pendente: ([A-Za-z0-9+/=]+)/)?.[1] ?? '', 'base64').toString('utf8')); } catch { pending = null; }
   const summary = job.prompt.match(/<!-- resumo: (.+?) -->/)?.[1];
   if (ok) {
     // mesma pessoa, conversa nova: o resumo vai como passagem de bastão da primeira mensagem
-    update('clients', client.id, { sessionId: null, sessionDirs: [], sessionCost: 0 });
+    if (job.workerId) update('workers', job.workerId, { sessionId: null, sessionCost: 0 });
+    update('clients', client.id, { sessionId: null, sessionCost: 0 });
     if (job.workerId && summary && existsSync(summary)) update('workers', job.workerId, { handoff: summary });
     addMessage(job.id, job.officeId, 'sistema', 'Conversa nova: a memória do cliente e o resumo da anterior foram carregados. A anterior continua na aba Sessões.');
   }
   // o pedido segue (numa conversa nova se deu certo; senão, na mesma, sem tentar de novo)
-  if (pending) clientMessage(job.officeId, client.id, pending.raw, pending.by, pending.newRequest, false, true);
+  if (pending) clientMessage(job.officeId, client.id, pending.raw, pending.by, pending.newRequest, false, true, pending.workerId ?? job.workerId);
 }
 
 // ---------- virada de mês: um funcionário novo assume com a passagem de bastão ----------

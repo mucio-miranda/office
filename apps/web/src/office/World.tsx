@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
 import { OrthographicCamera } from '@react-three/drei';
 import * as THREE from 'three';
-import { type AgentProfile, type Presence, type Vec2, type Worker } from '@office/shared';
+import { mapWorkers, type AgentProfile, type Presence, type Vec2, type Worker } from '@office/shared';
 import { useStore, showEmote } from '../lib/store';
 import { usePixel, useScene, useWorldStyle, type ScenePalette } from '../lib/theme';
 import { PixelRoom } from './pixel/Room';
@@ -447,7 +447,9 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
 export type WorkerSpot = Vec2 & { dir: number; seated: boolean; copa: boolean; play?: boolean };
 /** Lugares para passar o tempo (objetos de qualquer sala e a copa), com quem está nas mesas de trabalho fora. */
 const idleSpots = (): IdleSpot[] => [...leisureSpots(useDecor.getState().items), ...copaSpots()];
-export function workerSpots(workers: Worker[]) {
+export function workerSpots(all: Worker[]) {
+  // um avatar por cliente, mesmo com várias sessões abertas
+  const workers = mapWorkers(all);
   const now = Date.now();
   const atDesk = workers.filter((w) => workerPhase(w, now) === 'mesa');
   const inCopa = workers.filter((w) => workerPhase(w, now) === 'copa');

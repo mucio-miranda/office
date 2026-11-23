@@ -78,10 +78,13 @@ test('sessões do cliente: lista as do terminal e retoma uma delas', async () =>
   assert.equal((await call('GET', `${O}/clients/${c.id}/sessoes/${sid}`)).json[0].text, 'planeje novembro');
   assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/00000000-0000-4000-8000-000000000000/retomar`, {})).status, 404);
   await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
-  assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/${sid}/retomar`, {})).status, 200);
-  const row = db.prepare('SELECT session_id, session_cost FROM clients WHERE id = ?').get(c.id) as any;
-  assert.deepEqual([row.session_id, row.session_cost], [sid, -1], 'custo anterior desconhecido');
-  // a atual não se arquiva; outra sai da lista e volta ao desarquivar ou ao continuar nela
+  // retomar transforma a conversa do terminal numa sessão aberta do cliente, com o nome dela
+  const retomada = await call('POST', `${O}/clients/${c.id}/sessoes/${sid}/retomar`, {});
+  assert.equal(retomada.status, 200);
+  const row = db.prepare('SELECT session_id, session_cost, title, archived_at FROM workers WHERE id = ?').get(retomada.json.id) as any;
+  assert.deepEqual([row.session_id, row.session_cost, row.title, row.archived_at], [sid, -1, 'planeje novembro', null], 'custo anterior desconhecido');
+  assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/${sid}/retomar`, {})).json.id, retomada.json.id, 'retomar de novo abre a mesma sessão');
+  // a que está aberta como sessão não se arquiva; outra sai da lista e volta ao desarquivar ou ao continuar nela
   assert.equal((await call('POST', `${O}/clients/${c.id}/sessoes/${sid}/arquivar`, { archived: true })).status, 409);
   const other = 'bbbbbbbb-bbbb-4ccc-8ddd-eeeeeeeeeeee';
   writeFileSync(path.join(proj, `${other}.jsonl`), `${JSON.stringify({ type: 'user', timestamp: '2026-11-05T10:00:00Z', message: { content: 'outra' } })}
@@ -341,8 +344,8 @@ test('funcionário = sessão do cliente: nasce com o primeiro pedido, tem nome d
   assert.equal(r.status, 200, JSON.stringify(r.json));
   workers = (await call('GET', `${O}/workers`)).json;
   assert.ok(workers.find((w: any) => w.id === titular.id).archivedAt, 'arquivado fica no histórico');
-  assert.equal((db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id) as any).session_id, null, 'a conversa recomeça');
-  const { ensureTitular } = await import('../agents/workers.ts');
+  const { ensureTitular, sessionsOf } = await import('../agents/workers.ts');
+  assert.ok(!sessionsOf(c.id).some((w) => w.id === titular.id), 'a sessão arquivada sai da lista do cliente');
   const novo = ensureTitular(titular.officeId, c.id, null);
   assert.notEqual(novo.id, titular.id);
   assert.equal(novo.name, 'Nico', 'o nome arquivado não volta logo');
@@ -393,7 +396,8 @@ test('ajudante: o funcionário pede, uma pessoa aprova, ele trabalha em sessão 
   assert.ok(status(helperId), 'terminou e foi arquivado');
   const helperJob = db.prepare('SELECT * FROM jobs WHERE worker_id = ?').get(helperId) as any;
   assert.equal(helperJob.status, 'concluido');
-  assert.notEqual(helperJob.session_id, (db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id) as any).session_id ?? 'x', 'sessão própria, fora da conversa do cliente');
+  assert.equal(helperJob.worker_id, helperId);
+  assert.equal((db.prepare('SELECT session_id FROM workers WHERE id = ?').get(helperId) as any).session_id, null, 'sessão própria: o ajudante não vira uma sessão do cliente');
   const msgs = (db.prepare("SELECT text FROM job_messages WHERE job_id = ? AND role = 'sistema'").all(job.id) as any[]).map((m) => m.text);
   assert.ok(msgs.some((t) => t.includes('(ajudante) terminou')), msgs.join(' | '));
   assert.equal((await call('POST', `${O}/helpers/${pedido.id}`, { approve: true })).status, 409, 'não decide duas vezes');
@@ -405,6 +409,7 @@ test('ajudante: o funcionário pede, uma pessoa aprova, ele trabalha em sessão 
 test('virada de mês: o titular escreve a passagem, é arquivado e outro assume; quem começou neste mês não vira sozinho', async () => {
   const { monthlyTurnover } = await import('../agents/pipeline.ts');
   const c = (await call('GET', `${O}/clients`)).json[0];
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando','aguardando')").all().length));
   const officeId = O.split('/').pop()!;
   db.prepare("UPDATE clients SET session_id = 'sessao-de-teste' WHERE id = ?").run(c.id);
   assert.equal(monthlyTurnover(), 0, 'titular criado neste mês fica');
@@ -424,13 +429,13 @@ test('virada de mês: o titular escreve a passagem, é arquivado e outro assume;
 test('conversa longa: memória e resumo antes, depois o pedido segue numa conversa nova com o mesmo funcionário', async () => {
   const c = (await call('GET', `${O}/clients`)).json[0];
   await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
-  // a conversa atual passou de 100 mil tokens relidos
-  db.prepare("UPDATE clients SET session_id = 'sessao-longa' WHERE id = ?").run(c.id);
+  // a conversa desta sessão passou de 100 mil tokens relidos (vale por sessão: as outras do cliente não contam)
+  const titular = db.prepare("SELECT id FROM workers WHERE client_id = ? AND role = 'titular' AND archived_at IS NULL ORDER BY created_at DESC LIMIT 1").get(c.id) as any;
+  db.prepare("UPDATE workers SET session_id = 'sessao-longa' WHERE id = ?").run(titular.id);
   const last = db.prepare("SELECT id FROM jobs WHERE client_id = ? ORDER BY created_at DESC LIMIT 1").get(c.id) as any;
-  db.prepare("UPDATE jobs SET session_id = 'sessao-longa', context_tokens = 130000, status = 'concluido' WHERE id = ?").run(last.id);
+  db.prepare("UPDATE jobs SET session_id = 'sessao-longa', context_tokens = 130000, status = 'concluido', worker_id = ? WHERE id = ?").run(titular.id, last.id);
   db.prepare("UPDATE demands SET status = 'entregue' WHERE client_id = ?").run(c.id);
-  const titular = db.prepare("SELECT id FROM workers WHERE client_id = ? AND role = 'titular' AND archived_at IS NULL").get(c.id) as any;
-  const r = await call('POST', `${O}/clients/${c.id}/conversa`, { text: 'troca o título da arte' });
+  const r = await call('POST', `${O}/clients/${c.id}/conversa`, { text: 'troca o título da arte', workerId: titular.id });
   assert.equal(r.status, 200, JSON.stringify(r.json));
   const ref = db.prepare("SELECT * FROM jobs WHERE client_id = ? AND prompt LIKE '## Conversa nova%' ORDER BY created_at DESC LIMIT 1").get(c.id) as any;
   assert.ok(ref, 'pede memória e resumo antes');
@@ -462,21 +467,26 @@ test('modelo da conversa: escolhido no cliente, vai para o Claude Code; sem esco
   assert.equal((await call('GET', `${O}/clients`)).json[0].model, null);
 });
 
-test('conversa nova com o funcionário esperando sua aprovação: libera e encerra a pergunta; trabalhando, ainda espera', async () => {
+test('sessão nova: abre ao lado das outras, mesmo com uma trabalhando ou esperando você, e não mexe nelas', async () => {
   const c = (await call('GET', `${O}/clients`)).json[0];
-  const job = db.prepare('SELECT id FROM jobs WHERE client_id = ? ORDER BY updated_at DESC LIMIT 1').get(c.id) as { id: string };
-  db.prepare("UPDATE clients SET session_id = 'sessao-velha' WHERE id = ?").run(c.id);
-  // o funcionário pediu aprovação e parou (nada rodando): a troca não pode ficar travada para sempre
+  const job = db.prepare('SELECT id, worker_id FROM jobs WHERE client_id = ? AND worker_id IS NOT NULL ORDER BY updated_at DESC LIMIT 1').get(c.id) as { id: string; worker_id: string };
   db.prepare("UPDATE jobs SET status = 'aguardando' WHERE id = ?").run(job.id);
-  const r = await call('POST', `${O}/clients/${c.id}/conversa/nova`, {});
+  const r = await call('POST', `${O}/clients/${c.id}/conversa/nova`, { title: 'Story Falconi' });
   assert.equal(r.status, 200, JSON.stringify(r.json));
-  assert.equal((db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id) as any).status, 'cancelado', 'a pergunta pendente é encerrada');
-  assert.equal((db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id) as any).session_id, null, 'a conversa recomeça');
-  // trabalhando de verdade: continua esperando terminar
-  db.prepare("UPDATE clients SET session_id = 'sessao-velha' WHERE id = ?").run(c.id);
+  assert.equal(r.json.title, 'Story Falconi');
+  assert.notEqual(r.json.id, job.worker_id, 'é outra sessão');
+  assert.equal((db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id) as any).status, 'aguardando', 'a pergunta da outra sessão continua esperando');
+  assert.ok(!(db.prepare('SELECT archived_at FROM workers WHERE id = ?').get(job.worker_id) as any).archived_at, 'a outra sessão continua aberta');
   db.prepare("UPDATE jobs SET status = 'rodando' WHERE id = ?").run(job.id);
-  assert.equal((await call('POST', `${O}/clients/${c.id}/conversa/nova`, {})).status, 409);
+  assert.equal((await call('POST', `${O}/clients/${c.id}/conversa/nova`, { title: 'Outra' })).status, 200, 'trabalhando também não trava');
+  // o pedido vai para a sessão escolhida, não para a mais nova
   db.prepare("UPDATE jobs SET status = 'concluido' WHERE id = ?").run(job.id);
+  const { sessionFor } = await import('../agents/workers.ts');
+  assert.equal(sessionFor(O.split('/').pop()!, c.id, r.json.id, null).id, r.json.id);
+  assert.equal(sessionFor(O.split('/').pop()!, c.id, 'nao-existe', null).clientId, c.id, 'sessão inválida cai na mais nova do cliente');
+  // nome da sessão dá para trocar
+  assert.equal((await call('PATCH', `${O}/workers/${r.json.id}`, { title: 'Stories de novembro' })).status, 200);
+  assert.equal((db.prepare('SELECT title FROM workers WHERE id = ?').get(r.json.id) as any).title, 'Stories de novembro');
 });
 
 test('encerrar um pedido esperando aprovação: a tarefa sai de "esperando você" e a demanda continua existindo', async () => {
@@ -488,18 +498,18 @@ test('encerrar um pedido esperando aprovação: a tarefa sai de "esperando você
   assert.ok(db.prepare('SELECT id FROM demands WHERE id = ?').get(job.demand_id), 'a demanda não é apagada');
 });
 
-test('conversa nova pelo botão: o funcionário novo recebe o resumo mais recente do cliente como passagem de bastão', async () => {
+test('sessão nova levando o resumo: a primeira mensagem lê o resumo mais recente do cliente; sem pedir, começa limpa', async () => {
   const c = (await call('GET', `${O}/clients`)).json[0];
   const { conversationsDirOf } = await import('../agents/pipeline.ts');
   const dir = conversationsDirOf(c.id)!;
   mkdirSync(dir, { recursive: true });
   writeFileSync(path.join(dir, 'RESUMO 2026-11-20 10h00.md'), 'antigo');
   writeFileSync(path.join(dir, 'RESUMO 2026-11-22 17h10.md'), 'o mais novo');
-  db.prepare("UPDATE clients SET session_id = 'sessao-velha' WHERE id = ?").run(c.id);
-  assert.equal((await call('POST', `${O}/clients/${c.id}/conversa/nova`, {})).status, 200);
-  const novo = (await call('GET', `${O}/workers`)).json.find((w: any) => w.clientId === c.id && w.role === 'titular' && !w.archivedAt);
-  assert.ok(novo, 'o próximo funcionário já existe');
-  assert.equal((db.prepare('SELECT handoff FROM workers WHERE id = ?').get(novo.id) as any).handoff, path.join(dir, 'RESUMO 2026-11-22 17h10.md'));
+  const com = await call('POST', `${O}/clients/${c.id}/conversa/nova`, { title: 'Continuação', levarResumo: true });
+  assert.equal(com.status, 200);
+  assert.equal((db.prepare('SELECT handoff FROM workers WHERE id = ?').get(com.json.id) as any).handoff, path.join(dir, 'RESUMO 2026-11-22 17h10.md'));
+  const sem = await call('POST', `${O}/clients/${c.id}/conversa/nova`, { title: 'Do zero' });
+  assert.equal((db.prepare('SELECT handoff FROM workers WHERE id = ?').get(sem.json.id) as any).handoff, null);
 });
 
 test('arquivar tarefas no painel do funcionário: some da lista, nada é apagado; em andamento não arquiva', async () => {

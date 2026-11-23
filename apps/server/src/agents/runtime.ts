@@ -4,7 +4,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
-import { APPROVAL_MARKER, uid, type AgentJob, type AgentProfile, type Client, type Demand, type JobMessage, type Office, type Stage } from '@office/shared';
+import { APPROVAL_MARKER, uid, type AgentJob, type AgentProfile, type Client, type Demand, type JobMessage, type Office, type Stage, type Worker } from '@office/shared';
 import { config } from '../config.ts';
 import { all, insert, now, one, update, logActivity } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
@@ -326,10 +326,12 @@ export function cancelJob(jobId: string) {
 }
 
 function queueEntry(jobId: string, isReply: boolean): QueueEntry {
-  const job = one<AgentJob>('SELECT id, client_id, demand_id, agent_id, stage FROM jobs WHERE id = ?', jobId)!;
+  const job = one<AgentJob>('SELECT id, client_id, worker_id, demand_id, agent_id, stage FROM jobs WHERE id = ?', jobId)!;
   const d = job.demandId ? one<Pick<Demand, 'kind' | 'priority'>>('SELECT kind, priority FROM demands WHERE id = ?', job.demandId) : undefined;
   // vídeo não trava mais a tarefa inteira: só o comando de render pede a vez (gancho), o roteiro e a decupagem correm juntos
-  return { id: jobId, clientId: job.clientId ?? null, lane: null, rank: queueRank(d?.priority, isReply) };
+  // uma conversa roda um passo por vez: a trava é por sessão (várias sessões do mesmo cliente andam juntas), e o cliente
+  // só vale para tarefas sem sessão (revisão pela IA)
+  return { id: jobId, clientId: job.workerId ?? job.clientId ?? null, lane: null, rank: queueRank(d?.priority, isReply) };
 }
 
 function pump() {
@@ -365,14 +367,20 @@ async function start(jobId: string, typed: string, resume: boolean) {
   const helper = job.workerId ? one<{ role: string; name: string }>('SELECT role, name FROM workers WHERE id = ?', job.workerId) : undefined;
   const isHelper = helper?.role === 'ajudante';
   const conversation = client && !reviewer && !isHelper ? client : undefined;
-  // na conversa do cliente vale a sessão atual dele: depois de uma conversa nova (sessionId vazio), um pedido antigo que
-  // estava em aberto continua na conversa nova, e não reabre a antiga (que era justamente a grande)
-  const session = conversation ? conversation.sessionId ?? null : (resume ? job.sessionId : null);
+  // cada titular é uma sessão do cliente, com a sua conversa: várias podem existir e rodar ao mesmo tempo
+  const holder = conversation && job.workerId ? one<Worker>('SELECT * FROM workers WHERE id = ?', job.workerId) : undefined;
+  // vale a conversa atual da sessão: depois de uma conversa nova (sessionId vazio), um pedido antigo que estava em aberto
+  // continua na conversa nova, e não reabre a antiga (que era justamente a grande)
+  const session = holder ? holder.sessionId ?? null : conversation ? conversation.sessionId ?? null : (resume ? job.sessionId : null);
   // sem sessão para retomar, a mensagem precisa levar o pedido inteiro junto
   const input = !session && typed !== job.prompt ? `${job.prompt}\n\n${typed}` : typed;
   // quanto a sessão retomada já tinha custado, para somar só o que esta rodada gastou
-  let sessionTotal = session ? (conversation?.sessionId === session ? conversation.sessionCost ?? 0 : job.sessionCost ?? 0) : 0;
-  const saveSession = (id: string) => { if (conversation) update('clients', conversation.id, { sessionId: id }); };
+  let sessionTotal = session ? (holder?.sessionId === session ? holder.sessionCost ?? 0 : conversation?.sessionId === session ? conversation.sessionCost ?? 0 : job.sessionCost ?? 0) : 0;
+  // o cliente guarda a última conversa usada (telas e rotinas antigas); a sessão guarda a dela
+  const saveSession = (id: string) => {
+    if (holder) { update('workers', holder.id, { sessionId: id }); invalidate(office.id, 'workers'); }
+    if (conversation) update('clients', conversation.id, { sessionId: id });
+  };
 
   const dir = path.join(config.dataDir, 'jobs', jobId);
   mkdirSync(dir, { recursive: true });
@@ -556,6 +564,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
         setJob(jobId, { costUsd: (prev?.costUsd ?? 0) + spent, sessionCost: reported, sessionId: ev.session_id ?? undefined });
         if (ev.session_id) saveSession(ev.session_id);
         if (conversation) update('clients', conversation.id, { sessionCost: reported });
+        if (holder) update('workers', holder.id, { sessionCost: reported });
       }
     }
   });
@@ -603,6 +612,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
     // a sessão não existe mais (apagada, ou de outra pasta): segue numa nova e avisa, em vez de parar
     if (session && (code !== 0 || isError) && /no conversation found/i.test(`${stderr} ${finalText}`)) {
       if (conversation) update('clients', conversation.id, { sessionId: null, sessionCost: 0 });
+      if (holder) update('workers', holder.id, { sessionId: null, sessionCost: 0 });
       setJob(jobId, { sessionId: null, status: 'fila' });
       addMessage(jobId, office.id, 'sistema', 'Não encontrei a conversa anterior deste cliente, então comecei uma nova. O agente não lembra do que foi dito antes.');
       followups.delete(jobId);

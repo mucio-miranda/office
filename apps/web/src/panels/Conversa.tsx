@@ -3,7 +3,7 @@ import { HelperRequests } from './HelperRequests';
 import { ArrowUp, Check, ChevronDown, History, Reply, Sparkles, Square, Wrench } from 'lucide-react';
 import { desktop } from '../lib/desktop';
 import { LimitBadge } from './LimitBadge';
-import { MODEL_CHOICES, canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage } from '@office/shared';
+import { MODEL_CHOICES, canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage, type Worker } from '@office/shared';
 import { useStore } from '../lib/store';
 import { useDraft } from '../lib/draft';
 import { api, mediaUrl } from '../lib/api';
@@ -67,6 +67,8 @@ const SHORTCUTS: { label: string; text: string }[] = [
 
 interface Props {
   c: Client;
+  /** A sessão aberta do cliente que está na tela (um titular): as mensagens e os pedidos são dela. */
+  session: Worker | null;
   view: string | null;
   setView: (id: string | null) => void;
   sessions: ClientSession[];
@@ -81,10 +83,10 @@ interface Props {
  * um rótulo: todos têm as mesmas skills. O comando `/skill` e a correção no meio do trabalho funcionam aqui.
  * Os passos técnicos ficam agrupados numa linha que abre, e resposta em JSON vira um aviso em vez de dado cru.
  */
-export function Conversa({ c, view, setView, sessions, resume, onSessions, onInterview, onBriefing }: Props) {
+export function Conversa({ c, session, view, setView, sessions, resume, onSessions, onInterview, onBriefing }: Props) {
   const { jobs, messages, loadMessages, agents, office, demands, notify } = useStore();
   const base = `/api/offices/${office!.id}`;
-  const [text, setText] = useDraft(`conversa:${c.id}`);
+  const [text, setText] = useDraft(`conversa:${c.id}:${session?.id ?? ''}`);
   const [newRequest, setNewRequest] = useState(false);
   const [sendMenu, setSendMenu] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -100,11 +102,11 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   // a conversa é a do titular: o trabalho dos ajudantes (sessão própria) não entra aqui; o resumo deles chega como aviso
   const helperIds = useStore((s) => s.workers).filter((w) => w.role === 'ajudante').map((w) => w.id).join(',');
   const clientJobs = useMemo(() => jobs.filter((j) => j.clientId === c.id && j.stage !== 'aprovacao' && !(j.workerId && helperIds.includes(j.workerId))), [jobs, c.id, helperIds]);
-  const active = clientJobs.find((j) => ACTIVE.includes(j.status));
   const viewed = view ? sessions.find((s) => s.id === view) : undefined;
-  // trabalho sem sessão entra na atual só se ainda está vivo (ou deu erro ao abrir): um pedido cancelado antes de começar,
-  // como os briefings repetidos de um clique duplo, não tem sessão e reaparecia em toda "Sessão nova"
-  const mine = useMemo(() => clientJobs.filter((j) => (view ? j.sessionId === view : j.sessionId ? j.sessionId === c.sessionId : j.status !== 'cancelado')).slice(0, MAX_JOBS), [clientJobs, view, c.sessionId]);
+  // a conversa na tela é a da sessão escolhida (cada titular é uma sessão do cliente); sem sessão ainda, só o trabalho
+  // sem dono que está vivo (um pedido cancelado antes de começar não reaparece)
+  const mine = useMemo(() => clientJobs.filter((j) => (view ? j.sessionId === view : session ? j.workerId === session.id : !j.workerId && j.status !== 'cancelado')).slice(0, MAX_JOBS), [clientJobs, view, session]);
+  const active = view ? undefined : mine.find((j) => ACTIVE.includes(j.status));
   // sessão do terminal: o Office não tem as mensagens, então lê o fim do arquivo da sessão
   useEffect(() => {
     setTail(null);
@@ -142,7 +144,6 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   }, [demands, c.id]);
   const open = openDemand ? demands.find((d) => d.id === openDemand) : null;
   const guest = !canWork(office!.role);
-  const current = sessions.find((s) => s.current);
 
   // com o funcionário trabalhando, a mensagem espera ele terminar esta parte; `interrupt` para o trabalho agora
   const send = async (e?: React.FormEvent, interrupt = false) => {
@@ -151,7 +152,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
     setBusy(true);
     setSendMenu(false);
     try {
-      await api(`${base}/clients/${c.id}/conversa`, { body: { text, newRequest, interrupt: interrupt && !newRequest } });
+      await api(`${base}/clients/${c.id}/conversa`, { body: { text, newRequest, interrupt: interrupt && !newRequest, workerId: session?.id ?? null } });
       setText('');
       setNewRequest(false);
     } catch (x) { notify((x as Error).message); }
@@ -241,9 +242,11 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   return (
     <div className="conversa">
       <div className="conversa-bar">
-        <button type="button" className="ghost small" onClick={onSessions} title="Ver as sessões anteriores, do Office e do terminal">
-          <History size={13} /> {view ? 'Sessão anterior (só leitura)' : c.sessionId ? `Sessão atual${current ? ` · desde ${when(current.startedAt)}` : msgs[0] ? ` · desde ${when(msgs[0].createdAt)}` : ''}` : 'Sessão nova'}
-          {sessions.length > 1 && <span className="muted"> · {sessions.length} sessões</span>}
+        <span className="session-name truncate">
+          {view ? 'Conversa anterior (só leitura)' : session ? <><b>{session.title ?? session.name}</b>{msgs[0] && <span className="muted small"> · desde {when(msgs[0].createdAt)}</span>}</> : 'Sessão nova'}
+        </span>
+        <button type="button" className="ghost small" onClick={onSessions} title="Conversas anteriores do Office e do terminal: dá para ler e continuar como sessão">
+          <History size={13} /> Histórico
         </button>
         <span className="spacer" />
         {!!active?.contextTokens && (
@@ -258,7 +261,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
         <div className="session-banner">
           <span className="small">{viewed?.origin === 'terminal' ? 'Sessão do terminal' : 'Sessão anterior'}{viewed ? ` de ${when(viewed.startedAt)}` : ''}. Só leitura.</span>
           {!guest && <button className="small" disabled={!!active} title={active ? 'Espere o trabalho atual terminar' : viewed?.origin === 'terminal' ? 'Feche essa sessão no terminal antes, para não escreverem nela ao mesmo tempo' : ''} onClick={() => resume(view)}>Continuar nesta sessão</button>}
-          <button className="ghost small" onClick={() => setView(null)}>Voltar para a atual</button>
+          <button className="ghost small" onClick={() => setView(null)}>Voltar para a sessão</button>
         </div>
       )}
       <HelperRequests clientId={c.id} />
@@ -269,7 +272,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
         {view && viewed?.origin === 'terminal' && !tail && <p className="muted small">Lendo o fim da sessão…</p>}
         {!view && msgs.length === 0 && (
           <div className="conversa-empty">
-            <p>Peça o que precisar para <b>{c.name}</b>. O funcionário trabalha na pasta do cliente, com todas as skills, e lembra de um pedido para o outro.</p>
+            <p>{session?.title ? <>Sessão <b>{session.title}</b> de <b>{c.name}</b>. </> : <>Peça o que precisar para <b>{c.name}</b>. </>}O funcionário trabalha na pasta do cliente, com todas as skills, e lembra de tudo o que for feito nesta sessão.</p>
           </div>
         )}
         {blocks.map((b, i) => <Fragment key={i}>{block(b, i)}</Fragment>)}

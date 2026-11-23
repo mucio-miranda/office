@@ -50,6 +50,28 @@ export function ensureTitular(officeId: string, clientId: string, by: string | n
   return titularOf(officeId, clientId) ?? createWorker(officeId, clientId, 'titular', by);
 }
 
+/** Sessões abertas do cliente (titulares não arquivados), a mais nova primeiro. */
+export const sessionsOf = (clientId: string) =>
+  all<Worker>("SELECT * FROM workers WHERE client_id = ? AND role = 'titular' AND archived_at IS NULL ORDER BY created_at DESC", clientId);
+
+/** A sessão de um pedido: a escolhida na conversa, se for deste cliente e estiver aberta; senão a mais nova. */
+export function sessionFor(officeId: string, clientId: string, workerId: string | null | undefined, by: string | null) {
+  const w = workerId ? one<Worker>("SELECT * FROM workers WHERE id = ? AND client_id = ? AND role = 'titular' AND archived_at IS NULL", workerId, clientId) : undefined;
+  return w ?? ensureTitular(officeId, clientId, by);
+}
+
+/**
+ * Sessão nova do cliente, para uma demanda: começa com a conversa vazia (lê a memória do cliente) e, se pedido, com o
+ * resumo de uma conversa anterior como passagem. As outras sessões continuam abertas e podem rodar junto.
+ */
+export function createSession(officeId: string, clientId: string, by: string | null, title?: string | null, handoff?: string | null) {
+  const w = createWorker(officeId, clientId, 'titular', by);
+  const t = title?.trim().slice(0, 60) || null;
+  update('workers', w.id, { title: t, handoff: handoff ?? null });
+  invalidate(officeId, 'workers');
+  return { ...w, title: t, handoff: handoff ?? null };
+}
+
 export function archiveWorker(id: string) {
   const w = one<Worker>('SELECT * FROM workers WHERE id = ?', id);
   if (!w || w.archivedAt) return w ?? null;

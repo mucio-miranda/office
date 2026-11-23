@@ -2,7 +2,7 @@ import { useFrame, useThree } from '@react-three/fiber';
 import { Vector3 } from 'three';
 import { useStore } from '../lib/store';
 import { useWorldStyle } from '../lib/theme';
-import { isWorkerVisible } from '@office/shared';
+import { isWorkerVisible, mapWorkers } from '@office/shared';
 import { DESKS, FURNITURE, OBJECT_TAG, ROOMS, isFixedAgent, roomAt } from './layout';
 import { workerPhase } from './npc';
 import { busyState, useLabelMode, useOnlyWorking } from './view';
@@ -83,12 +83,16 @@ export function LabelLayer() {
   if (user) items.push({ id: `user:${user.id}`, name: user.name, color: user.color, emoji: emotes[user.id]?.emoji, me: true });
   for (const p of Object.values(presences))
     items.push({ id: `user:${p.userId}`, name: p.name, color: p.color, emoji: emotes[p.userId]?.emoji, status: PRESENCE_STATUS[p.status], statusClass: 'st-livre' });
-  for (const w of workers) {
+  for (const w of mapWorkers(workers)) {
     const phase = workerPhase(w);
     if (phase === 'fora' || (onlyWorking && !busyState(w.state))) continue;
     const st = w.state;
     const client = clients.find((c) => c.id === w.clientId)?.name;
-    items.push({ id: `worker:${w.id}`, name: `${w.name} · IA`, sub: phase === 'copa' ? `${client ?? ''} · na copa` : client, color: w.color, status: st === 'copa' ? null : AGENT_STATUS[st], statusClass: `st-${st === 'copa' ? 'livre' : st}`, onClick: () => open('clientes', w.clientId) });
+    // o avatar é o do cliente (um só, mesmo com várias sessões): o nome é o do cliente e embaixo a sessão
+    const titular = w.role === 'titular';
+    const head = titular ? `${client ?? w.name} · IA` : `${w.name} · IA`;
+    const under = titular ? (w.title ?? w.name) : client;
+    items.push({ id: `worker:${w.id}`, name: head, sub: phase === 'copa' ? `${under ?? ''} · na copa` : under, color: w.color, status: st === 'copa' ? null : AGENT_STATUS[st], statusClass: `st-${st === 'copa' ? 'livre' : st}`, onClick: () => open('clientes', w.clientId) });
   }
   // quem fica sempre na mesa (o gerente): nome, função e status em cima dele
   for (const a of agents.filter(isFixedAgent).filter((x) => !onlyWorking || busyState(x.status))) {
