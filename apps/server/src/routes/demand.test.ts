@@ -500,3 +500,46 @@ test('conversa nova pelo botão: o funcionário novo recebe o resumo mais recent
   assert.ok(novo, 'o próximo funcionário já existe');
   assert.equal((db.prepare('SELECT handoff FROM workers WHERE id = ?').get(novo.id) as any).handoff, path.join(dir, 'RESUMO 2026-11-22 17h10.md'));
 });
+
+test('arquivar tarefas no painel do funcionário: some da lista, nada é apagado; em andamento não arquiva', async () => {
+  const jobs = (await call('GET', `${O}/jobs`)).json as any[];
+  const done = jobs.find((j) => j.status === 'concluido' || j.status === 'cancelado');
+  assert.ok(done, 'há uma tarefa terminada');
+  assert.equal((await call('POST', `${O}/jobs/${done.id}/arquivar`, { archived: true })).status, 200);
+  assert.ok((await call('GET', `${O}/jobs`)).json.find((j: any) => j.id === done.id).archivedAt, 'marcada como arquivada');
+  assert.equal((await call('POST', `${O}/jobs/${done.id}/arquivar`, { archived: false })).status, 200);
+  assert.equal((await call('GET', `${O}/jobs`)).json.find((j: any) => j.id === done.id).archivedAt, null);
+  // rodando ou esperando você: não arquiva
+  db.prepare("UPDATE jobs SET status = 'aguardando' WHERE id = ?").run(done.id);
+  assert.equal((await call('POST', `${O}/jobs/${done.id}/arquivar`, { archived: true })).status, 409);
+  db.prepare("UPDATE jobs SET status = 'concluido' WHERE id = ?").run(done.id);
+  // todas as terminadas de um funcionário de uma vez
+  const r = await call('POST', `${O}/agents/${done.agentId}/arquivar-concluidas`, {});
+  assert.equal(r.status, 200);
+  assert.ok(r.json.archived >= 1);
+  const mine = (await call('GET', `${O}/jobs`)).json.filter((j: any) => j.agentId === done.agentId);
+  assert.ok(mine.filter((j: any) => ['concluido', 'cancelado', 'erro'].includes(j.status)).every((j: any) => j.archivedAt));
+});
+
+test('triagem: palavra de site vai para design; sem palavra-chave, a IA decide e, se falhar, vale o tipo do último pedido do cliente', async () => {
+  const { guessKind } = await import('../agents/skills.ts');
+  for (const t of ['siga com o site', 'ajuste a landing page', 'fundo com parallax na seção', 'aparelho 3D da batida 3']) assert.equal(guessKind(t), 'design', t);
+  assert.equal(guessKind('bom dia, tudo certo?'), 'outro');
+  const { parseTriage, triageKind } = await import('../agents/triage.ts');
+  assert.equal(parseTriage('{"type":"result","result":"design"}'), 'design');
+  assert.equal(parseTriage(JSON.stringify({ type: 'result', result: ' Vídeo.\n' })), 'video');
+  assert.equal(parseTriage('{"type":"result","result":"não sei"}'), null);
+  // o Claude de mentira responde "Feito.": a triagem não decide e o pedido segue com o tipo do último pedido do cliente
+  assert.equal(await triageKind('qualquer coisa'), null);
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  db.prepare("UPDATE jobs SET status = 'concluido' WHERE client_id = ? AND status IN ('fila','rodando','aguardando')").run(c.id);
+  db.prepare("UPDATE demands SET status = 'entregue' WHERE client_id = ?").run(c.id);
+  const before = (db.prepare('SELECT count(*) n FROM demands WHERE client_id = ?').get(c.id) as any).n;
+  const last = db.prepare("SELECT kind FROM demands WHERE client_id = ? AND kind != 'outro' ORDER BY created_at DESC LIMIT 1").get(c.id) as any;
+  assert.equal((await call('POST', `${O}/clients/${c.id}/conversa`, { text: 'bom dia, segue aquilo', newRequest: true })).status, 200);
+  await wait(() => (db.prepare('SELECT count(*) n FROM demands WHERE client_id = ?').get(c.id) as any).n > before && !!db.prepare("SELECT id FROM jobs WHERE demand_id = (SELECT id FROM demands WHERE client_id = ? ORDER BY created_at DESC LIMIT 1)").get(c.id));
+  const d = db.prepare('SELECT kind FROM demands WHERE client_id = ? ORDER BY created_at DESC LIMIT 1').get(c.id) as any;
+  assert.equal(d.kind, last?.kind ?? 'outro', 'sem decisão da IA, segue o tipo do último pedido');
+  // a tarefa que o pedido abriu termina antes do fim da suíte (o banco fecha no after)
+  await wait(() => !db.prepare("SELECT id FROM jobs WHERE client_id = ? AND status IN ('fila','rodando')").get(c.id));
+});

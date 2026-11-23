@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { ArrowUp, Check, ChevronDown, ClipboardList, Copy, Navigation, Plus, Square, Wrench } from 'lucide-react';
+import { Archive, ArrowUp, Check, ChevronDown, ClipboardList, Copy, Navigation, Plus, Square, Wrench } from 'lucide-react';
 import type { AgentJob } from '@office/shared';
 import { useStore } from '../lib/store';
 import { useDraft } from '../lib/draft';
@@ -18,9 +18,16 @@ export function AgentPanel() {
   const { agents, jobs, messages, panelArg, office, demands, loadMessages, user, live } = useStore();
   const attach = useAttach(office!.id, (paths) => setText((t) => withPaths(t, paths)), (m) => useStore.getState().notify(m));
   const agent = agents.find((a) => a.id === panelArg) ?? agents[0];
-  const myJobs = jobs.filter((j) => j.agentId === agent?.id);
+  const allMine = jobs.filter((j) => j.agentId === agent?.id);
+  // arquivadas saem da lista (nada é apagado) e ficam recolhidas no fim
+  const myJobs = allMine.filter((j) => !j.archivedAt);
+  const archivedJobs = allMine.filter((j) => j.archivedAt);
+  const [showArchived, setShowArchived] = useState(false);
   const [jobId, setJobId] = useState<string | null>(null);
-  const job = myJobs.find((j) => j.id === jobId) ?? null;
+  const job = allMine.find((j) => j.id === jobId) ?? null;
+  const notify = (m: string) => useStore.getState().notify(m);
+  const setArchived = (id: string, archived: boolean) =>
+    api(`/api/offices/${office!.id}/jobs/${id}/arquivar`, { body: { archived } }).catch((x) => notify((x as Error).message));
   const [text, setText] = useDraft(`agente:${panelArg ?? ''}`);
   const [demandId, setDemandId] = useState('');
   const [err, setErr] = useState('');
@@ -109,11 +116,38 @@ export function AgentPanel() {
               <span className="row gap"><ClipboardList size={14} /> {dailyBusy ? 'Levantando o dia…' : 'Daily de hoje'}</span>
             </button>
           )}
-          {myJobs.map((j) => (
-            <button key={j.id} className={`job-item ${j.id === jobId ? 'active' : ''}`} onClick={() => setJobId(j.id)}>
-              <span>{j.prompt.replace(/^## Demanda: /, '').replace(/^# Daily report (\d{4})-(\d{2})-(\d{2})/, 'Daily report $3/$2').split('\n')[0]}</span>
-              <small className={`st-${j.status}`}><span className="status-dot" />{STATUS_LABEL[j.status]}</small>
+          {myJobs.some((j) => ['concluido', 'cancelado', 'erro'].includes(j.status)) && (
+            <button type="button" className="ghost small job-archive-all" title="Tira da lista todas as conversas terminadas (nada é apagado)"
+              onClick={() => api<{ archived: number }>(`/api/offices/${office!.id}/agents/${agent.id}/arquivar-concluidas`, { body: {} })
+                .then((r) => notify(`${r.archived} conversa(s) arquivada(s)`)).catch((x) => notify((x as Error).message))}>
+              <Archive size={13} /> Arquivar concluídas
             </button>
+          )}
+          {myJobs.map((j) => (
+            <div key={j.id} className="job-row">
+              <button className={`job-item ${j.id === jobId ? 'active' : ''}`} onClick={() => setJobId(j.id)}>
+                <span>{j.prompt.replace(/^## Demanda: /, '').replace(/^# Daily report (\d{4})-(\d{2})-(\d{2})/, 'Daily report $3/$2').split('\n')[0]}</span>
+                <small className={`st-${j.status}`}><span className="status-dot" />{STATUS_LABEL[j.status]}</small>
+              </button>
+              {!['fila', 'rodando', 'aguardando'].includes(j.status) && (
+                <button type="button" className="icon tiny job-archive" title="Arquivar: sai da lista (nada é apagado)" aria-label="Arquivar conversa" onClick={() => setArchived(j.id, true)}>
+                  <Archive size={12} />
+                </button>
+              )}
+            </div>
+          ))}
+          {archivedJobs.length > 0 && (
+            <button type="button" className="ghost small job-archived-toggle" aria-expanded={showArchived} onClick={() => setShowArchived((v) => !v)}>
+              <ChevronDown size={12} className={showArchived ? 'open' : ''} /> Arquivadas ({archivedJobs.length})
+            </button>
+          )}
+          {showArchived && archivedJobs.map((j) => (
+            <div key={j.id} className="job-row archived">
+              <button className={`job-item ${j.id === jobId ? 'active' : ''}`} onClick={() => setJobId(j.id)}>
+                <span className="muted">{j.prompt.replace(/^## Demanda: /, '').split('\n')[0]}</span>
+              </button>
+              <button type="button" className="ghost small" onClick={() => setArchived(j.id, false)}>Desarquivar</button>
+            </div>
           ))}
         </div>
       </aside>

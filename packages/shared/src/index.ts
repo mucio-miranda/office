@@ -709,6 +709,8 @@ export interface AgentJob {
   cwd?: string | null;
   /** Início da rodada atual (cada resposta a um checkpoint abre uma rodada na mesma sessão). */
   turnStartedAt?: string | null;
+  /** Arquivada no painel do funcionário (some da lista; nada é apagado). */
+  archivedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }

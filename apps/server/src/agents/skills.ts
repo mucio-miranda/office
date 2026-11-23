@@ -28,6 +28,8 @@ export function expandCommand(text: string, skills: string[]) {
 /** Tipo do pedido escrito na conversa: só define o rótulo e quem atende, porque todos têm as mesmas skills. */
 export function guessKind(text: string) {
   if (/capa|arte|carross|mosaico|\bfeed\b|est[aá]tic|conte[uú]do|\bpost/i.test(text)) return 'design';
+  // site e landing page são trabalho de design (antes caíam na copy, com o Theo)
+  if (/\bsite\b|landing|\blp\b|p[aá]gina|html|\b3d\b|parallax|layout|wireframe/i.test(text)) return 'design';
   if (/v[ií]deo|reels?\b|stor(y|ies)|brutos?\b|legendas? no/i.test(text)) return 'video';
   if (/foto|ensaio|retoque|retrato|papada/i.test(text)) return 'foto';
   if (/roteiro|legenda|copy|pauta|texto/i.test(text)) return 'copy';

@@ -17,6 +17,7 @@ import { addMessage, cancelJob, enqueueJob, followUpJob, interruptJob, replyToJo
 import { baseCheck, captionFrom, isInsideAny, latestFiles, marksText, newerFiles, processFiles, slug } from './outputs.ts';
 import { mentionedDirs } from './permissions.ts';
 import { expandCommand, guessKind, listSkills, parseLearnings } from './skills.ts';
+import { triageKind } from './triage.ts';
 
 /**
  * Andamento de uma demanda: produção → aprovação → pronto para agendar. A produção é uma etapa só, na conversa contínua
@@ -329,8 +330,13 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
   }
   const opts: NewRequest = typeof newRequest === 'object' ? newRequest : {};
   const proc = processById(opts.process);
-  const kind = (proc?.kind ?? guessKind(raw)) as DemandKind;
+  const guessed = (proc?.kind ?? guessKind(raw)) as DemandKind;
   const chosen = opts.agentId && one('SELECT id FROM agents WHERE id = ? AND office_id = ?', opts.agentId, officeId) ? `agent:${opts.agentId}` : null;
+  // triagem híbrida: palavra-chave clara decide na hora; sem ela, a IA decide (Haiku) e, se falhar, vale o tipo do
+  // último pedido deste cliente (quem está fazendo o site continua no site, em vez de tudo cair na copy)
+  const ambiguous = !proc && !chosen && guessed === 'outro';
+  const lastKind = ambiguous ? one<{ kind: DemandKind }>("SELECT kind FROM demands WHERE client_id = ? AND kind != 'outro' ORDER BY created_at DESC LIMIT 1", clientId)?.kind : undefined;
+  const kind = ambiguous ? lastKind ?? guessed : guessed;
   const d: Demand = {
     id: uid(), officeId, clientId, title: (opts.title?.trim() || raw.trim().split(/\r?\n/)[0]).slice(0, 80), description: text,
     kind, status: 'a_fazer', priority: opts.priority ?? 'media', assignee: chosen, dueDate: opts.dueDate ?? null, trackedSeconds: 0, timerStartedAt: null,
@@ -340,7 +346,21 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
   insert('demands', d as never);
   invalidate(officeId, 'demands');
   logActivity(officeId, by, 'pediu', d.title);
-  return runStage(d, d.pipeline[0], by);
+  if (!ambiguous) return runStage(d, d.pipeline[0], by);
+  // ambíguo: a triagem roda em segundo plano (~1 s) e o pedido começa logo depois, já com a função certa
+  triageKind(raw).then((k) => {
+    const fresh = getDemand(d.id);
+    if (!fresh || fresh.stage) return;
+    const final = k ?? kind;
+    const ready = final === fresh.kind ? fresh : { ...fresh, kind: final, pipeline: defaultPipeline(final) };
+    if (ready !== fresh) { update('demands', d.id, { kind: final, pipeline: ready.pipeline }); invalidate(officeId, 'demands'); }
+    const err = runStage(ready, ready.pipeline[0], by);
+    if (err) return notice(officeId, err, { demandId: d.id });
+    const job = one<{ id: string; agentId: string }>('SELECT id, agent_id FROM jobs WHERE demand_id = ? ORDER BY created_at DESC LIMIT 1', d.id);
+    const who = job ? one<{ name: string }>('SELECT name FROM agents WHERE id = ?', job.agentId)?.name : undefined;
+    if (job) addMessage(job.id, officeId, 'sistema', `Triagem: ${STAGE_LABEL[ready.pipeline[0]]}${who ? ` (${who})` : ''}, ${k ? 'decidida pela IA' : 'como o último pedido deste cliente'}.`);
+  }).catch(() => {});
+  return null;
 }
 
 /**

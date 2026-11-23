@@ -193,6 +193,8 @@ const MIGRATIONS: string[] = [
   `ALTER TABLE offices ADD COLUMN default_model TEXT;`,
   // modelo escolhido na conversa de cada cliente
   `ALTER TABLE clients ADD COLUMN model TEXT;`,
+  // tarefa arquivada no painel do funcionário: sai da lista, nada é apagado
+  `ALTER TABLE jobs ADD COLUMN archived_at TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

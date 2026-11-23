@@ -1492,3 +1492,10 @@ body { cursor: var(--cur-arrow), default; }
 .desk-swap button.on { background: var(--accent); border-color: var(--foreground); }
 .desk-swap button canvas, .desk-swap button img { width: 28px; height: 28px; }
 .label-mode { white-space: nowrap; width: max-content; cursor: var(--cur-hand), pointer; }
+.job-row { display: flex; align-items: flex-start; gap: 2px; }
+.job-row > .job-item { flex: 1; min-width: 0; }
+.job-row .job-archive { opacity: 0; margin-top: 6px; }
+.job-row:hover .job-archive, .job-row .job-archive:focus-visible { opacity: 1; }
+.job-archive-all, .job-archived-toggle { align-self: flex-start; margin: 4px 2px; }
+.job-archived-toggle svg { transition: transform .15s ease; transform: rotate(-90deg); }
+.job-archived-toggle svg.open { transform: none; }

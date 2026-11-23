@@ -1897,6 +1897,27 @@ export async function api(app: FastifyInstance) {
       } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
     });
 
+    // arquivar no painel do funcionário: a tarefa sai da lista (nada é apagado); em andamento ou esperando você, não
+    r.post('/api/offices/:officeId/jobs/:id/arquivar', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const b = body(z.object({ archived: z.boolean() }), req, reply);
+      if (!b) return;
+      const { officeId, id } = req.params as any;
+      const job = one<AgentJob>('SELECT * FROM jobs WHERE id = ? AND office_id = ?', id, officeId);
+      if (!job) return reply.code(404).send({ error: 'Tarefa não encontrada' });
+      if (b.archived && ['fila', 'rodando', 'aguardando'].includes(job.status)) return reply.code(409).send({ error: 'Esta tarefa ainda está em andamento. Pare ou encerre antes de arquivar.' });
+      update('jobs', id, { archivedAt: b.archived ? now() : null });
+      invalidate(officeId, 'jobs');
+      return { ok: true };
+    });
+    r.post('/api/offices/:officeId/agents/:id/arquivar-concluidas', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const res = db.prepare("UPDATE jobs SET archived_at = ? WHERE office_id = ? AND agent_id = ? AND archived_at IS NULL AND status IN ('concluido','cancelado','erro')").run(now(), officeId, id);
+      invalidate(officeId, 'jobs');
+      return { archived: Number(res.changes) };
+    });
+
     r.post('/api/offices/:officeId/jobs/:id/cancel', async (req, reply) => {
       if (!requireWorker(req, reply)) return;
       if (!one('SELECT id FROM jobs WHERE id = ? AND office_id = ?', (req.params as any).id, (req.params as any).officeId)) return reply.code(404).send({ error: 'Tarefa não encontrada' });
