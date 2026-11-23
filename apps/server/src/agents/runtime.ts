@@ -420,7 +420,11 @@ async function start(jobId: string, typed: string, resume: boolean) {
   // o modelo da tarefa (o daily vai no Sonnet); senão o escolhido na conversa do cliente; senão o do escritório
   const model = job.model ?? client?.model ?? office.defaultModel ?? null;
   if (model) args.push('--model', model);
-  if (lean) args.push('--strict-mcp-config', '--tools', 'Read', 'Write');
+  // só os servidores MCP do Office (e o Chrome, que entra por --chrome): sem isso o funcionário herdava todos os da máquina
+  // e da conta (Notion, Trello, Drive, rea...), ~14 mil tokens a mais no início e uma lista de ~17 mil reinjetada a cada
+  // resumo, o que fazia a conversa encher de novo em 2-3 minutos (resumo em loop, 23/11/2026)
+  args.push('--strict-mcp-config');
+  if (lean) args.push('--tools', 'Read', 'Write');
   if (mcpIds.length) {
     const mcpFile = path.join(dir, 'mcp.json');
     writeFileSync(mcpFile, JSON.stringify({ mcpServers: mcp.servers }, null, 2), 'utf8');
