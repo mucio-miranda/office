@@ -205,12 +205,24 @@ function describeTool(name: string, input: Record<string, unknown>) {
   return name;
 }
 
+/** Funções que não pegam mais trabalho de cliente: todas tinham as mesmas skills, e dividir por função espalhava o cliente em vários chats. */
+export const CLIENT_FUNCTIONS = ['copywriter', 'designer', 'editor-de-video', 'gerente'];
+export const SESSION_AGENT = 'sessao';
+
+/** Trabalho de cliente roda sempre no perfil "Sessão" (todas as skills e ferramentas); Rafa e Nina ficam para a agência. */
+export function clientAgentId(officeId: string, agentId: string, clientId?: string | null) {
+  if (!clientId) return agentId;
+  const a = one<{ slug: string; base: string | null }>('SELECT slug, base FROM agents WHERE id = ?', agentId);
+  if (a && !CLIENT_FUNCTIONS.includes(a.base ?? a.slug)) return agentId;
+  return one<{ id: string }>('SELECT id FROM agents WHERE office_id = ? AND slug = ?', officeId, SESSION_AGENT)?.id ?? agentId;
+}
+
 export function enqueueJob(params: { officeId: string; agentId: string; demandId: string | null; prompt: string; createdBy: string; stage?: Stage; cwd?: string | null; clientId?: string | null; display?: string; workerId?: string | null; model?: string | null }) {
   // a conversa do cliente é a do titular dele; a revisão pela IA é função do sistema, sem funcionário
   const workerId = params.workerId !== undefined ? params.workerId
     : params.clientId && params.stage !== 'aprovacao' ? ensureTitular(params.officeId, params.clientId, params.createdBy).id : null;
   const job: AgentJob & { createdBy: string } = {
-    id: uid(), officeId: params.officeId, agentId: params.agentId, demandId: params.demandId, stage: params.stage ?? null, clientId: params.clientId ?? null, workerId,
+    id: uid(), officeId: params.officeId, agentId: clientAgentId(params.officeId, params.agentId, params.clientId), demandId: params.demandId, stage: params.stage ?? null, clientId: params.clientId ?? null, workerId,
     prompt: params.prompt, status: 'fila', sessionId: null, costUsd: 0, cwd: params.cwd ?? null, model: params.model ?? null,
     createdBy: params.createdBy, createdAt: now(), updatedAt: now(),
   };

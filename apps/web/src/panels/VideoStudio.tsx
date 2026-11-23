@@ -31,7 +31,8 @@ export function VideoStudio() {
   const { office, timelines, live, agents, jobs, clients, panelArg } = useStore();
   // quem está editando vídeo agora: a TV mostra cada prévia que sai e deixa comentar no minuto
   const editors = new Set(agents.filter((a) => a.slug === 'editor-de-video').map((a) => a.id));
-  const editing = jobs.filter((j) => editors.has(j.agentId) && ['rodando', 'fila', 'aguardando'].includes(j.status));
+  // vídeo de cliente roda na sessão (sem editor fixo): vale a etapa de vídeo da esteira
+  const editing = jobs.filter((j) => (editors.has(j.agentId) || j.stage === 'video') && ['rodando', 'fila', 'aguardando'].includes(j.status));
   const [watchId, setWatchId] = useState<string | null>(null);
   const watchJob = jobs.find((j) => j.id === watchId);
   const [openId, setOpenId] = useState<string | null>(timelines[0]?.id ?? null);

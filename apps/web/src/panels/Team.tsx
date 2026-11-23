@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Copy, Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
-import { MAX_CUSTOM_ROOMS, ROLE_LABEL, WALL_TYPES, type SkillsState, type AgentProfile, type Member, type WallType } from '@office/shared';
+import { MAX_CUSTOM_ROOMS, ROLE_LABEL, isRetiredAgent, WALL_TYPES, type SkillsState, type AgentProfile, type Member, type WallType } from '@office/shared';
 import { AvatarEditor } from './AvatarEditor';
 import { DESKS, findDeskSpot } from '../office/layout';
 import { WALL_LABEL, applyWall, wallsOfRoom } from '../office/decor/walls';
@@ -159,7 +159,7 @@ export function Team() {
           <div className="section-label" style={{ padding: 0 }}>Funcionários de IA</div>
           {isOwner && <button className="ghost small" onClick={() => setEditingAgent('novo')}><Plus size={13} /> Novo funcionário</button>}
         </div>
-        {agents.map((a) => (
+        {agents.filter((a) => !isRetiredAgent(a)).map((a) => (
           <div key={a.id} className="member">
             <span className="avatar" style={{ background: a.color }}>{a.name[0]}</span>
             <b>{a.name}</b>
@@ -185,14 +185,15 @@ export function Team() {
 }
 
 /** Modelos para contratar: o rótulo usa o nome atual de quem tem aquela função (os funcionários podem ser renomeados). */
-const BASES: [string, string][] = [['designer', 'Design'], ['editor-de-video', 'Vídeo'], ['copywriter', 'Copy'], ['gerente', 'Gerência'], ['prospeccao', 'Prospecção (leads)']];
+// trabalho de cliente não tem mais função (roda na sessão do cliente): só se contratam funções da agência
+const BASES: [string, string][] = [['gerente', 'Gerência'], ['prospeccao', 'Prospecção (leads)']];
 
 /** Funcionário novo ou existente: nome, cargo, sala, aparência e, nos novos, o modelo de que herda o trabalho. */
 function AgentEditor({ agent, onClose }: { agent: AgentProfile | null; onClose: () => void }) {
   const { office, agents, rooms, notify } = useStore();
   const [role, setRole] = useState(agent?.role ?? '');
   const [room, setRoom] = useState(agent?.room ?? 'design');
-  const [base, setBase] = useState('designer');
+  const [base, setBase] = useState('prospeccao');
   useStore((s) => s.mapRev);
   const url = `/api/offices/${office!.id}/agents`;
   /** A mesa padrão da sala, se estiver livre; senão, um espaço livre nela. */

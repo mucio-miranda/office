@@ -16,7 +16,7 @@ const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const MAX_JOBS = 30;
 export const when = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 type Line = { role: 'usuario' | 'agente'; text: string; at: string };
-type Msg = JobMessage & { agentId: string };
+type Msg = JobMessage & { agentId: string; workerId?: string | null };
 
 /** Passos técnicos do funcionário, contados por tipo e ditos em português ("leu 3 arquivos · rodou 2 comandos"). */
 const STEP_KINDS: { re: RegExp; one: string; many: (n: number) => string }[] = [
@@ -114,7 +114,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   useEffect(() => { if (missing) missing.split(',').forEach((id) => loadMessages(id)); }, [missing]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => { api<{ name: string; description: string }[]>(`${base}/skills`).then(setSkills).catch(() => setSkills([])); }, [base]);
 
-  const msgs = useMemo(() => mine.flatMap((j) => (messages[j.id] ?? []).map((m) => ({ ...m, agentId: j.agentId }))).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [mine, messages]);
+  const msgs = useMemo(() => mine.flatMap((j) => (messages[j.id] ?? []).map((m) => ({ ...m, agentId: j.agentId, workerId: j.workerId }))).sort((a, b) => a.createdAt.localeCompare(b.createdAt)), [mine, messages]);
   useEffect(() => { list.current?.scrollTo(0, list.current.scrollHeight); }, [msgs.length]);
   // passos seguidos viram um bloco só
   const blocks = useMemo(() => {
@@ -132,6 +132,8 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   const running = active?.status === 'rodando' || active?.status === 'fila';
   const workers = useStore((s) => s.workers);
   const worker = workers.find((w) => w.id === active?.workerId) ?? agents.find((a) => a.id === active?.agentId);
+  // quem fala é o funcionário do cliente (a sessão), não o perfil que rodou a tarefa
+  const speaker = (m: Msg) => workers.find((w) => w.id === m.workerId) ?? agents.find((x) => x.id === m.agentId);
   const typed = text.match(/^\/([\w-]*)$/)?.[1];
   const matches = typed === undefined ? [] : skills.filter((s) => s.name.includes(typed)).slice(0, 7);
   const pieces = useMemo(() => {
@@ -193,7 +195,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   const shortcut = (t: string) => { setText(t); requestAnimationFrame(() => { input.current?.focus(); input.current?.setSelectionRange(t.length, t.length); }); };
 
   const agentLine = (m: Msg) => {
-    const a = agents.find((x) => x.id === m.agentId);
+    const a = speaker(m);
     const who = <div className="who"><span className="avatar" style={{ background: a?.color, width: 18, height: 18, fontSize: 10 }}>{a?.name[0]}</span>{a?.name}</div>;
     const json = asJson(m.text);
     if (json) {
@@ -211,7 +213,7 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   };
   const block = (b: Msg | { steps: Msg[] }, i: number) => {
     if ('steps' in b) {
-      const a = agents.find((x) => x.id === b.steps[0].agentId);
+      const a = speaker(b.steps[0]);
       return (
         <details key={`s${i}-${b.steps[0].id}`} className="msg passos">
           <summary><Wrench size={12} /> {a?.name ?? 'O funcionário'} {summarizeSteps(b.steps.map((s) => s.text))}</summary>

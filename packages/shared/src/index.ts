@@ -888,3 +888,10 @@ export interface HelperRequest {
 
 /** Limite da assinatura do Claude (fração usada, 0 a 1), como o Claude Code informou na última rodada. */
 export interface ClaudeLimit { at?: string; fiveHour?: number | null; sevenDay?: number | null; fiveHourResets?: string | null; sevenDayResets?: string | null }
+
+/**
+ * Funções que saíram do mapa e da Equipe (23/11/2026): o trabalho de cliente roda no perfil "Sessão", com todas as skills,
+ * e o avatar do cliente representa esse trabalho. Rafa (gerente) e Nina (prospecção) ficam, para a agência.
+ */
+export const RETIRED_AGENTS = ['copywriter', 'designer', 'editor-de-video', 'sessao'];
+export const isRetiredAgent = (a: { slug: string; base?: string | null }) => RETIRED_AGENTS.includes(a.base ?? a.slug);

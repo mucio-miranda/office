@@ -1,7 +1,7 @@
 import { PostProgress } from './CalendarPanel';
 import { useEffect, useState } from 'react';
 import { Bot, Check, Eye, Megaphone, Pause, Play, Plus, RotateCcw, Workflow, X } from 'lucide-react';
-import { DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, PROCESSES, STAGE_AGENT, STAGE_LABEL, processById, type Demand, type DemandKind, type DemandStatus, type Priority, type Stage } from '@office/shared';
+import { isRetiredAgent, DEMAND_COLUMNS, DEMAND_COLUMN_LABEL, PROCESSES, STAGE_AGENT, STAGE_LABEL, processById, type Demand, type DemandKind, type DemandStatus, type Priority, type Stage } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, fmtDuration } from '../lib/api';
 import { DriveBox, PublishBox, ReviewDesk, versionsOf } from './ReviewDesk';
@@ -242,7 +242,7 @@ function DemandForm({ d, onClose }: { d: Partial<Demand>; onClose: () => void })
             <label>Responsável<select value={f.assignee ?? ''} onChange={set('assignee')}>
               <option value="">—</option>
               <optgroup label="Pessoas">{members.map((m) => <option key={m.id} value={`user:${m.id}`}>{m.name}</option>)}</optgroup>
-              <optgroup label="Funcionários de IA">{agents.map((a) => <option key={a.id} value={`agent:${a.id}`}>{a.name} · {a.role}</option>)}</optgroup>
+              <optgroup label="Funcionários de IA">{agents.filter((a) => !isRetiredAgent(a)).map((a) => <option key={a.id} value={`agent:${a.id}`}>{a.name} · {a.role}</option>)}</optgroup>
             </select></label>
           </div>
         </div>

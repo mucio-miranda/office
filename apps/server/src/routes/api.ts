@@ -115,6 +115,17 @@ export function syncAgentTools() {
   }
 }
 
+/** Modelos que todo escritório precisa ter, mesmo os criados antes deles existirem (o "Sessão" roda o trabalho de cliente). */
+export function ensureRequiredAgents(slugs = ['sessao']) {
+  const templates = loadTemplates().filter((t) => slugs.includes(t.slug));
+  for (const o of all<{ id: string }>('SELECT id FROM offices')) {
+    for (const t of templates) {
+      if (one('SELECT id FROM agents WHERE office_id = ? AND slug = ?', o.id, t.slug)) continue;
+      insert('agents', { id: uid(), officeId: o.id, ...t, status: 'livre' });
+    }
+  }
+}
+
 export function seedAgents(officeId: string) {
   for (const t of loadTemplates()) {
     if (one('SELECT id FROM agents WHERE office_id = ? AND slug = ?', officeId, t.slug)) continue;

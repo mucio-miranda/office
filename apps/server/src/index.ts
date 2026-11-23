@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
 import { config } from './config.ts';
 import './db.ts';
-import { api, syncAgentTools } from './routes/api.ts';
+import { api, ensureRequiredAgents, syncAgentTools } from './routes/api.ts';
 import { handleSocket } from './realtime.ts';
 import { recoverJobs } from './agents/runtime.ts';
 import { migrateWorkers } from './agents/workers.ts';
@@ -44,6 +44,7 @@ setInterval(publishReminders, 60_000).unref();
 purgeSessions();
 setInterval(purgeSessions, 3_600_000).unref();
 scheduleBackups();
+ensureRequiredAgents();
 syncAgentTools();
 // os apps abertos ao vivo pertencem a este processo: fecham com ele
 process.on('exit', closeAllLive);

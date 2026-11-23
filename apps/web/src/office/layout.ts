@@ -1,4 +1,4 @@
-import { FOOTPRINT, PLAN, buildingOf, roomRect, sharedEdge, type CustomRoom, type Rect, type RoomId, type Vec2, type WallType } from '@office/shared';
+import { FOOTPRINT, PLAN, buildingOf, isRetiredAgent, roomRect, sharedEdge, type CustomRoom, type Rect, type RoomId, type Vec2, type WallType } from '@office/shared';
 import type { PanelId } from '../lib/store';
 
 /**
@@ -385,7 +385,7 @@ export const DESK_DIRS: Record<string, number> = {};
  * Funcionários de função (gerente, designer, editor de vídeo, copywriter e os contratados a partir deles) ficam sempre na
  * mesa: são as funções do escritório, não sessões de um cliente. Os funcionários dos clientes andam pelas mesas livres.
  */
-export const isFixedAgent = (_a: { slug: string }) => true;
+export const isFixedAgent = (a: { slug: string; base?: string | null }) => !isRetiredAgent(a);
 
 /** Menu de cada função: perto do funcionário, R (ou X/□ no controle) abre o menu dele. */
 export const ROLE_PANEL: Record<string, { panel: PanelId; label: string }> = {

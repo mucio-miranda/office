@@ -58,7 +58,8 @@ test('demanda pelo mapa: sai com quem faz, processo, prazo e prioridade, e a ses
   assert.equal(d.assignee, `agent:${vic.id}`, 'quem foi escolhido no mapa faz');
   await wait(() => !!db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id)?.session_id);
   const job = (await call('GET', `${O}/jobs`)).json.find((j: any) => j.demandId === d.id);
-  assert.equal(job.agentId, vic.id);
+  // trabalho de cliente roda no perfil "Sessão" (todas as skills), não mais no funcionário da função
+  assert.equal(job.agentId, agents.find((a) => a.slug === 'sessao')!.id);
   const msgs = (await call('GET', `${O}/jobs/${job.id}/messages`)).json;
   assert.equal(msgs[0].author, 'Dona', 'a mensagem diz quem pediu');
   assert.equal((db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id) as any).session_id, '11111111-2222-4333-8444-555555555555');
