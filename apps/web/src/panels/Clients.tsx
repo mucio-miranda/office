@@ -313,8 +313,6 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
           </div>
           {titular && c.sessionId && (
             <div className="row gap" style={{ padding: '2px 0 6px' }}>
-              <button className="ghost small" disabled={busy} title={busy ? 'Espere o trabalho atual terminar' : `${titular.name} escreve a passagem de bastão e outro funcionário assume lendo ela (acontece sozinho no dia 1 de cada mês)`}
-                onClick={async () => { try { await api(`${base}/virada`, { body: {} }); notify(`${titular.name} está escrevendo a passagem de bastão`); } catch (e) { notify((e as Error).message); } }}>Virar o mês agora</button>
               {titular.handoff && <span className="muted small truncate" title={titular.handoff}>Assumiu com a passagem: {titular.handoff.split(/[\\/]/).pop()}</span>}
             </div>
           )}

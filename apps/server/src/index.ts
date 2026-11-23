@@ -9,7 +9,6 @@ import { api, syncAgentTools } from './routes/api.ts';
 import { handleSocket } from './realtime.ts';
 import { recoverJobs } from './agents/runtime.ts';
 import { migrateWorkers } from './agents/workers.ts';
-import { monthlyTurnover } from './agents/pipeline.ts';
 import { dailyTick } from './agents/daily.ts';
 import { publishReminders } from './agents/pipeline.ts';
 import { closeAllLive } from './agents/live.ts';
@@ -36,9 +35,8 @@ if (existsSync(config.webDist)) {
 // funcionário = sessão: as conversas que já existiam ganham o titular delas (uma vez)
 migrateWorkers();
 recoverJobs();
-// virada de mês: a cada hora, titulares parados que começaram antes deste mês passam o bastão
-setTimeout(monthlyTurnover, 120_000).unref();
-setInterval(monthlyTurnover, 3_600_000).unref();
+// sem virada de mês automática: trocar a conversa só porque o mês mudou gasta sem motivo; quem cuida disso é a troca
+// por tamanho (conversa longa) e o botão de conversa nova, que leva o resumo mais recente
 // daily report: confere a cada 5 minutos se já passou da hora e o do dia ainda não saiu
 setInterval(() => { dailyTick().catch(() => {}); }, 300_000).unref();
 // lembrete de "hora de publicar" das publicações agendadas

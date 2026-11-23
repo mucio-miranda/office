@@ -486,3 +486,17 @@ test('encerrar um pedido esperando aprovação: a tarefa sai de "esperando você
   assert.equal((db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id) as any).status, 'cancelado');
   assert.ok(db.prepare('SELECT id FROM demands WHERE id = ?').get(job.demand_id), 'a demanda não é apagada');
 });
+
+test('conversa nova pelo botão: o funcionário novo recebe o resumo mais recente do cliente como passagem de bastão', async () => {
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  const { conversationsDirOf } = await import('../agents/pipeline.ts');
+  const dir = conversationsDirOf(c.id)!;
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(path.join(dir, 'RESUMO 2026-11-20 10h00.md'), 'antigo');
+  writeFileSync(path.join(dir, 'RESUMO 2026-11-22 17h10.md'), 'o mais novo');
+  db.prepare("UPDATE clients SET session_id = 'sessao-velha' WHERE id = ?").run(c.id);
+  assert.equal((await call('POST', `${O}/clients/${c.id}/conversa/nova`, {})).status, 200);
+  const novo = (await call('GET', `${O}/workers`)).json.find((w: any) => w.clientId === c.id && w.role === 'titular' && !w.archivedAt);
+  assert.ok(novo, 'o próximo funcionário já existe');
+  assert.equal((db.prepare('SELECT handoff FROM workers WHERE id = ?').get(novo.id) as any).handoff, path.join(dir, 'RESUMO 2026-11-22 17h10.md'));
+});

@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { archiveWorker, createWorker, titularOf } from './workers.ts';
 import { handoffHelper } from './helpers.ts';
 import path from 'node:path';
@@ -367,7 +367,24 @@ export function resetConversation(clientId: string): string | null {
   const client = getClient(clientId);
   const titular = client && titularOf(client.officeId, clientId);
   if (titular) archiveWorker(titular.id);
+  // o próximo funcionário já nasce com o resumo mais recente do cliente como passagem de bastão (como na conversa nova automática)
+  const summary = latestSummary(clientId);
+  if (client && summary) update('workers', createWorker(client.officeId, clientId, 'titular', null).id, { handoff: summary });
   return null;
+}
+
+/** Pasta dos resumos de conversa do cliente (DOCUMENTOS\CONVERSAS). */
+export function conversationsDirOf(clientId: string) {
+  const client = getClient(clientId);
+  return client ? path.dirname(summaryFile(getOffice(client.officeId), client)) : null;
+}
+
+/** O resumo de conversa mais recente do cliente (os nomes levam a data, então a ordem do nome é a do tempo). */
+function latestSummary(clientId: string) {
+  const dir = conversationsDirOf(clientId);
+  if (!dir || !existsSync(dir)) return null;
+  const last = readdirSync(dir).filter((f) => /^RESUMO .+\.md$/i.test(f)).sort().at(-1);
+  return last ? path.join(dir, last) : null;
 }
 
 function saveLearnings(job: AgentJob, d: Demand, finalText: string) {
