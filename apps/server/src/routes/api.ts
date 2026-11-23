@@ -27,7 +27,7 @@ import { discoverClients } from '../clients/discover.ts';
 import { removeSquad, saveSquad, setClientSquad, squadOfClient, squadsOf } from '../clients/squads.ts';
 import { listSkills } from '../agents/skills.ts';
 import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/sessions.ts';
-import { startTurnover, newSession, resumeAsSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
+import { startTurnover, closeSession, newSession, resumeAsSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
 import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef, setNicheFont } from '../clients/references.ts';
@@ -36,7 +36,6 @@ import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePl
 import { thumbOf } from '../clients/thumb.ts';
 import { clientBase, deleteEntries, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
 import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../agents/agenda.ts';
-import { archiveWorker } from '../agents/workers.ts';
 import { localPaths, saveAttachment } from '../agents/attachments.ts';
 import type { Readable } from 'node:stream';
 import { decideHelper, requestHelper } from '../agents/helpers.ts';
@@ -1694,9 +1693,11 @@ export async function api(app: FastifyInstance) {
       const { officeId, id } = req.params as any;
       const w = one<Worker>('SELECT * FROM workers WHERE id = ? AND office_id = ?', id, officeId);
       if (!w) return reply.code(404).send({ error: 'Funcionário não encontrado' });
-      if (one("SELECT id FROM jobs WHERE worker_id = ? AND status IN ('fila','rodando','aguardando')", id)) return reply.code(409).send({ error: `${w.name} ainda está trabalhando. Pare a tarefa antes.` });
-      // sessão arquivada sai da lista do cliente; as outras sessões dele continuam como estão
-      return archiveWorker(id);
+      // sessão com conversa: antes de sair da lista, grava a memória do cliente e o resumo (as outras sessões só sabem
+      // o que fica em arquivo); sem conversa, sai na hora. As outras sessões do cliente continuam como estão
+      const r = closeSession(officeId, id, `user:${req.user.id}`);
+      if (r.error) return reply.code(409).send({ error: r.error });
+      return { ok: true, closing: !!r.closing };
     });
 
     r.get('/api/offices/:officeId/agents', async (req, reply) => {

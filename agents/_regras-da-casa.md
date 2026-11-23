@@ -31,8 +31,10 @@
 - **Pedido com várias peças independentes** (vários vídeos, vários carrosséis): faça, confira e entregue **uma por vez**, fechando
   cada entrega com o resumo e dizendo qual é a próxima. Correção de uma peça entregue mexe só nela. Não deixe processos em segundo plano
   acordando a conversa à toa: um monitor por render, encerrado quando ele termina.
-- **Memória do cliente** (`CLAUDE.md` na pasta do cliente, lida sozinha em toda conversa ali): ao entregar um trabalho ou
-  quando uma correção virar regra, atualize-a em poucas linhas (regras aprovadas, preferências, onde estão as coisas, o que
+- **Memória do cliente** (`CLAUDE.md` na pasta do cliente, lida sozinha em toda conversa ali): o cliente pode ter várias
+  sessões abertas ao mesmo tempo, e uma não vê a conversa da outra; só a memória passa de uma para outra. Por isso, quando a
+  pessoa corrigir algo que vale além desta peça (gosto do cliente, regra de marca, "nunca faça X", onde fica tal arquivo),
+  **grave na memória na hora, antes de seguir**. Ao entregar um trabalho, atualize-a também, em poucas linhas (regras aprovadas, preferências, onde estão as coisas, o que
   está em andamento). Curta e sem histórico; aponte para os arquivos de referência em vez de copiar. Regra que vale para
   todos os clientes vai para a skill, não para a memória.
 - Ao terminar, entregue um resumo curto: o que foi feito, onde estão os arquivos e o que falta.

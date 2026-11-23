@@ -804,6 +804,22 @@ export function needsRefresh(sessionId: string | null, jobs: AgentJob[]) {
   return idleH >= REFRESH_IDLE_HOURS && ctx >= REFRESH_IDLE_TOKENS;
 }
 
+/** Os passos de memória do cliente e resumo da conversa (conversa longa e fechamento de sessão). */
+function memorySteps(mem: string | null, summary: string) {
+  return [
+    ...(mem ? [
+      `1. Atualize a memória do cliente em \`${mem}\` (crie se não existir). É lida sozinha em toda conversa nesta pasta: curta (até umas 120 linhas), só fatos e regras que continuam valendo, sem histórico. Aponte para os arquivos de referência que já existem (IDV, PADRAO-EDICAO, marca.json…) em vez de copiar. Seções:`,
+      '   - `# Memória · <cliente>` e uma linha do que é o cliente e o posicionamento;',
+      '   - `## Identidade e onde estão as coisas` (cores, fontes, tom; pastas e arquivos de referência);',
+      '   - `## Regras aprovadas` (correções que viraram regra, o que o cliente não quer);',
+      '   - `## Preferências` (do cliente e da equipe);',
+      '   - `## Em andamento` (trabalhos abertos, com caminhos);',
+      '   - `Atualizado em <data>` no fim.',
+    ] : []),
+    `${mem ? '2' : '1'}. Escreva o resumo desta conversa em \`${summary}\` (crie a pasta se faltar), em até uma página: o que está em andamento e em que ponto, o que espera aprovação, os últimos arquivos entregues (caminhos) e os combinados recentes que ainda não viraram regra.`,
+  ];
+}
+
 /**
  * Antes do pedido: na conversa atual, o titular atualiza a memória do cliente e escreve o resumo; quando termina, a
  * conversa recomeça limpa (mesmo funcionário) e o pedido segue nela, com o resumo lido antes. O pedido fica guardado
@@ -823,16 +839,7 @@ function startRefresh(office: Office, client: Client, titular: Worker, raw: stri
       '',
       `Esta conversa ficou longa (${Math.round((last?.contextTokens ?? 0) / 1000)} mil tokens relidos a cada passo). O próximo pedido vai começar numa conversa limpa, com você mesmo, lendo a memória do cliente e um resumo desta conversa. Antes disso, sem começar trabalho novo:`,
       '',
-      ...(mem ? [
-        `1. Atualize a memória do cliente em \`${mem}\` (crie se não existir). É lida sozinha em toda conversa nesta pasta: curta (até umas 120 linhas), só fatos e regras que continuam valendo, sem histórico. Aponte para os arquivos de referência que já existem (IDV, PADRAO-EDICAO, marca.json…) em vez de copiar. Seções:`,
-        '   - `# Memória · <cliente>` e uma linha do que é o cliente e o posicionamento;',
-        '   - `## Identidade e onde estão as coisas` (cores, fontes, tom; pastas e arquivos de referência);',
-        '   - `## Regras aprovadas` (correções que viraram regra, o que o cliente não quer);',
-        '   - `## Preferências` (do cliente e da equipe);',
-        '   - `## Em andamento` (trabalhos abertos, com caminhos);',
-        '   - `Atualizado em <data>` no fim.',
-      ] : []),
-      `${mem ? '2' : '1'}. Escreva o resumo desta conversa em \`${summary}\` (crie a pasta se faltar), em até uma página: o que está em andamento e em que ponto, o que espera aprovação, os últimos arquivos entregues (caminhos) e os combinados recentes que ainda não viraram regra.`,
+      ...memorySteps(mem, summary),
       '',
       'Responda só com "ok".',
       '',
@@ -843,9 +850,53 @@ function startRefresh(office: Office, client: Client, titular: Worker, raw: stri
   return null;
 }
 
+
+const CLOSE_MARK = '<!-- fechar-sessao -->';
+
+/**
+ * Arquivar uma sessão que tem conversa: antes, nela mesma, o funcionário atualiza a memória do cliente e escreve o resumo,
+ * para as outras sessões (e as próximas) saberem o que foi combinado aqui. Depois a sessão é arquivada sozinha.
+ * Sem conversa ainda, arquiva na hora. Com trabalho rodando ou esperando você, não fecha.
+ */
+export function closeSession(officeId: string, workerId: string, by: string): { error?: string; closing?: boolean } {
+  const w = one<Worker>('SELECT * FROM workers WHERE id = ? AND office_id = ?', workerId, officeId);
+  if (!w || w.archivedAt) return { error: 'Sessão não encontrada.' };
+  if (one("SELECT id FROM jobs WHERE worker_id = ? AND status IN ('fila','rodando','aguardando')", workerId)) return { error: `${w.title ?? w.name} ainda está trabalhando ou esperando você. Termine ou encerre antes de arquivar.` };
+  const client = getClient(w.clientId);
+  if (w.role !== 'titular' || !w.sessionId || !client) { archiveWorker(workerId); return {}; }
+  const office = getOffice(officeId);
+  const mem = memoryFile(office, client);
+  const summary = summaryFile(office, client);
+  const last = one<AgentJob>('SELECT agent_id FROM jobs WHERE worker_id = ? ORDER BY updated_at DESC LIMIT 1', workerId);
+  enqueueJob({
+    officeId, agentId: last?.agentId ?? one<{ id: string }>('SELECT id FROM agents WHERE office_id = ? LIMIT 1', officeId)!.id,
+    demandId: null, clientId: client.id, workerId, cwd: jobCwd(office, client), createdBy: by,
+    display: `Fechando a sessão "${w.title ?? w.name}": antes de arquivar, atualiza a memória do cliente e escreve o resumo.`,
+    prompt: [
+      REFRESH,
+      '',
+      'Esta sessão vai ser arquivada. Outras sessões deste cliente (abertas agora ou depois) não veem esta conversa: só a memória do cliente e os resumos. Antes de fechar, sem começar trabalho novo:',
+      '',
+      ...memorySteps(mem, summary),
+      '',
+      'Responda só com "ok".',
+      '',
+      CLOSE_MARK,
+      `<!-- resumo: ${summary} -->`,
+    ].join('\n'),
+  });
+  return { closing: true };
+}
+
 function finishRefresh(job: AgentJob, ok: boolean) {
   const client = getClient(job.clientId ?? null);
   if (!client) return;
+  // fechamento de sessão: com a memória e o resumo gravados (ou não, se falhou), a sessão sai da lista
+  if (job.prompt.includes(CLOSE_MARK)) {
+    addMessage(job.id, job.officeId, 'sistema', ok ? 'Memória do cliente e resumo gravados. Sessão arquivada (a conversa continua no Histórico).' : 'Não consegui gravar a memória e o resumo; a sessão foi arquivada mesmo assim (a conversa continua no Histórico).');
+    if (job.workerId) archiveWorker(job.workerId);
+    return;
+  }
   let pending: { raw: string; by: string; newRequest: boolean | NewRequest; workerId?: string } | null = null;
   try { pending = JSON.parse(Buffer.from(job.prompt.match(/pedido-pendente: ([A-Za-z0-9+/=]+)/)?.[1] ?? '', 'base64').toString('utf8')); } catch { pending = null; }
   const summary = job.prompt.match(/<!-- resumo: (.+?) -->/)?.[1];

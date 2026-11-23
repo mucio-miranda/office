@@ -342,6 +342,9 @@ test('funcionário = sessão do cliente: nasce com o primeiro pedido, tem nome d
   assert.equal((await call('PATCH', `${O}/workers/${titular.id}`, { name: titular.name })).status, 200, 'volta ao nome da lista');
   const r = await call('POST', `${O}/workers/${titular.id}/arquivar`, {});
   assert.equal(r.status, 200, JSON.stringify(r.json));
+  // com conversa, a sessão primeiro grava a memória e o resumo e só depois é arquivada
+  await wait(() => !!(db.prepare('SELECT archived_at FROM workers WHERE id = ?').get(titular.id) as any).archived_at);
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
   workers = (await call('GET', `${O}/workers`)).json;
   assert.ok(workers.find((w: any) => w.id === titular.id).archivedAt, 'arquivado fica no histórico');
   const { ensureTitular, sessionsOf } = await import('../agents/workers.ts');
@@ -381,7 +384,8 @@ test('ajudante: o funcionário pede, uma pessoa aprova, ele trabalha em sessão 
   const { ensureTitular } = await import('../agents/workers.ts');
   const officeId = O.split('/').pop()!;
   const titular = ensureTitular(officeId, c.id, null);
-  const job = (await call('GET', `${O}/jobs`)).json.find((j: any) => j.clientId === c.id && j.stage !== 'aprovacao');
+  // uma tarefa normal da conversa (não a de fechamento da sessão arquivada no teste anterior)
+  const job = db.prepare("SELECT id FROM jobs WHERE client_id = ? AND (stage IS NULL OR stage != 'aprovacao') AND prompt NOT LIKE '## Conversa nova%' ORDER BY created_at LIMIT 1").get(c.id) as { id: string };
   db.prepare('UPDATE jobs SET worker_id = ? WHERE id = ?').run(titular.id, job.id);
   const token = issueJobToken(job.id);
   const ask = await app.inject({ method: 'POST', url: '/api/agente/pedir_ajudante', remoteAddress: '127.0.0.1', headers: { host: 'localhost', authorization: `Bearer ${token}` }, payload: { tarefa: 'Tratar as 30 fotos do ensaio', motivo: 'enquanto monto os carrosséis' } });
@@ -510,6 +514,24 @@ test('sessão nova levando o resumo: a primeira mensagem lê o resumo mais recen
   assert.equal((db.prepare('SELECT handoff FROM workers WHERE id = ?').get(com.json.id) as any).handoff, path.join(dir, 'RESUMO 2026-11-22 17h10.md'));
   const sem = await call('POST', `${O}/clients/${c.id}/conversa/nova`, { title: 'Do zero' });
   assert.equal((db.prepare('SELECT handoff FROM workers WHERE id = ?').get(sem.json.id) as any).handoff, null);
+});
+
+test('arquivar sessão: com conversa, antes grava a memória do cliente e o resumo e só depois sai da lista; sem conversa, sai na hora', async () => {
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando','aguardando')").all().length));
+  const vazia = (await call('POST', `${O}/clients/${c.id}/conversa/nova`, { title: 'Vazia' })).json;
+  const r0 = await call('POST', `${O}/workers/${vazia.id}/arquivar`, {});
+  assert.deepEqual([r0.status, r0.json.closing], [200, false]);
+  assert.ok((db.prepare('SELECT archived_at FROM workers WHERE id = ?').get(vazia.id) as any).archived_at, 'sem conversa, arquiva na hora');
+  const usada = (await call('POST', `${O}/clients/${c.id}/conversa/nova`, { title: 'Usada' })).json;
+  db.prepare("UPDATE workers SET session_id = 'sessao-usada' WHERE id = ?").run(usada.id);
+  const r = await call('POST', `${O}/workers/${usada.id}/arquivar`, {});
+  assert.deepEqual([r.status, r.json.closing], [200, true]);
+  const fecha = db.prepare("SELECT * FROM jobs WHERE worker_id = ? AND prompt LIKE '%fechar-sessao%'").get(usada.id) as any;
+  assert.ok(fecha && fecha.prompt.includes('CLAUDE.md') && fecha.prompt.includes('RESUMO '), 'pede memória do cliente e resumo');
+  await wait(() => !!(db.prepare('SELECT archived_at FROM workers WHERE id = ?').get(usada.id) as any).archived_at);
+  assert.ok((db.prepare('SELECT archived_at FROM workers WHERE id = ?').get(usada.id) as any).archived_at, 'arquivada depois de gravar');
+  await wait(() => !(db.prepare("SELECT id FROM jobs WHERE status IN ('fila','rodando')").all().length));
 });
 
 test('arquivar tarefas no painel do funcionário: some da lista, nada é apagado; em andamento não arquiva', async () => {

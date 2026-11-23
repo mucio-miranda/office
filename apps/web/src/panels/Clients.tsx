@@ -214,9 +214,9 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   };
   const archiveSession = async (w: Worker) => {
     try {
-      await api(`/api/offices/${office!.id}/workers/${w.id}/arquivar`, { body: {} });
-      if (sel === w.id) setSel(null);
-      notify('Sessão arquivada. A conversa continua no Histórico.');
+      const r = await api<{ closing: boolean }>(`/api/offices/${office!.id}/workers/${w.id}/arquivar`, { body: {} });
+      if (!r.closing && sel === w.id) setSel(null);
+      notify(r.closing ? 'Antes de arquivar, a sessão grava a memória do cliente e o resumo. Ela sai da lista quando terminar.' : 'Sessão arquivada. A conversa continua no Histórico.');
     } catch (x) { notify((x as Error).message); }
   };
   const running = mine.some((d) => d.pipeline?.[0] === 'briefing' && d.status !== 'entregue');
@@ -337,7 +337,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
                     {canWork(office!.role) && renaming !== w.id && (
                       <span className="session-tools">
                         <button type="button" className="icon" title="Renomear" aria-label={`Renomear ${w.title ?? w.name}`} onClick={() => { setRenaming(w.id); setRenameText(w.title ?? ''); }}><Pencil size={12} /></button>
-                        <button type="button" className="icon" disabled={w.state === 'trabalhando'} title={w.state === 'trabalhando' ? 'Pare o trabalho antes de arquivar' : 'Arquivar: sai da lista (nada é apagado)'} aria-label={`Arquivar ${w.title ?? w.name}`} onClick={() => archiveSession(w)}><ArchiveIcon size={12} /></button>
+                        <button type="button" className="icon" disabled={w.state !== 'copa'} title={w.state !== 'copa' ? 'Termine ou encerre o trabalho antes de arquivar' : 'Arquivar: antes grava a memória do cliente e o resumo; sai da lista (nada é apagado)'} aria-label={`Arquivar ${w.title ?? w.name}`} onClick={() => archiveSession(w)}><ArchiveIcon size={12} /></button>
                       </span>
                     )}
                   </div>
