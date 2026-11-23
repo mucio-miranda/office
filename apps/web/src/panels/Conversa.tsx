@@ -308,6 +308,12 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
               <span className="spacer" />
               <ModelPicker c={c} />
               {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
+              {active?.status === 'aguardando' && (
+                <button type="button" className="ghost small" title="Encerra este pedido sem responder: a demanda vai para Paradas e não é apagada"
+                  onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} }).then(() => notify('Pedido encerrado. A demanda ficou em Paradas, na Mesa.')).catch((x) => notify((x as Error).message))}>
+                  <Square size={12} /> Encerrar
+                </button>
+              )}
               <div className="send-group">
                 <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> Enviar</button>
                 <button type="button" className="primary small icon-only" aria-label="Mais opções de envio" aria-expanded={sendMenu} onClick={() => setSendMenu((v) => !v)}><ChevronDown size={14} /></button>

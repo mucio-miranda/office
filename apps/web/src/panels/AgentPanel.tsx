@@ -164,6 +164,10 @@ export function AgentPanel() {
             <span className="status-dot st-aguardando" />
             <b>{agent.name} precisa da sua decisão.</b>
             <span className="spacer" />
+            <button className="ghost small" title="Encerra este pedido sem responder: a demanda vai para Paradas e não é apagada"
+              onClick={() => api(`${base}/jobs/${job.id}/cancel`, { body: {} }).then(() => useStore.getState().notify('Pedido encerrado. A demanda ficou em Paradas, na Mesa.')).catch((x) => useStore.getState().notify((x as Error).message))}>
+              <Square size={12} /> Encerrar
+            </button>
             <button className="primary small" onClick={() => api(`${base}/jobs/${job.id}/reply`, { body: { text: 'Aprovado. Pode seguir.' } })}><Check size={14} /> Aprovar e seguir</button>
           </div>
         )}

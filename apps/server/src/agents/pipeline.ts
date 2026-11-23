@@ -13,7 +13,7 @@ import { clientDir, folderName, indexClient, indexSummary, writeNew } from '../c
 import { clientPaths } from '../clients/layout.ts';
 import { nicheOf } from '../clients/moodboard.ts';
 import { clientDriveFolder, driveInfo, driveSubdir, sendToDrive, type DriveItem } from '../clients/drive.ts';
-import { addMessage, enqueueJob, followUpJob, interruptJob, replyToJob } from './runtime.ts';
+import { addMessage, cancelJob, enqueueJob, followUpJob, interruptJob, replyToJob } from './runtime.ts';
 import { baseCheck, captionFrom, isInsideAny, latestFiles, marksText, newerFiles, processFiles, slug } from './outputs.ts';
 import { mentionedDirs } from './permissions.ts';
 import { expandCommand, guessKind, listSkills, parseLearnings } from './skills.ts';
@@ -356,7 +356,12 @@ export function resumeSession(clientId: string, sessionId: string): string | nul
 
 /** Nova conversa: o próximo pedido começa do zero. O histórico fica nas tarefas antigas. */
 export function resetConversation(clientId: string): string | null {
-  if (all('SELECT id FROM jobs WHERE client_id = ? AND status IN (\'fila\', \'rodando\', \'aguardando\')', clientId).length) return 'Um funcionário ainda está nesta conversa. Espere ele terminar ou pare a tarefa.';
+  if (all('SELECT id FROM jobs WHERE client_id = ? AND status IN (\'fila\', \'rodando\')', clientId).length) return 'Um funcionário ainda está nesta conversa. Espere ele terminar ou pare a tarefa.';
+  // esperando sua aprovação não é trabalho em andamento (nada roda): a pergunta pendente é encerrada junto com a conversa
+  for (const j of all<Pick<AgentJob, 'id' | 'officeId'>>('SELECT id, office_id FROM jobs WHERE client_id = ? AND status = \'aguardando\'', clientId)) {
+    addMessage(j.id, j.officeId, 'sistema', 'Encerrada para começar uma conversa nova. O pedido continua na demanda: é só pedir de novo na conversa nova.');
+    cancelJob(j.id);
+  }
   update('clients', clientId, { sessionId: null, sessionDirs: [], sessionCost: 0 });
   // conversa nova é funcionário novo: o atual é arquivado com o histórico dele, e o próximo pedido chama outro
   const client = getClient(clientId);

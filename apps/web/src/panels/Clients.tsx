@@ -1,7 +1,7 @@
 import { ClientDrive } from './ClientDrive';
 import { canSeeFinance, canWork } from '@office/shared';
 import { useEffect, useState } from 'react';
-import { Archive as ArchiveIcon, Bot, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, Pencil, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
+import { Archive as ArchiveIcon, Bot, ChevronRight, FolderInput, FolderOpen, FolderPlus, History, MessageSquarePlus, PanelLeftClose, Pencil, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession, type Worker } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, brl } from '../lib/api';
@@ -95,8 +95,9 @@ export function Clients() {
         ))}
         {inactive.length > 0 && (
           <div className="client-group inactive">
-            <button className="squad-head link" onClick={() => setShowInactive(!showInactive)} aria-expanded={showInactive} title="Clientes pausados ou encerrados (muda no topo do cliente)">
-              <b>Inativos</b> <span className="muted">{inactive.length}</span> <span className="muted small">{showInactive ? 'esconder' : 'mostrar'}</span>
+            <button className="squad-head squad-toggle" onClick={() => setShowInactive(!showInactive)} aria-expanded={showInactive}
+              title={`${showInactive ? 'Esconder' : 'Mostrar'} os clientes pausados ou encerrados (a situação muda no topo do cliente)`}>
+              <ChevronRight size={12} className={showInactive ? 'open' : ''} /> <b className="truncate">Inativos</b> <span className="muted">{inactive.length}</span>
             </button>
             {showInactive && inactive.map((c) => (
               <button key={c.id} className={`client-item ${current?.id === c.id ? 'active' : ''}`} onClick={() => setSel(c.id)}>
@@ -154,7 +155,10 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   const [confirmReset, setConfirmReset] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
   const clientJobs = jobs.filter((j) => j.clientId === c.id);
-  const busy = clientJobs.some((j) => j.status === 'rodando' || j.status === 'fila' || j.status === 'aguardando');
+  // rodando ou na fila = trabalhando de verdade; aguardando = parou e espera sua aprovação (nada roda)
+  const jobRunning = clientJobs.some((j) => j.status === 'rodando' || j.status === 'fila');
+  const jobWaiting = !jobRunning && clientJobs.some((j) => j.status === 'aguardando');
+  const busy = jobRunning || jobWaiting;
   useEffect(() => {
     api<ClientSession[]>(`${base}/sessoes`).then(setSessions).catch(() => setSessions([]));
   }, [base, c.sessionId, clientJobs.length]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -230,7 +234,8 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
             <select className={`status-pill st-${c.status}`} value={c.status} aria-label="Situação do cliente" onChange={(e) => patch({ status: e.target.value as Client['status'] })}>
               <option value="ativo">Ativo</option><option value="pausado">Pausado</option><option value="encerrado">Encerrado</option>
             </select>
-            {busy && <span className="working"><span className="status-dot" /> trabalhando agora</span>}
+            {jobRunning && <span className="working"><span className="status-dot" /> trabalhando agora</span>}
+            {jobWaiting && <span className="working waiting"><span className="status-dot" /> esperando você</span>}
             {canSeeFinance(office?.role) && c.monthlyFee > 0 && <span className="muted">{brl(c.monthlyFee)}/mês</span>}
           </div>
         </div>
@@ -286,12 +291,12 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
             <h4>Equipe de {c.name}</h4>
             {confirmReset ? (
               <div className="row gap">
-                <span className="muted small">{titular ? `${titular.name} é arquivado e deixa de lembrar a conversa; o próximo pedido chama outro funcionário.` : 'A conversa atual é esquecida.'}</span>
+                <span className="muted small">{titular ? `${titular.name} é arquivado e deixa de lembrar a conversa; o próximo pedido chama outro funcionário.` : 'A conversa atual é esquecida.'}{jobWaiting ? ' A aprovação que ele está esperando é encerrada (o pedido continua na demanda).' : ''}</span>
                 <button className="ghost small" onClick={() => setConfirmReset(false)}>Manter</button>
                 <button className="small" onClick={reset}>Trocar</button>
               </div>
             ) : (
-              <button className="ghost small" disabled={(!c.sessionId && !titular) || busy} title={busy ? 'Espere o trabalho atual terminar' : undefined} onClick={() => setConfirmReset(true)}><MessageSquarePlus size={13} /> Trocar de funcionário (conversa nova)</button>
+              <button className="ghost small" disabled={(!c.sessionId && !titular) || jobRunning} title={jobRunning ? 'Espere o trabalho atual terminar' : undefined} onClick={() => setConfirmReset(true)}><MessageSquarePlus size={13} /> Trocar de funcionário (conversa nova)</button>
             )}
           </div>
           <div className="team-list" role="list">

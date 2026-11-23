@@ -460,3 +460,29 @@ test('modelo da conversa: escolhido no cliente, vai para o Claude Code; sem esco
   assert.equal((await call('PATCH', `${O}/clients/${c.id}`, { model: null })).status, 200, 'volta ao padrão');
   assert.equal((await call('GET', `${O}/clients`)).json[0].model, null);
 });
+
+test('conversa nova com o funcionário esperando sua aprovação: libera e encerra a pergunta; trabalhando, ainda espera', async () => {
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  const job = db.prepare('SELECT id FROM jobs WHERE client_id = ? ORDER BY updated_at DESC LIMIT 1').get(c.id) as { id: string };
+  db.prepare("UPDATE clients SET session_id = 'sessao-velha' WHERE id = ?").run(c.id);
+  // o funcionário pediu aprovação e parou (nada rodando): a troca não pode ficar travada para sempre
+  db.prepare("UPDATE jobs SET status = 'aguardando' WHERE id = ?").run(job.id);
+  const r = await call('POST', `${O}/clients/${c.id}/conversa/nova`, {});
+  assert.equal(r.status, 200, JSON.stringify(r.json));
+  assert.equal((db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id) as any).status, 'cancelado', 'a pergunta pendente é encerrada');
+  assert.equal((db.prepare('SELECT session_id FROM clients WHERE id = ?').get(c.id) as any).session_id, null, 'a conversa recomeça');
+  // trabalhando de verdade: continua esperando terminar
+  db.prepare("UPDATE clients SET session_id = 'sessao-velha' WHERE id = ?").run(c.id);
+  db.prepare("UPDATE jobs SET status = 'rodando' WHERE id = ?").run(job.id);
+  assert.equal((await call('POST', `${O}/clients/${c.id}/conversa/nova`, {})).status, 409);
+  db.prepare("UPDATE jobs SET status = 'concluido' WHERE id = ?").run(job.id);
+});
+
+test('encerrar um pedido esperando aprovação: a tarefa sai de "esperando você" e a demanda continua existindo', async () => {
+  const c = (await call('GET', `${O}/clients`)).json[0];
+  const job = db.prepare('SELECT id, demand_id FROM jobs WHERE client_id = ? AND demand_id IS NOT NULL ORDER BY updated_at DESC LIMIT 1').get(c.id) as { id: string; demand_id: string };
+  db.prepare("UPDATE jobs SET status = 'aguardando' WHERE id = ?").run(job.id);
+  assert.equal((await call('POST', `${O}/jobs/${job.id}/cancel`, {})).status, 200);
+  assert.equal((db.prepare('SELECT status FROM jobs WHERE id = ?').get(job.id) as any).status, 'cancelado');
+  assert.ok(db.prepare('SELECT id FROM demands WHERE id = ?').get(job.demand_id), 'a demanda não é apagada');
+});

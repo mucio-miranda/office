@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Check, ChevronDown, FileText, Film, Workflow, X } from 'lucide-react';
+import { Check, ChevronDown, FileText, Film, Square, Workflow, X } from 'lucide-react';
 import { STAGE_LABEL, processById, type Demand, type Learning, type SkillChange } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
@@ -131,7 +131,7 @@ function SkillPath() {
 }
 
 export function Mesa() {
-  const { demands, jobs, clients, agents, office } = useStore();
+  const { demands, jobs, clients, agents, office, notify } = useStore();
   const [openId, setOpenId] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const activeJob = (d: Demand) => jobs.find((j) => j.demandId === d.id && ['fila', 'rodando', 'aguardando'].includes(j.status));
@@ -158,8 +158,10 @@ export function Mesa() {
     const files = versionsOf(d).at(-1)?.files ?? [];
     const thumb = files.find((f) => IMG.test(f));
     const video = files.some((f) => VID.test(f));
+    const waitingJob = activeJob(d)?.status === 'aguardando' ? activeJob(d) : undefined;
     return (
-      <button key={d.id} type="button" className="mesa-card" onClick={() => setOpenId(d.id)}>
+      <div key={d.id} className="mesa-card-wrap">
+      <button type="button" className="mesa-card" onClick={() => setOpenId(d.id)}>
         <span className="mesa-thumb">
           {thumb ? <img src={mediaUrl(office!.id, thumb)} alt="" loading="lazy" /> : video ? <Film size={26} /> : <FileText size={26} />}
         </span>
@@ -170,6 +172,13 @@ export function Mesa() {
           {files.length > 0 && <span className="muted small">{files.length} {files.length === 1 ? 'arquivo' : 'arquivos'}</span>}
         </span>
       </button>
+      {waitingJob && (
+        <button type="button" className="ghost small mesa-stop" title="Encerrar este pedido sem responder: a demanda vai para Paradas e não é apagada"
+          onClick={() => api(`/api/offices/${office!.id}/jobs/${waitingJob.id}/cancel`, { body: {} }).then(() => notify(`"${d.title}" encerrada. Ficou em Paradas.`)).catch((x) => notify((x as Error).message))}>
+          <Square size={11} /> Encerrar
+        </button>
+      )}
+      </div>
     );
   };
   const section = (id: string, title: string, list: Demand[]) => list.length > 0 && (
