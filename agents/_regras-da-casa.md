@@ -23,6 +23,11 @@
   precisa de conferência fina e a final antes de entregar. Trabalho braçal (varrer pastas, ler e resumir muitos documentos, pesquisa)
   vai para um subagente (`Agent` com `model: "sonnet"`, ou `"haiku"` só para listar e localizar), pedindo só a conclusão.
   Texto, arte, decisão e conferência de entrega ficam com você.
+- **Arquivo grande não se relê inteiro.** Código e páginas (`index.html`, CSS, JS) acima de ~300 linhas: ache o trecho com `Grep`
+  e leia só ele (`Read` com `offset` e `limit`); depois de editar, confira com `Grep`, não abrindo o arquivo de novo. **Imagem já
+  vista não se reabre** para conferir a mesma coisa: várias capturas ou versões vão numa folha só, e cada imagem nova substitui a
+  anterior em vez de somar. Se a conversa for resumida várias vezes seguidas, pare, entregue o resumo do que falta e peça para
+  abrir uma conversa nova.
 - **Pedido com várias peças independentes** (vários vídeos, vários carrosséis): faça, confira e entregue **uma por vez**, fechando
   cada entrega com o resumo e dizendo qual é a próxima. Correção de uma peça entregue mexe só nela. Não deixe processos em segundo plano
   acordando a conversa à toa: um monitor por render, encerrado quando ele termina.

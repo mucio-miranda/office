@@ -80,6 +80,16 @@ const clientNameOf = (jobId: string) => one<{ name: string }>('SELECT c.name FRO
 
 /** Teto de contexto dos funcionários, em tokens. */
 export const COMPACT_WINDOW = 120_000;
+/**
+ * Trava contra resumo em loop: se a conversa é resumida 3 vezes em 10 minutos, ela reenche logo depois de cada resumo
+ * (arquivo ou imagem grande relidos) e cada resumo relê ~90 mil tokens. Melhor parar e abrir uma conversa nova.
+ */
+export const THRASH = { count: 3, windowMs: 10 * 60_000 };
+const compactLog = new Map<string, number[]>();
+export function compactThrash(times: number[], at: number) {
+  const recent = [...times, at].filter((t) => at - t <= THRASH.windowMs);
+  return { times: recent, thrash: recent.length >= THRASH.count };
+}
 /** Limite semanal da assinatura a partir do qual a conversa avisa (uma vez por semana e por faixa). */
 export const LIMIT_ALERTS = [0.8, 0.95];
 const limitAlerted = new Set<string>();
@@ -489,6 +499,16 @@ async function start(jobId: string, typed: string, resume: boolean) {
       if (ev.type === 'system' && ev.subtype === 'init' && ev.session_id) {
         setJob(jobId, { sessionId: ev.session_id });
         saveSession(ev.session_id);
+      } else if (ev.type === 'system' && ev.subtype === 'compact_boundary') {
+        const { times, thrash } = compactThrash(compactLog.get(jobId) ?? [], Date.now());
+        compactLog.set(jobId, times);
+        if (thrash && running.has(jobId)) {
+          compactLog.delete(jobId);
+          followups.delete(jobId);
+          addMessage(jobId, office.id, 'sistema', `Parei este trabalho: a conversa foi resumida ${times.length} vezes em menos de 10 minutos. Ela enche de novo logo depois de cada resumo e só gasta limite sem avançar. No painel do cliente, use "Trocar de funcionário (conversa nova)": a conversa nova leva o resumo e começa leve. Depois peça para seguir de onde parou.`);
+          logActivity(office.id, `agent:${agent.slug}`, 'parado por resumo em loop', clientNameOf(jobId) ?? '');
+          cancelJob(jobId);
+        }
       } else if (ev.type === 'assistant') {
         const u = ev.message?.usage;
         const ctx = u ? (u.input_tokens ?? 0) + (u.cache_creation_input_tokens ?? 0) + (u.cache_read_input_tokens ?? 0) : 0;
