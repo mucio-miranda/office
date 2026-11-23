@@ -16,3 +16,11 @@ test('os funcionários têm as permissões do método da casa', () => {
   const vic = by.get('editor-de-video')!;
   for (const tool of ['PowerShell(ffmpeg:*)', 'PowerShell(python:*)']) assert.ok(vic.allowedTools.includes(tool), tool);
 });
+
+test('prospecção: monta lista de leads com a skill, roda os scripts e usa o navegador', () => {
+  const nina = loadTemplates().find((t) => t.slug === 'prospeccao')!;
+  assert.ok(nina, 'modelo prospeccao existe');
+  assert.ok(nina.skills.includes('lista-leads'));
+  for (const tool of ['PowerShell(python:*)', 'Bash(python:*)', 'mcp__claude-in-chrome']) assert.ok(nina.allowedTools.includes(tool), tool);
+  assert.match(nina.persona, /nunca contata/);
+});

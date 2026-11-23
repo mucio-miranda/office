@@ -185,7 +185,7 @@ export function Team() {
 }
 
 /** Modelos para contratar: o rótulo usa o nome atual de quem tem aquela função (os funcionários podem ser renomeados). */
-const BASES: [string, string][] = [['designer', 'Design'], ['editor-de-video', 'Vídeo'], ['copywriter', 'Copy'], ['gerente', 'Gerência']];
+const BASES: [string, string][] = [['designer', 'Design'], ['editor-de-video', 'Vídeo'], ['copywriter', 'Copy'], ['gerente', 'Gerência'], ['prospeccao', 'Prospecção (leads)']];
 
 /** Funcionário novo ou existente: nome, cargo, sala, aparência e, nos novos, o modelo de que herda o trabalho. */
 function AgentEditor({ agent, onClose }: { agent: AgentProfile | null; onClose: () => void }) {
