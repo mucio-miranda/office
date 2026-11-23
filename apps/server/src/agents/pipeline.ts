@@ -462,6 +462,9 @@ export function requestChanges(demandId: string, text: string, by: string, marks
 
 /** Cliente novo: abre a demanda de briefing e o gerente começa a entrevista. */
 export function startBriefing(client: Client, by: string, draft = false) {
+  // clique duplo (ou dois PCs ao mesmo tempo): o briefing que já está andando vale, em vez de abrir outro igual
+  const open = one<{ demandId: string }>("SELECT demand_id FROM jobs WHERE client_id = ? AND stage = 'briefing' AND status IN ('fila','rodando','aguardando') AND demand_id IS NOT NULL LIMIT 1", client.id);
+  if (open) return { demandId: open.demandId, agentId: agentBySlug(client.officeId, 'gerente')?.id ?? null, error: null };
   const d: Demand = {
     id: uid(), officeId: client.officeId, clientId: client.id, title: `${draft ? DRAFT_TITLE : 'Briefing: '}${client.name}`,
     description: draft ? 'O gerente lê a pasta do cliente e preenche o que encontrar. A equipe confere e confirma.' : 'Entrevista de briefing com a equipe. As respostas vão para o BRIEFING.md da pasta do cliente.',

@@ -102,7 +102,9 @@ export function Conversa({ c, view, setView, sessions, resume, onSessions, onInt
   const clientJobs = useMemo(() => jobs.filter((j) => j.clientId === c.id && j.stage !== 'aprovacao' && !(j.workerId && helperIds.includes(j.workerId))), [jobs, c.id, helperIds]);
   const active = clientJobs.find((j) => ACTIVE.includes(j.status));
   const viewed = view ? sessions.find((s) => s.id === view) : undefined;
-  const mine = useMemo(() => clientJobs.filter((j) => (view ? j.sessionId === view : !j.sessionId || j.sessionId === c.sessionId)).slice(0, MAX_JOBS), [clientJobs, view, c.sessionId]);
+  // trabalho sem sessão entra na atual só se ainda está vivo (ou deu erro ao abrir): um pedido cancelado antes de começar,
+  // como os briefings repetidos de um clique duplo, não tem sessão e reaparecia em toda "Sessão nova"
+  const mine = useMemo(() => clientJobs.filter((j) => (view ? j.sessionId === view : j.sessionId ? j.sessionId === c.sessionId : j.status !== 'cancelado')).slice(0, MAX_JOBS), [clientJobs, view, c.sessionId]);
   // sessão do terminal: o Office não tem as mensagens, então lê o fim do arquivo da sessão
   useEffect(() => {
     setTail(null);
