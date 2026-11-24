@@ -4,8 +4,8 @@
 
 ### O escritório virtual onde seus funcionários de IA trabalham de verdade.
 
-Ande por um escritório 3D, puxe uma demanda do quadro e entregue para a **Vic**, sua editora de vídeo de IA.<br/>
-Ela abre os brutos do cliente, monta o corte, renderiza e **levanta a mão ✋** quando precisa da sua aprovação.
+Ande por um escritório 3D, entre num cliente e abra uma **sessão** para cada demanda: um funcionário de IA com nome próprio<br/>
+abre os brutos, monta o corte, renderiza e **levanta a mão ✋** quando precisa da sua aprovação. Várias sessões rodam juntas.
 
 <br/>
 
@@ -18,7 +18,7 @@ Ela abre os brutos do cliente, monta o corte, renderiza e **levanta a mão ✋**
 
 <br/>
 
-<img src="docs/img/escritorio-pixel.jpg" alt="Escritório em pixel art isométrica e andar aberto: recepção, redação, gerência, copa e design sem paredes entre si, sala de reunião e ilha de vídeo fechadas e funcionários de IA nas mesas" width="100%"/>
+<img src="docs/img/escritorio-real.jpg" alt="Print real do escritório em pixel art isométrica: menu lateral, andar aberto com mesas, estúdio escuro, copa e minimapa (nomes da equipe borrados)" width="100%"/>
 
 <img src="docs/img/modo-decorar.jpg" alt="Modo Decorar: catálogo de móveis na parte de baixo, com a peça escolhida seguindo o cursor sobre a grade do piso" width="100%"/>
 
@@ -63,12 +63,14 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 <td width="50%" valign="top">
 
 ### 🤖 Funcionários de IA
-- **Um funcionário = uma sessão do Claude Code headless, sempre de um cliente ou projeto.** Ele ganha um nome de uma lista de 50 (Vic, Duda, Theo, Luna, Nico…), o selo **IA** e trabalha só naquele cliente, na pasta dele, com o seu `CLAUDE.md` e todas as skills da casa. Não há mais funcionário por função
-- **Titular**: a conversa contínua do cliente, com memória de um dia para o outro. **Trocar de funcionário** arquiva o titular com o histórico dele e o próximo pedido chama outro
+- **Um funcionário = uma sessão do Claude Code headless, sempre de um cliente.** Ele ganha um nome de uma lista de 50 (Ravi, Zoe, Sabrina, Luna, Nico…), o selo **IA** e trabalha só naquele cliente, na pasta dele, com o `CLAUDE.md` do cliente e **todas** as skills da casa. Não há funcionário por função: design, vídeo e copy usam o mesmo perfil, porque todos teriam as mesmas skills
+- **Sessões por demanda**: dentro do cliente você vê a lista de sessões abertas, cria uma **Nova sessão** com nome (e, se quiser, levando o resumo da anterior) e várias rodam ao mesmo tempo. No mapa aparece **um avatar por cliente**, não um por sessão
+- **Memória do cliente**: uma sessão não vê a conversa da outra; o que passa entre elas é o `CLAUDE.md` do cliente. Correção que vale além da peça ("essa cliente não usa vermelho") vai para a memória na hora, e **arquivar** uma sessão grava antes a memória e um resumo em `DOCUMENTOS\CONVERSAS`
+- **Funcionários fixos da agência**: só a gerente (Rafa) e a prospecção (Nina, que monta listas de leads para a SDR)
 - **Ajudante com permissão**: quando uma parte pode andar em paralelo, o funcionário pede um ajudante (tarefa e motivo); qualquer pessoa da equipe aprova na conversa ou na Mesa. Ele trabalha em sessão própria, devolve o resumo para quem pediu e é arquivado ao terminar. No máximo 50 funcionários ativos e 2 ajudantes por cliente
-- **Virada de mês**: no começo do mês o titular escreve a passagem de bastão (`PASSAGEM AAAA-MM.md` nos documentos do cliente) e outro funcionário assume lendo ela. Dá para virar na hora pela aba Equipe do cliente
+- **Virada de mês**: no começo do mês o titular escreve a passagem de bastão (`PASSAGEM AAAA-MM.md` nos documentos do cliente) e outro funcionário assume lendo ela
 - **No mapa**, o funcionário trabalha na sala do tipo de trabalho, digita ⌨️ e ganha anel amarelo quando precisa de você; parado, espera na copa
-- **Equipe** na barra lateral: pessoas (selo Humano, com conversa direta entre elas) e funcionários de IA (selo IA e o cliente), com o contador `IA n/50`. Na tela de cada cliente, a aba Equipe mostra titular, ajudantes e quem já trabalhou ali
+- **Equipe** na barra lateral: pessoas (selo Humano, com conversa direta entre elas) e funcionários de IA (selo IA e o cliente), com o contador `IA n/50`
 - A **revisão pela IA** (aprovação configurável por cliente) é uma função do sistema, sem nome: lê as peças sem o histórico de quem fez
 - Você responde pelo chat e ele **continua a mesma sessão**; mensagens enviadas com ele trabalhando entram juntas quando ele termina a parte atual
 - **Vários clientes ao mesmo tempo**: cada cliente tem a própria conversa, e até `OFFICE_MAX_JOBS` tarefas (padrão 4) rodam juntas. Só o que disputa a máquina espera a vez: vídeo renderiza um por vez e o **Chrome** (tunning, downloads) é de um cliente por vez. O resto do design dos outros clientes segue em paralelo, e quem está esperando vê o motivo no chat
@@ -128,11 +130,11 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
   prévia de imagem, vídeo, áudio, PDF e texto. Editar um PDF vira uma tarefa para o funcionário com o PdfCraft
 
 ### 🧾 Clientes
-- **Tela do cliente** com topo enxuto e abas (Conversa, Sessões, Briefing, Demandas, Arquivos). A barra lateral recolhe para só ícones (<kbd>Ctrl</kbd>+<kbd>B</kbd>) e a lista de clientes vira uma coluna estreita.
-- **Uma conversa contínua por cliente**: pedidos, correções e aprovações na mesma conversa, com memória de um dia para o outro. Digite `/` para os comandos, que são as skills do escritório (`/start-conteudo`). **Nova conversa** começa do zero. Cada mensagem mostra quem pediu.
+- **Tela do cliente** com topo enxuto e abas (Conversa, Histórico, Briefing, Demandas, Arquivos). A barra lateral recolhe para só ícones (<kbd>Ctrl</kbd>+<kbd>B</kbd>) e a lista de clientes vira uma coluna estreita.
+- **Conversa com coluna de sessões**: à esquerda as sessões abertas do cliente (renomear, arquivar, nova sessão), à direita a conversa da escolhida. Pedidos, correções e aprovações seguem na mesma sessão. Digite `/` para os comandos, que são as skills do escritório (`/start-conteudo`). Cada mensagem mostra quem pediu.
 - **Mensagens com o funcionário trabalhando entram na fila**: várias seguidas se juntam e ele recebe todas quando termina a parte em que está, sem perder o que fez. Para cortar na hora, o menu de envio tem **Parar e corrigir agora**.
 - **Abrir a pasta** do cliente vai direto à pasta dele no Drive (ou à local, se não houver).
-- **Sessões do cliente**: o botão **Sessões** lista as conversas do Office e as que você abriu no terminal (Claude Code) na pasta do cliente. Leia qualquer uma e continue de onde parou, no Office.
+- **Histórico**: a aba lista as conversas arquivadas do Office e as que você abriu no terminal (Claude Code) na pasta do cliente. Leia qualquer uma e retome como sessão nova, no Office.
 - **Demanda pelo mapa**: chegue perto de um funcionário e aperte <kbd>E</kbd>, ou use **Nova demanda** no topo. Escolha cliente, pedido, processo, prazo e quem faz, e a sessão do cliente já começa.
 - **Importar da pasta** lista o que já existe em `CLIENTES\` e ainda não é cliente no Office, sem criar, mover nem renomear nada lá. Atalhos para o Drive e pastas antigas com o mesmo nome da pasta do Drive não viram cliente repetido. Opcionalmente, o gerente lê cada pasta e preenche um rascunho do briefing para a equipe conferir.
 - **Cliente novo** cria a pasta no padrão da casa (`CLIENTES\<NOME>` com REDES SOCIAIS e ARQUIVOS – NOME); só cria
@@ -226,7 +228,9 @@ npx tsx packages/video-engine/src/cli.ts exportar timeline.json otio         # o
 
 ## 🧠 Como um funcionário de IA trabalha
 
-<img src="docs/img/funcionario-ia.jpg" alt="Painel do funcionário Theo com histórico da tarefa, ferramentas usadas e resumo final" width="100%"/>
+<img src="docs/img/sessoes-cliente.jpg" alt="Tela do cliente: lista de clientes, coluna de sessões com Nova sessão e a conversa da sessão escolhida com o funcionário de IA (nomes e conversa borrados)" width="100%"/>
+
+<sub>Print real do app; nomes de clientes, da equipe e a conversa estão borrados.</sub>
 
 ```mermaid
 sequenceDiagram
@@ -234,36 +238,50 @@ sequenceDiagram
   participant Office
   participant Claude as Claude Code (headless)
   participant Pasta as Pasta do cliente
-  Você->>Office: 🤖 Delegar "Reels do depoimento" para a Vic
-  Office->>Claude: claude -p --output-format stream-json (cwd = pasta do escritório)
-  Claude->>Pasta: lê CLAUDE.md, skills, brutos e referências
+  Você->>Office: Nova sessão "Reels do depoimento" no cliente
+  Office->>Claude: claude -p --output-format stream-json (cwd = pasta do cliente)
+  Claude->>Pasta: lê CLAUDE.md (memória do cliente), skills, brutos e referências
   Claude-->>Office: ⌨️ ferramentas e mensagens em tempo real
   Claude-->>Office: "Escolhi estes 3 takes" + [[AGUARDANDO_APROVACAO]]
-  Office-->>Você: ✋ a Vic precisa de você
+  Office-->>Você: ✋ o funcionário precisa de você
   Você->>Office: "Aprovado, pode seguir"
   Office->>Claude: --resume (mesma sessão)
   Claude->>Pasta: timeline.json → office-render → reels_v1.mp4
   Office-->>Você: ✅ demanda vai para "Aprovação"
 ```
 
-Os funcionários são **arquivos Markdown** em [`agents/`](agents/). Para criar um novo (social media, tráfego pago,
-roteirista, atendimento...), copie um arquivo, escreva a persona e liste as skills e as ferramentas permitidas.
+Os perfis são **arquivos Markdown** em [`agents/`](agents/): `sessao.md` (o trabalho de cliente), `gerente.md` e
+`prospeccao.md`, mais as regras que valem para todos em `_regras-da-casa.md`. Para um perfil novo, copie um arquivo,
+escreva a persona e liste as skills e as ferramentas permitidas.
+
+### ⚡ Contexto e custo
+
+- **Só o necessário em cada sessão**: o funcionário roda com `--strict-mcp-config` e recebe apenas os servidores MCP do
+  Office. Os que estão instalados na máquina ou na conta (Notion, Drive, engenharia reversa…) não entram, porque a lista de
+  ferramentas deles pesava milhares de tokens e era reenviada a cada passo.
+- **Ferramentas sob demanda**: servidores pesados ficam numa lista (`apps/server/src/agents/ondemand.ts`) e só ligam no
+  pedido que os cita pelo nome, com a configuração do Claude Code da máquina. Hoje: o REA (engenharia reversa), com
+  "usa o REA para analisar esse app".
+- **Conversa cheia é resumida e segue**, como no terminal: ao passar de 200 mil tokens o Claude Code compacta e o trabalho
+  continua. Você troca de sessão quando quiser.
+- **Skills leves**: em toda sessão entra só o nome e a descrição de cada skill; o conteúdo carrega quando o pedido precisa.
+  Skill de fora entra como texto, nunca com hook que rode a cada passo.
 
 ### 🧰 Ferramentas criativas (MCP)
 
 Programas open source que os funcionários operam por MCP, sem interface ou **ao vivo**, com o app aberto na tela:
 
-| Ferramenta | No lugar do | Quem usa | O que faz | Ao vivo |
+| Ferramenta | No lugar do | Para | O que faz | Ao vivo |
 |---|---|---|---|---|
-| [PhotoCraft](https://github.com/storytold/photocraft) | Photoshop | Duda | Imagens e PSD com camadas, máscaras, ajustes e exportação | ✅ |
-| [VectorCraft](https://github.com/storytold/vectorcraft) | Illustrator | Duda | SVG, PDF e `.ai`: logos, ícones e layouts | ✅ |
-| [LightCraft](https://github.com/storytold/lightcraft) | Lightroom | Duda | Tratamento de foto sem tocar no original, presets, exportação em lote | ✅ |
-| [DesignCraft](https://github.com/storytold/designcraft) | InDesign | Duda | Diagramação: carrosséis, materiais e PDF | ✅ |
-| [FilmCraft](https://github.com/storytold/filmcraft) | Premiere | Vic | Edição de vídeo: sequência, cortes, cor, mixagem, legendas e exportação | ✅ |
-| [EffectCraft](https://github.com/storytold/effectcraft) | After Effects | Vic | Motion graphics, títulos e legendas animadas | ✅ |
-| [SoundCraft](https://github.com/storytold/soundcraft) | Pro Tools | Vic | Áudio: limpar voz, mixar trilha, loudness | ✅ |
-| [PdfCraft](https://github.com/storytold/pdfcraft) | Acrobat | Theo e Rafa | Ler, anotar, juntar, dividir e preencher PDF | |
-| [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) | Word, Excel e PowerPoint | Theo e Rafa | Cria e edita DOCX, XLSX e PPTX | |
+| [PhotoCraft](https://github.com/storytold/photocraft) | Photoshop | design | Imagens e PSD com camadas, máscaras, ajustes e exportação | ✅ |
+| [VectorCraft](https://github.com/storytold/vectorcraft) | Illustrator | design | SVG, PDF e `.ai`: logos, ícones e layouts | ✅ |
+| [LightCraft](https://github.com/storytold/lightcraft) | Lightroom | foto | Tratamento de foto sem tocar no original, presets, exportação em lote | ✅ |
+| [DesignCraft](https://github.com/storytold/designcraft) | InDesign | design | Diagramação: carrosséis, materiais e PDF | ✅ |
+| [FilmCraft](https://github.com/storytold/filmcraft) | Premiere | vídeo | Edição de vídeo: sequência, cortes, cor, mixagem, legendas e exportação | ✅ |
+| [EffectCraft](https://github.com/storytold/effectcraft) | After Effects | vídeo | Motion graphics, títulos e legendas animadas | ✅ |
+| [SoundCraft](https://github.com/storytold/soundcraft) | Pro Tools | vídeo | Áudio: limpar voz, mixar trilha, loudness | ✅ |
+| [PdfCraft](https://github.com/storytold/pdfcraft) | Acrobat | documentos | Ler, anotar, juntar, dividir e preencher PDF | |
+| [OfficeCLI](https://github.com/iOfficeAI/OfficeCLI) | Word, Excel e PowerPoint | documentos | Cria e edita DOCX, XLSX e PPTX | |
 
 - Em **Equipe → Ferramentas criativas** o dono do escritório vê o que está instalado e clica em **Instalar**: o Office baixa o
   release oficial do GitHub, **confere o SHA256 publicado** e guarda em `%LOCALAPPDATA%\Office\tools\<ferramenta>\<versão>`
@@ -274,7 +292,7 @@ Programas open source que os funcionários operam por MCP, sem interface ou **ao
 
 #### 🔴 Modo ao vivo: a IA trabalha no app de verdade
 
-Com **ao vivo** ligado (padrão: PhotoCraft da Duda e FilmCraft do Vic), a tarefa abre o app na tela do computador que roda o
+Com **ao vivo** ligado (padrão: PhotoCraft e FilmCraft), a tarefa abre o app na tela do computador que roda o
 Office, com um canal de controle local e um token novo por sessão, e o servidor MCP vira uma **ponte para a janela**. É o
 diretor de arte e o estagiário: a IA edita, você assiste e pega o mouse quando quiser.
 
