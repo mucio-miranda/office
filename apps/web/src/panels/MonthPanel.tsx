@@ -8,6 +8,8 @@ import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { usePersisted } from '../lib/persisted';
 import { desktop } from '../lib/desktop';
+import { usePad } from '../lib/gamepad';
+import { openPadPicker } from '../lib/PadPicker';
 
 /**
  * Gestão mensal do squad: cada cliente com as quatro etapas do mês (ensaio, conteúdo feito, aprovado, programado) e,
@@ -157,6 +159,20 @@ function MonthOrganizer({ row, mes, label, onBack, onShift }: { row: MonthRow; m
       await api(`${url}/atribuir`, { body: { files: p.files, date, format: p.format, theme: p.theme, posted: p.posted } });
     } catch (e) { notify((e as Error).message); }
   };
+  /** o arrastar do controle: escolher o dia do mês (ou tirar do calendário) numa lista */
+  const movePiece = (p: MonthPiece) => {
+    const inMonth = days.filter((x) => ym(x) === mes).map(ymd);
+    const WD = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+    openPadPicker({
+      title: `Mover ${p.theme || 'peça'} para`,
+      current: p.date ?? null,
+      items: [
+        ...(p.date ? [{ label: 'Tirar do calendário', value: '' }] : []),
+        ...inMonth.map((v) => { const x = new Date(`${v}T12:00`); return { label: `${WD[x.getDay()]} ${v.slice(8)}/${v.slice(5, 7)}`, value: v, hint: postDays.includes(x.getDay()) ? 'dia de post' : undefined }; }),
+      ],
+      onPick: (v) => { if ((v || null) !== (p.date ?? null)) assign(p, v || null); },
+    });
+  };
   const apply = async () => {
     try {
       const r = await api<{ id: string | null; renamed: RenamePlan[]; skipped: string[] }>(`${url}/aplicar`, { body: {} });
@@ -185,6 +201,9 @@ function MonthOrganizer({ row, mes, label, onBack, onShift }: { row: MonthRow; m
       <div
         className={`piece ${small ? 'sm' : ''} ${p.posted ? 'posted' : ''} ${p.loose && !p.postId ? 'loose' : ''}`} draggable={can}
         onDragStart={(e) => { setDrag(p); e.dataTransfer.effectAllowed = 'move'; }} onDragEnd={() => setDrag(null)}
+        // controle de videogame não arrasta: A na peça abre "mover para o dia"
+        tabIndex={can ? 0 : undefined}
+        onClick={() => { if (can && usePad.getState().active) movePiece(p); }}
         title={`${p.files.map(base).join('\n')}${p.posted ? '\n(postado)' : ''}`}
       >
         <div className="thumb">

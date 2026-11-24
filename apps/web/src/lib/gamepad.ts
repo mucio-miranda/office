@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { openPadPicker } from './PadPicker';
 
 /**
  * Controle de videogame (Xbox, PlayStation e genéricos): o Chromium entrega todos no layout padrão, então o mapa
@@ -170,20 +171,11 @@ export function padPointerUp() {
   // clique só se soltou em cima do mesmo lugar (como o mouse)
   if (under && (under === t || t.contains(under) || under.contains(t))) {
     fire(under, 'click', MouseEvent);
+    // seletor, data, cor...: o clique simulado não abre o menu nativo, então abre a lista do Office
+    padActivate(under);
   }
 }
 export const padPressing = () => !!pressTarget;
-
-/** A com a seta na tela: clica (ou põe o foco no campo) onde ela está. Devolve se usou a seta. */
-export function clickPadCursor() {
-  if (!padCursorOn()) return false;
-  const target = (document.elementFromPoint(padCursor.x, padCursor.y) as HTMLElement | null)?.closest<HTMLElement>(CLICKABLE);
-  if (!target) return true;
-  if (target instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'submit'].includes(target.type) || target instanceof HTMLTextAreaElement) target.focus();
-  else { target.focus({ preventScroll: true }); target.click(); }
-  padCursor.shownAt = performance.now();
-  return true;
-}
 
 /** Manda uma tecla para o elemento com foco (a busca e as listas já sabem tratar setas, Enter e Esc). */
 export function sendKey(key: string) {
@@ -211,13 +203,157 @@ export function closeTopLayer() {
   return true;
 }
 
-/** Lista de opções com foco: setas para os lados trocam a opção (o React vê como se a pessoa tivesse escolhido). */
-export function stepSelect(delta: number) {
+/* ---------- campos que o Chromium só abre com clique de verdade: seletor, data, hora, mês, cor, arquivo ---------- */
+
+const PICKABLE = 'select, input[type="date"], input[type="time"], input[type="datetime-local"], input[type="month"], input[type="color"], input[type="file"]';
+/** O campo com menu nativo em (ou em volta de) um elemento, se houver. */
+export const pickableOf = (el: Element | null) => (el?.closest(PICKABLE) as HTMLInputElement | HTMLSelectElement | null) ?? null;
+
+/** Troca o valor como se a pessoa tivesse escolhido: o React só vê a mudança pelo setter nativo e pelos eventos. */
+function setValue(el: HTMLInputElement | HTMLSelectElement, v: string) {
+  const proto = el instanceof HTMLSelectElement ? HTMLSelectElement.prototype : HTMLInputElement.prototype;
+  Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(el, v);
+  el.dispatchEvent(new Event('input', { bubbles: true }));
+  el.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
+const pad2 = (n: number) => String(n).padStart(2, '0');
+const isoDay = (d: Date) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
+const dayOf = (s: string) => { const [y, m, d] = s.split('-').map(Number); return new Date(y, (m || 1) - 1, d || 1); };
+const addDays = (s: string, n: number) => { const d = dayOf(s); d.setDate(d.getDate() + n); return isoDay(d); };
+const addMonths = (s: string, n: number) => { const [y, m] = s.split('-').map(Number); const d = new Date(y, m - 1 + n, 1); return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`; };
+const WEEK = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+const MONTHS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const dayLabel = (s: string) => { const d = dayOf(s); const t = isoDay(new Date()); const rel = s === t ? ' · hoje' : s === addDays(t, 1) ? ' · amanhã' : ''; return `${WEEK[d.getDay()]} ${pad2(d.getDate())}/${pad2(d.getMonth() + 1)}${d.getFullYear() !== new Date().getFullYear() ? `/${d.getFullYear()}` : ''}${rel}`; };
+const toMin = (t: string) => { const [h, m] = t.split(':').map(Number); return (h || 0) * 60 + (m || 0); };
+const fromMin = (n: number) => `${pad2(Math.floor(((n % 1440) + 1440) % 1440 / 60))}:${pad2(((n % 60) + 60) % 60)}`;
+const COLORS = ['#ffffff', '#000000', '#1f1f1f', '#7a7a7a', '#ff5c8a', '#e5484d', '#ff7a45', '#ffb020', '#f5d90a', '#22c3a6', '#3fae49', '#3fa7ff', '#3b82f6', '#7c5cff', '#9b5de5', '#8b5a2b'];
+
+const dayItems = (base: string) => {
+  const today = isoDay(new Date());
+  const start = addDays(base < today ? base : today, -7);
+  return Array.from({ length: 75 }, (_, i) => { const v = addDays(start, i); return { label: dayLabel(v), value: v }; });
+};
+const timeItems = () => Array.from({ length: 48 }, (_, i) => { const v = fromMin(i * 30); return { label: v, value: v }; });
+/** horário da lista mais perto do atual (a lista anda de meia em meia hora) */
+const nearTime = (t: string) => fromMin(Math.round(toMin(t || '09:00') / 30) * 30);
+
+/**
+ * A do controle num desses campos: abre a lista de opções do Office no lugar do menu nativo.
+ * Devolve se era um desses campos.
+ */
+export function padActivate(target: Element | null) {
+  const el = pickableOf(target);
+  if (!el || el.disabled) return false;
+  // título: o rótulo do campo, só o texto dele (sem as opções que ficam dentro do <label>)
+  const label = el.closest('label');
+  const own = label ? [...label.childNodes].filter((n) => n.nodeType === Node.TEXT_NODE).map((n) => n.textContent).join(' ').trim() : '';
+  const title = (el.getAttribute('aria-label') || own || el.getAttribute('title') || '').slice(0, 60);
+  if (el instanceof HTMLSelectElement) {
+    openPadPicker({
+      title: title || 'Escolher', current: el.value,
+      items: [...el.options].filter((o) => !o.hidden).map((o) => ({ label: o.label || o.text, value: o.value, disabled: o.disabled })),
+      onPick: (v) => setValue(el, v),
+    });
+    return true;
+  }
+  const today = isoDay(new Date());
+  switch (el.type) {
+    case 'date': {
+      const base = el.value || today;
+      openPadPicker({ title: title || 'Dia', current: el.value || today, items: [...dayItems(base), ...(el.required ? [] : [{ label: 'Sem data', value: '' }])], onPick: (v) => setValue(el, v) });
+      return true;
+    }
+    case 'time':
+      openPadPicker({ title: title || 'Horário', current: nearTime(el.value), items: timeItems(), onPick: (v) => setValue(el, v) });
+      return true;
+    case 'datetime-local': {
+      const [d0, t0] = (el.value || `${today}T09:00`).split('T');
+      openPadPicker({
+        title: title || 'Dia', current: d0, items: dayItems(d0),
+        onPick: (d) => setTimeout(() => openPadPicker({ title: `${dayLabel(d)}: horário`, current: nearTime(t0), items: timeItems(), onPick: (t) => setValue(el, `${d}T${t}`) }), 0),
+      });
+      return true;
+    }
+    case 'month': {
+      const base = el.value || today.slice(0, 7);
+      const items = Array.from({ length: 25 }, (_, i) => { const v = addMonths(base, i - 12); const [y, m] = v.split('-').map(Number); return { label: `${MONTHS[m - 1]} ${y}`, value: v }; });
+      openPadPicker({ title: title || 'Mês', current: base, items, onPick: (v) => setValue(el, v) });
+      return true;
+    }
+    case 'color': {
+      const cur = el.value.toLowerCase();
+      const items = [...(COLORS.includes(cur) ? [] : [cur]), ...COLORS].map((c) => ({ label: c, value: c, swatch: c }));
+      openPadPicker({ title: title || 'Cor', current: cur, items, onPick: (v) => setValue(el, v) });
+      return true;
+    }
+    case 'file':
+      openPadPicker({
+        title: 'Escolher arquivo', note: 'A janela de arquivos do Windows não funciona com o controle. Use o mouse, ou arraste o arquivo para esta tela.',
+        items: [{ label: 'Entendi', value: '' }], onPick: () => {},
+      });
+      return true;
+  }
+  return false;
+}
+
+/**
+ * Direcional para os lados num campo com foco: troca a opção do seletor, um dia na data, um mês no mês e meia hora no
+ * horário (o React vê como se a pessoa tivesse escolhido). Devolve se havia um campo desses.
+ */
+export function stepField(delta: number) {
   const el = document.activeElement;
-  if (!(el instanceof HTMLSelectElement) || el.disabled) return false;
-  const i = Math.min(el.options.length - 1, Math.max(0, el.selectedIndex + delta));
-  if (i !== el.selectedIndex) { el.selectedIndex = i; el.dispatchEvent(new Event('change', { bubbles: true })); }
-  return true;
+  if (el instanceof HTMLSelectElement) {
+    if (el.disabled) return false;
+    let i = el.selectedIndex;
+    do i += delta; while (i >= 0 && i < el.options.length && el.options[i].disabled);
+    if (i >= 0 && i < el.options.length && i !== el.selectedIndex) setValue(el, el.options[i].value);
+    return true;
+  }
+  if (!(el instanceof HTMLInputElement) || el.disabled) return false;
+  const today = isoDay(new Date());
+  if (el.type === 'date') { setValue(el, addDays(el.value || today, el.value ? delta : 0)); return true; }
+  if (el.type === 'month') { setValue(el, addMonths(el.value || today.slice(0, 7), el.value ? delta : 0)); return true; }
+  if (el.type === 'time') { setValue(el, fromMin(toMin(nearTime(el.value)) + (el.value ? delta * 30 : 0))); return true; }
+  if (el.type === 'datetime-local') { const [d, t] = (el.value || `${today}T09:00`).split('T'); setValue(el, `${el.value ? addDays(d, delta) : d}T${t.slice(0, 5)}`); return true; }
+  return false;
+}
+
+/**
+ * A nos painéis: clica no que está sob a seta (ou no foco), abre a lista nos campos com menu nativo e, se for o segundo
+ * A em seguida no mesmo lugar, manda também o clique duplo. Devolve o elemento clicado.
+ */
+let lastPress = { t: 0, el: null as Element | null };
+export let pressedEl: Element | null = null;
+export function padPress(focusEl: HTMLElement | null, typingNow: boolean) {
+  let target: HTMLElement | null = null;
+  if (padCursorOn()) {
+    target = (document.elementFromPoint(padCursor.x, padCursor.y) as HTMLElement | null)?.closest<HTMLElement>(CLICKABLE) ?? null;
+    padCursor.shownAt = performance.now();
+    if (!target) return null;
+  } else if (focusEl && focusEl !== document.body && (!typingNow || pickableOf(focusEl))) target = focusEl;
+  if (!target) return null;
+  pressedEl = target;
+  if (pickableOf(target)) { target.focus({ preventScroll: true }); padActivate(target); return target; }
+  if (target instanceof HTMLInputElement && !['checkbox', 'radio', 'button', 'submit'].includes(target.type) || target instanceof HTMLTextAreaElement) { target.focus(); return target; }
+  target.focus({ preventScroll: true });
+  target.click();
+  const now = performance.now();
+  if (lastPress.el === target && now - lastPress.t < 400) {
+    target.dispatchEvent(new MouseEvent('dblclick', { bubbles: true, cancelable: true, detail: 2 }));
+    lastPress = { t: 0, el: null };
+  } else lastPress = { t: now, el: target };
+  return target;
+}
+
+/** A segurado (meio segundo ou mais) nos painéis: o "botão direito" no que foi apertado. */
+export const LONG_PRESS_MS = 550;
+export function padContextMenu() {
+  const el = pressedEl;
+  pressedEl = null;
+  if (!el || !el.isConnected) return;
+  const r = el.getBoundingClientRect();
+  el.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, cancelable: true, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, button: 2 }));
 }
 
 /** Rola a área com rolagem em volta do foco (ou a maior da página) pelo analógico direito. */

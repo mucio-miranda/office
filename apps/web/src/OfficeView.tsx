@@ -12,8 +12,9 @@ import { useStore, type PanelId } from './lib/store';
 import { World, workerSpots, cam, player, recenter, goTo, goToAgent, goToPerson, goToMyDesk, releaseMyDesk, myDesk, type Nearby } from './office/World';
 import { LabelLayer } from './office/Labels';
 import { resetView, rotateView, tiltView, useLabelMode, LABEL_MODES, useOnlyWorking } from './office/view';
-import { HOLD_MS, padPointerDown, padPointerMove, padPointerUp, padPressing, clickPadCursor, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepSelect, usePad, type PadButton } from './lib/gamepad';
+import { HOLD_MS, LONG_PRESS_MS, padPointerDown, padPointerMove, padPointerUp, padPressing, padPress, padContextMenu, pickableOf, closeTopLayer, hidePadCursor, movePadCursor, moveFocus, pad, padCursorOn, rumble, scrollFocusArea, sendKey, startGamepad, stepField, usePad, type PadButton } from './lib/gamepad';
 import { PadHints } from './lib/PadHints';
+import { PadPicker, usePadPicker } from './lib/PadPicker';
 import { Tour, startTour, tourSeen } from './office/Tour';
 import { HUMAN_DESKS, ROOMS, BOUNDS, isFixedAgent, roomCenter } from './office/layout';
 import { Pages, PAGE_TITLE } from './panels/Panels';
@@ -132,10 +133,9 @@ export function OfficeView() {
       const typingNow = !!el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') && !['checkbox', 'radio', 'button', 'submit'].includes((el as HTMLInputElement).type);
       // B: sai do campo; senão fecha a janela de cima; senão volta para o mapa
       if (b === 'B') { if (typingNow) el!.blur(); else if (!closeTopLayer()) open(null); return; }
-      if ((b === 'LEFT' || b === 'RIGHT') && stepSelect(b === 'LEFT' ? -1 : 1)) return;
+      if ((b === 'LEFT' || b === 'RIGHT') && !usePadPicker.getState().onPick && stepField(b === 'LEFT' ? -1 : 1)) return;
       if (dir) { hidePadCursor(); moveFocus(dir); return; }
-      if (b === 'A' && clickPadCursor()) return;
-      if (b === 'A' && el && el !== document.body && !typingNow) el.click();
+      if (b === 'A') padPress(el, typingNow);
       return;
     }
     if (b === 'A') { near?.action(); return; }
@@ -154,6 +154,8 @@ export function OfficeView() {
     }
   }, (b, held) => {
     if (b === 'A' && padPressing()) { padPointerUp(); return; }
+    // A segurado num painel: o "botão direito" (ex.: nota numa etapa da Gestão do mês)
+    if (b === 'A' && held >= LONG_PRESS_MS && !padCtx.current.inWorld && !usePadPicker.getState().onPick) { padContextMenu(); return; }
     if ((b === 'LB' || b === 'RB') && held < HOLD_MS && padCtx.current.inWorld && !useDecor.getState().editing) rotateView(b === 'LB' ? -1 : 1);
   }), [open]);
   // analógico direito com um painel aberto: rola a página
@@ -184,12 +186,27 @@ export function OfficeView() {
     if (s.workers.some((w) => w.state === 'aguardando' && prev.workers.find((p) => p.id === w.id)?.state !== 'aguardando')) rumble(220, 0.6);
   }), []);
   const padMouse = usePad((s) => s.mouse);
-  const padItems: { b: PadButton[]; label: string }[] = palette
+  const picking = usePadPicker((s) => !!s.onPick);
+  // campo com menu nativo no foco (seletor, data...): a dica mostra como abrir e trocar
+  const [fieldFocus, setFieldFocus] = useState<'select' | 'step' | 'other' | null>(null);
+  useEffect(() => {
+    const on = () => {
+      const el = pickableOf(document.activeElement);
+      setFieldFocus(!el ? null : el instanceof HTMLSelectElement ? 'select' : ['date', 'time', 'month', 'datetime-local'].includes(el.type) ? 'step' : 'other');
+    };
+    addEventListener('focusin', on); addEventListener('focusout', on);
+    return () => { removeEventListener('focusin', on); removeEventListener('focusout', on); };
+  }, []);
+  const padItems: { b: PadButton[]; label: string }[] = picking
+    ? [{ b: ['UP', 'DOWN'], label: 'Escolher' }, { b: ['A'], label: 'Confirmar' }, { b: ['B'], label: 'Fechar' }]
+    : palette
     ? [{ b: ['UP', 'DOWN'], label: 'Escolher' }, { b: ['A'], label: 'Abrir' }, { b: ['B'], label: 'Fechar' }]
     : padMouse || decorating
       ? [{ b: ['LS'], label: 'Mover a seta' }, { b: ['A'], label: 'Clicar (segure para arrastar)' }, ...(decorating ? [{ b: ['X'] as PadButton[], label: 'Girar peça' }] : []), { b: ['B'], label: 'Voltar' }, ...(decorating ? [] : [{ b: ['BACK'] as PadButton[], label: 'Sair do modo mouse' }])]
     : !inWorld
-      ? [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['LS'], label: 'Cursor' }, { b: ['A'], label: 'Selecionar' }, { b: ['B'], label: 'Voltar' }, { b: ['RS'], label: 'Rolar' }, { b: ['Y'], label: 'Buscar' }]
+      ? fieldFocus
+        ? [{ b: ['A'], label: 'Abrir a lista' }, ...(fieldFocus !== 'other' ? [{ b: ['LEFT', 'RIGHT'] as PadButton[], label: fieldFocus === 'select' ? 'Trocar a opção' : 'Voltar ou avançar' }] : []), { b: ['UP', 'DOWN'], label: 'Navegar' }, { b: ['B'], label: 'Voltar' }]
+        : [{ b: ['UP', 'DOWN', 'LEFT', 'RIGHT'], label: 'Navegar' }, { b: ['LS'], label: 'Cursor' }, { b: ['A'], label: 'Selecionar (2×: duplo · segure: mais)' }, { b: ['B'], label: 'Voltar' }, { b: ['RS'], label: 'Rolar' }, { b: ['Y'], label: 'Buscar' }]
       : [
         ...(nearby ? [{ b: ['A'] as PadButton[], label: nearby.label }] : []),
         ...(nearby?.alt ? [{ b: ['X'] as PadButton[], label: nearby.alt.label }] : []),
@@ -253,6 +270,7 @@ export function OfficeView() {
       </main>
       {palette && <Palette onClose={() => setPalette(false)} />}
       <PadHints items={padItems} />
+      <PadPicker />
       <NewDemandHost />
       {toast && <ToastView />}
     </div>

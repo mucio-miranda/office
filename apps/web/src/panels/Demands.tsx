@@ -93,7 +93,7 @@ export function Demands() {
                 const who = assignee(d.assignee);
                 const late = d.dueDate && d.dueDate < today && d.status !== 'entregue';
                 return (
-                  <article key={d.id} className="kcard" draggable onDragStart={(e) => e.dataTransfer.setData('id', d.id)} onClick={() => setEditing(d)}>
+                  <article key={d.id} className="kcard" tabIndex={0} draggable onDragStart={(e) => e.dataTransfer.setData('id', d.id)} onClick={() => setEditing(d)}>
                     <div className="kcard-title">{d.title}</div>
                     <PostProgress demandId={d.id} />
                     {d.stage && <div className="kcard-stage"><StageTrack d={d} compact /><span>{d.auto && d.status !== 'entregue' ? <Workflow size={11} /> : null} {STAGE_LABEL[d.stage]}</span></div>}
