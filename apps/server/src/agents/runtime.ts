@@ -10,6 +10,7 @@ import { all, insert, now, one, update, logActivity } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { houseRules } from './templates.ts';
 import { mcpConfig } from './tools.ts';
+import { onDemandFor, userServers } from './ondemand.ts';
 import { openLiveForJob, releaseLiveForJob } from './live.ts';
 import { pct, recordUsage } from './usage.ts';
 import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
@@ -424,6 +425,11 @@ async function start(jobId: string, typed: string, resume: boolean) {
     mcp.hints.push('- **Office** (servidor MCP `office`): o calendário de conteúdo do cliente. Use `calendario_listar` antes de planejar ou produzir. Quando o calendário do mês for definido, registre cada post com `calendario_salvar` (data, formato, tema, número). Durante a produção, mova cada peça de etapa: referencia > composicao > tunning > conferencia > aprovado > drive > postado, com os caminhos das peças finais em `files`. O tunning é parte do design: arte só passa de conferência com `tunning: "feito"`. Só uma pessoa dispensa o tunning, pela tela: se alguém pedir sem tunning, avise que precisa ser marcado no calendário.');
     if (!isHelper) mcp.hints.push('- **Ajudante** (`pedir_ajudante`): quando uma parte do trabalho pode andar em paralelo (ex.: tratar as fotos enquanto você monta os carrosséis), peça um ajudante com a tarefa e o motivo. Uma pessoa precisa aprovar; siga com o resto enquanto isso. O resultado dele chega nesta conversa.');
     if (usesChrome) mcp.hints.push('- **Navegador dividido**: o Chrome e a pasta Downloads servem a todos os clientes. Ao usar o Chrome você pega a vez dele sozinho (às vezes espera outro cliente terminar). Adiante antes o que não precisa do Chrome (base, composição, scripts); junte o uso do navegador (tunning, downloads) num trecho só e, quando os arquivos baixados já estiverem na pasta do trabalho, chame `navegador_liberar` para outro cliente usar.');
+  }
+  // REA e outros pesados: só no pedido que os cita
+  if (!reviewer && !lean) for (const d of onDemandFor(input, userServers())) {
+    mcp.servers[d.id] = d.server as never;
+    mcp.hints.push(d.hint);
   }
   const mcpIds = Object.keys(mcp.servers);
   const sysFile = path.join(dir, 'system.md');

@@ -37,4 +37,8 @@
   **grave na memória na hora, antes de seguir**. Ao entregar um trabalho, atualize-a também, em poucas linhas (regras aprovadas, preferências, onde estão as coisas, o que
   está em andamento). Curta e sem histórico; aponte para os arquivos de referência em vez de copiar. Regra que vale para
   todos os clientes vai para a skill, não para a memória.
+- **Ferramentas sob demanda**: o REA (engenharia reversa de apps, sites e binários) fica desligado e só entra no pedido em que a
+  pessoa cita "REA" ou "engenharia reversa". Se o trabalho precisar dele, diga isso e peça para ela mandar o pedido citando.
+- **Só diga "pronto" depois de conferir**: abrir o arquivo final, rodar o teste ou ver o resultado na tela. Se não deu para
+  conferir algo, diga o quê, em vez de afirmar que funciona.
 - Ao terminar, entregue um resumo curto: o que foi feito, onde estão os arquivos e o que falta.
