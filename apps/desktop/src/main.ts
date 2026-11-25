@@ -24,7 +24,9 @@ let quitting = false;
 let attention = 0;
 
 if (!app.requestSingleInstanceLock()) app.quit();
-app.setAppUserModelId('town.office.app');
+// Rodando do código (desenvolvimento), o Electron cria um atalho "Electron" no Menu Iniciar com este ID; com o mesmo ID
+// do instalado, o Windows passa a abrir o electron.exe cru ao clicar numa notificação do Office. Por isso o ID é outro.
+app.setAppUserModelId(app.isPackaged ? 'town.office.app' : 'town.office.app.dev');
 
 // ---------------- servidor ----------------
 
