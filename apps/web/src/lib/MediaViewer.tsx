@@ -3,6 +3,7 @@ import { ChevronLeft, ChevronRight, Copy, ExternalLink, FolderOpen, Image as Ima
 import { useStore } from './store';
 import { api, mediaUrl } from './api';
 import { desktop } from './desktop';
+import { ZoomImage } from './ZoomImage';
 
 /**
  * Visualizador em tela grande: lâmina por lâmina (setas do teclado também), vídeo com player e o link do Drive de cada
@@ -51,7 +52,7 @@ export function MediaViewer({ files, title, start = 0, onClose }: { files: strin
         <div className="viewer-stage">
           {!file ? <div className="post-empty"><ImageIcon size={22} /><span className="muted small">Nenhum arquivo para mostrar.</span></div>
             : VID.test(file) ? <video key={file} src={mediaUrl(office!.id, file)} controls autoPlay />
-            : IMG.test(file) ? <img key={file} src={mediaUrl(office!.id, file)} alt={name(file)} />
+            : IMG.test(file) ? <ZoomImage key={file} src={mediaUrl(office!.id, file)} alt={name(file)} />
             : <div className="post-empty"><span className="muted small">{name(file)}: sem prévia para este tipo.</span></div>}
           {files.length > 1 && (
             <>

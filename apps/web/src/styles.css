@@ -1330,6 +1330,12 @@ label.check input { width: auto; height: auto; }
 .viewer-stage > img, .viewer-stage > video, .post-stage > img, .post-stage > video { position: absolute; inset: 0; margin: auto; width: auto; height: auto; max-width: 100%; max-height: 100%; object-fit: contain; }
 .viewer-stage > .post-empty, .post-stage > .post-empty, .post-stage > span:not(.post-count) { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
 .viewer-stage .post-nav, .post-stage .post-nav { z-index: 1; }
+.zoom-img { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; cursor: zoom-in; touch-action: none; user-select: none; }
+.zoom-img.zoomed { cursor: grab; }
+.zoom-img.zoomed:active { cursor: grabbing; }
+.zoom-img > img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; transform-origin: center; will-change: transform; }
+.zoom-bar { position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%); z-index: 2; display: flex; align-items: center; gap: 2px; padding: 2px 6px; border-radius: 999px; background: color-mix(in srgb, var(--background) 88%, transparent); border: 1px solid var(--border); box-shadow: var(--shadow); cursor: default; }
+.zoom-bar span { min-width: 44px; text-align: center; }
 
 .review-img.openable { cursor: zoom-in; }
 
