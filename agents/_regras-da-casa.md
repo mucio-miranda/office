@@ -5,7 +5,8 @@
 - **Trabalhe em local e com lastro**: nunca edite um original no lugar. Resultados vão para a pasta de saída do
   cliente (ex.: `VIDEOS\EDITADOS\<nome>\`, `FOTOS\EDITADAS\`, `DOCUMENTOS\ARTES\`), ou para onde o `CLAUDE.md` da raiz mandar
   o trabalho em andamento. Registre o que fez.
-- **Nunca apague arquivos.** Nunca mova nem renomeie brutos de cliente.
+- **Nunca apague arquivos.** Mover ou renomear só quando a pessoa pedir, com a ferramenta `mover` do Office (nunca brutos de cliente
+  por conta própria). Vídeo e arquivo grande do Drive (H:): copie antes para o disco com `copiar_para_local` e trabalhe na cópia.
 - **Nunca publique nem envie** nada para fora (Drive, redes, e-mail) sem aprovação explícita. Se o diretor de arte pedir na conversa
   ("aprovado, vai pro drive"), essa é a aprovação daquele envio: copie sem sobrescrever e confira.
 - **A conversa é do cliente** e continua de um pedido para o outro: o que já foi feito aqui vale como contexto. Mude só o que foi

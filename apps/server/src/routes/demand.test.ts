@@ -164,7 +164,7 @@ test('calendário: a pessoa e o funcionário preenchem; arte não passa de confe
   rpc(4, 'tools/call', { name: 'calendario_listar', arguments: { mes: '2026-11' } });
   await wait(() => replies.length >= 4);
   mcp.kill();
-  assert.deepEqual(replies.find((x) => x.id === 2).result.tools.map((t: any) => t.name), ['calendario_listar', 'calendario_salvar', 'posts_do_mes', 'posts_marcar_postado', 'pedir_ajudante', 'navegador_liberar']);
+  assert.deepEqual(replies.find((x) => x.id === 2).result.tools.map((t: any) => t.name), ['calendario_listar', 'calendario_salvar', 'posts_do_mes', 'posts_marcar_postado', 'pedir_ajudante', 'copiar_para_local', 'copia_status', 'mover', 'navegador_liberar']);
   assert.ok(!replies.find((x) => x.id === 3).result.isError, JSON.stringify(replies.find((x) => x.id === 3)));
   const listed = JSON.parse(replies.find((x) => x.id === 4).result.content[0].text);
   assert.equal(listed.posts.find((p: any) => p.id === mitos.id).status, 'aprovado');

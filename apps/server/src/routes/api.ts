@@ -44,6 +44,7 @@ import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { localDay, startDaily } from '../agents/daily.ts';
 import { latestUsage } from '../agents/usage.ts';
+import { copyStatus, getCopy, moveSafe, startCopy, waitCopy } from '../agents/files.ts';
 import { addPreviews, mediaInDirs, mediaPaths, previewFileOf, previewsOf } from '../agents/previews.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
 import { EXPORT_FORMATS, probe } from '@office/video-engine';
@@ -168,6 +169,27 @@ export async function api(app: FastifyInstance) {
     if (job && tool === 'navegador_liberar') { releaseBrowser(job.id); return { ok: true, texto: 'Navegador liberado para os outros clientes.' }; }
     if (job && tool === 'render_pegar') return { ok: takeRender(job) };
     if (job && tool === 'render_liberar') { releaseRender(job.id); return { ok: true }; }
+    // arquivos pelo Office: copiar do Drive para o disco (sem o limite de tempo de um comando) e mover com trava
+    if (job && (tool === 'copiar_para_local' || tool === 'copia_status' || tool === 'mover')) {
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', job.officeId)!;
+      const roots = [office.rootPath, ...(office.driveRoot ? [office.driveRoot] : []), ...office.extraDirs];
+      const q = (req.body ?? {}) as { de?: string | string[]; para?: string; id?: string; motivo?: string };
+      try {
+        if (tool === 'copiar_para_local') {
+          const c = startCopy(job.id, (Array.isArray(q.de) ? q.de : [q.de ?? '']).filter(Boolean).map(String), String(q.para ?? ''), roots);
+          logActivity(job.officeId, `agent:${job.agentId}`, 'copiou do Drive para o disco', `${c.items.length} item(ns) para ${c.dest}`);
+          return await waitCopy(c);
+        }
+        if (tool === 'copia_status') {
+          const c = getCopy(String(q.id ?? ''), job.id);
+          if (!c) return reply.code(404).send({ error: 'Cópia não encontrada nesta tarefa. Comece de novo com copiar_para_local (o que já foi copiado não é refeito).' });
+          return c.done ? copyStatus(c) : await waitCopy(c);
+        }
+        const r = moveSafe(String(q.de ?? ''), String(q.para ?? ''), roots, path.join(config.dataDir, 'movimentos.log'), `agent:${job.agentId}`);
+        logActivity(job.officeId, `agent:${job.agentId}`, 'moveu', `${r.de} > ${r.para}${q.motivo ? ` (${String(q.motivo).slice(0, 120)})` : ''}`);
+        return { ok: true, ...r };
+      } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+    }
     // prévia ao vivo: o que o comando gerou (só arquivo mexido nesta rodada, para não puxar o bruto) ou o que ele abriu
     if (job && tool === 'previa') {
       const q = (req.body ?? {}) as { texto?: string; cwd?: string };

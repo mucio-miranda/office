@@ -416,6 +416,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
       env: { ELECTRON_RUN_AS_NODE: '1', OFFICE_API: `http://127.0.0.1:${config.port}`, OFFICE_JOB_TOKEN: token },
     };
     mcp.hints.push('- **Office** (servidor MCP `office`): o calendário de conteúdo do cliente. Use `calendario_listar` antes de planejar ou produzir. Quando o calendário do mês for definido, registre cada post com `calendario_salvar` (data, formato, tema, número). Durante a produção, mova cada peça de etapa: referencia > composicao > tunning > conferencia > aprovado > drive > postado, com os caminhos das peças finais em `files`. O tunning é parte do design: arte só passa de conferência com `tunning: "feito"`. Só uma pessoa dispensa o tunning, pela tela: se alguém pedir sem tunning, avise que precisa ser marcado no calendário.');
+    mcp.hints.push('- **Arquivos do Drive** (`copiar_para_local`, `copia_status`, `mover`): vídeo bruto e arquivo grande no Drive (H:) primeiro vão para o disco com `copiar_para_local`, na pasta TMP do trabalho; ler direto do H: com ffmpeg/whisper corta no meio. Mover ou renomear só com `mover` e só quando a pessoa pedir (comandos de mover são bloqueados; não peça para ela "liberar permissão", isso não existe aqui).');
     if (!isHelper) mcp.hints.push('- **Ajudante** (`pedir_ajudante`): quando uma parte do trabalho pode andar em paralelo (ex.: tratar as fotos enquanto você monta os carrosséis), peça um ajudante com a tarefa e o motivo. Uma pessoa precisa aprovar; siga com o resto enquanto isso. O resultado dele chega nesta conversa.');
     if (usesChrome) mcp.hints.push('- **Navegador dividido**: o Chrome e a pasta Downloads servem a todos os clientes. Ao usar o Chrome você pega a vez dele sozinho (às vezes espera outro cliente terminar). Adiante antes o que não precisa do Chrome (base, composição, scripts); junte o uso do navegador (tunning, downloads) num trecho só e, quando os arquivos baixados já estiverem na pasta do trabalho, chame `navegador_liberar` para outro cliente usar.');
   }
@@ -486,7 +487,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
     // o gancho do navegador roda com o mesmo executável do Office (no app instalado, Electron em modo Node)
     const hookEnv = token ? { ELECTRON_RUN_AS_NODE: '1', OFFICE_API: `http://127.0.0.1:${config.port}`, OFFICE_JOB_TOKEN: token } : {};
     // teto de contexto: ao passar disso a conversa é resumida e segue (sem o teto ela ia a ~1 milhão de tokens, relidos a cada passo)
-    const compact = { CLAUDE_CODE_AUTO_COMPACT_WINDOW: process.env.OFFICE_COMPACT_WINDOW ?? String(COMPACT_WINDOW) };
+    // MCP_TOOL_TIMEOUT: a cópia do Drive (copiar_para_local) espera até ~4 min dentro da ferramenta
+    const compact = { CLAUDE_CODE_AUTO_COMPACT_WINDOW: process.env.OFFICE_COMPACT_WINDOW ?? String(COMPACT_WINDOW), MCP_TOOL_TIMEOUT: process.env.MCP_TOOL_TIMEOUT ?? '600000' };
     child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, ...compact, ...hookEnv, OFFICE_JOB_ID: jobId } });
   } catch (e) {
     addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o Claude Code: ${(e as Error).message}`);

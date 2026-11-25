@@ -52,6 +52,21 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { tarefa: { type: 'string', description: 'o que o ajudante deve fazer, com as pastas e arquivos de entrada e onde salvar' }, motivo: { type: 'string', description: 'por que vale a pena em paralelo' } }, required: ['tarefa', 'motivo'] },
   },
   {
+    name: 'copiar_para_local',
+    description: 'Copia arquivos ou pastas do Google Drive (H:) para o disco local antes de editar: vídeos brutos e qualquer arquivo grande. O Drive baixa enquanto lê, e um comando seu (ffmpeg, whisper, Copy-Item) cai no limite de tempo no meio de um arquivo de GB. Aqui a cópia roda no Office, em segundo plano e com retomada se o Drive falhar. Espera até ~4 min; se não terminar, devolve o id e o progresso: chame copia_status para esperar mais. Nunca apaga nem mexe no original. Copie para a pasta TMP do trabalho (C:\REZZU-TEMP\...).',
+    inputSchema: { type: 'object', properties: { de: { type: 'array', items: { type: 'string' }, description: 'caminhos completos de arquivos ou pastas' }, para: { type: 'string', description: 'pasta de destino (caminho completo)' } }, required: ['de', 'para'] },
+  },
+  {
+    name: 'copia_status',
+    description: 'Espera uma cópia de copiar_para_local (até ~4 min por chamada) e diz quanto falta ou se terminou.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
+    name: 'mover',
+    description: 'Move ou renomeia um arquivo ou pasta dentro das pastas do escritório (comandos de mover são bloqueados). Use SÓ quando a pessoa pediu nesta conversa para mover ou renomear aquilo; nunca por conta própria e nunca brutos de cliente sem o pedido dela. Não sobrescreve (se o destino existe, recusa); se `para` é uma pasta que existe, vai para dentro dela com o mesmo nome. No mesmo disco (ex.: dentro do Drive H:) é na hora, sem enviar de novo. Devolve como desfazer.',
+    inputSchema: { type: 'object', properties: { de: { type: 'string', description: 'caminho completo do que mover' }, para: { type: 'string', description: 'caminho completo do destino (pasta existente ou novo nome)' }, motivo: { type: 'string', description: 'o pedido da pessoa, em poucas palavras' } }, required: ['de', 'para', 'motivo'] },
+  },
+  {
     name: 'navegador_liberar',
     description: 'Devolve a vez do navegador (Chrome e pasta Downloads, que servem a todos os clientes). Chame quando terminar o tunning e os arquivos baixados já estiverem na pasta do trabalho. Se usar o Chrome de novo, a vez é pedida sozinha.',
     inputSchema: { type: 'object', properties: {} },
