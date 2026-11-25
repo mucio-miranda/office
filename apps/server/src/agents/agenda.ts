@@ -130,7 +130,8 @@ export function conferencePrompt(client: Client, month: string) {
     '2. Ache o @ do Instagram do cliente (no briefing, na IDV ou no CLAUDE.md da pasta). Se não achar, pare e pergunte.',
     '3. Abra o perfil no Chrome, numa aba nova, e veja os posts do mês (feed e reels). Só leitura: não curta, não comente, não siga, não mande mensagem.',
     '4. Compare cada post do perfil com as peças (olhe as imagens das peças com Read; compare arte, texto da capa e legenda). Só conta como postado se for claramente a mesma peça.',
-    '5. Para as que bateram, chame `posts_marcar_postado` com a chave da peça e o dia em que foi ao ar. O Office move os arquivos para POSTADOS sozinho.',
-    '6. No fim, responda com uma lista curta: o que marcou como postado (com o dia), o que está no perfil e não achei nas peças, e o que segue sem postar.',
+    '5. **A data vem da página do próprio post, nunca da ordem do feed.** Para cada post que bateu, abra o link dele (`/p/...` ou `/reel/...`) e leia a data ali, no `datetime` do `<time>` daquele post (ex.: `document.querySelector(\'article time, main time\')?.getAttribute(\'datetime\')`), conferindo na mesma tela que a imagem é a da peça. Não junte uma lista de datas com uma lista de miniaturas pela posição: os fixados vêm primeiro e a grade não segue a ordem do DOM, o que troca as datas. O `datetime` é UTC: converta para o horário de Brasília (UTC-3) antes de tirar o dia. Se não conseguir ler a data de um post, diga isso em vez de deduzir.',
+    '6. Para as que bateram, chame `posts_marcar_postado` com a chave da peça e esse dia. O Office move os arquivos para POSTADOS sozinho. Se a peça já estava marcada com outro dia, informe os dois (o do Office e o lido no post).',
+    '7. No fim, responda com uma lista curta: o que marcou como postado (com o dia), o que está no perfil e não achei nas peças, e o que segue sem postar.',
   ].join('\n');
 }

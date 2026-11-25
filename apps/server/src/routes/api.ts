@@ -223,7 +223,7 @@ export async function api(app: FastifyInstance) {
         const mesItem = typeof it.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(it.data) ? it.data.slice(0, 7) : mes;
         const item = agendaOf(office, mesItem, job.clientId).find((x) => x.key === it.chave) ?? agendaOf(office, mes, job.clientId).find((x) => x.key === it.chave);
         if (!item) { results.push({ chave: it.chave, ok: false, erro: 'Peça não encontrada (use a chave de posts_do_mes).' }); continue; }
-        if (item.state === 'postado') { results.push({ chave: it.chave, ok: true, ja: true }); continue; }
+        if (item.state === 'postado') { results.push({ chave: it.chave, ok: true, ja: true, diaNoOffice: item.date }); continue; }
         try {
           const r = schedule(job.officeId, job.clientId, { postId: item.postId, files: item.files, theme: item.theme, format: item.format, date: it.data ?? item.date ?? now().slice(0, 10), time: item.time, state: 'postado' }, `agent:${job.agentId}`);
           results.push({ chave: it.chave, ok: true, movidos: r.moved, avisos: r.skipped });
