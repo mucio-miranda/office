@@ -12,7 +12,21 @@ import path from 'node:path';
  */
 
 const key = (p: string) => path.resolve(p).replace(/[\\/]+$/, '').toLowerCase();
-const real = (p: string) => { try { return realpathSync.native(p); } catch { return path.resolve(p); } };
+/**
+ * Caminho real (atalhos resolvidos, nome curto "RUNNER~1" vira o longo). O que ainda não existe é resolvido pela pasta
+ * mais próxima que existe, para comparar do mesmo jeito que o resto.
+ */
+function real(p: string) {
+  let cur = path.resolve(p);
+  const rest: string[] = [];
+  while (!existsSync(cur)) {
+    const parent = path.dirname(cur);
+    if (parent === cur) return path.resolve(p);
+    rest.unshift(path.basename(cur));
+    cur = parent;
+  }
+  try { return path.join(realpathSync.native(cur), ...rest); } catch { return path.resolve(p); }
+}
 /** O caminho está dentro de uma das pastas (comparando o caminho real, por causa dos atalhos para o Drive). */
 export function inside(p: string, roots: string[]) {
   const k = key(real(p));
