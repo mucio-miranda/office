@@ -48,6 +48,13 @@ test('produção GPT usa skill, aguarda aprovação e retoma o mesmo trabalho se
     const call=(url:string,payload?:object)=>server.inject({url:base+url,method:payload?'POST':'GET',payload,headers:{host:'localhost',authorization:'Bearer '+token}});
     const w=(await call('/conversa/nova',{provider:'codex',title:'Arte'})).json();
     assert.equal(w.provider,'codex');
+    const upload = (session: string) => server.inject({ method: 'POST', url: '/api/offices/'+o.id+'/anexos?nome=v9.mp4&sessao='+session,
+      headers: { authorization: 'Bearer '+token, 'content-type': 'application/octet-stream' }, payload: Buffer.from('v9') });
+    const attachment = await upload(w.id);
+    assert.equal(attachment.statusCode,200,attachment.body);
+    assert.equal(attachment.json().path,path.join(dir,'db','importacoes',w.id,attachment.json().relativo));
+    assert.equal(readFileSync(attachment.json().path,'utf8'),'v9');
+    assert.equal((await upload('outra-sessao')).statusCode,404);
     assert.equal(ensureTitular(o.id,'c','u').provider,'claude');
     async function waitFor(status:string) {
       const deadline=Date.now()+(live?200000:12000);

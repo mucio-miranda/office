@@ -182,6 +182,27 @@ E roda **na sua máquina**: seus arquivos não saem dela, a equipe entra pela re
 </tr>
 </table>
 
+### Produção de mídia na sessão GPT
+
+**Importar arquivo local** na conversa aceita um arquivo escolhido no computador, inclusive o MP4 no temporário de outra sessão. O anexo recebe uma referência `importados` exclusiva da sessão. O GPT usa `copiar_para_local` para levá-lo ao temporário da demanda. A mesma ferramenta copia pastas inteiras do Drive e devolve o caminho local, a quantidade de arquivos e os bytes copiados. Em operações demoradas, peça execução em segundo plano e acompanhe o ID com `consultar_operacao` ou `cancelar_operacao` durante a execução.
+
+**Exportar a capa** usa o `layout.html` gerado pela skill. Informe a pasta, o caminho relativo do HTML, o nome da saída com extensão PNG ou JPG e as dimensões finais em pixels. Fotos, fontes e marcas precisam estar nas pastas autorizadas da demanda. A ferramenta abre um Chrome ou Edge local com perfil temporário, grava a imagem e devolve uma miniatura. Para conferir um JPG revelado, use `prever_foto`.
+
+**Renderizar o MP4** preserva o áudio original por padrão na ferramenta GPT. Se a timeline contém faixas de áudio separadas, escolha `keepAudio` explicitamente em cada clipe de vídeo. Use uma entrada em `audio` para cada arquivo de música, voz ou efeito que precise de revisão independente. Cada faixa aceita `ganhoDb` (−96 a +12 dB) ou `volume` linear. Um MP4 já mixado exige acesso às faixas originais para ajustar só a música. O resultado inclui as faixas de áudio, a duração, o pico e o loudness integrado medido em LUFS. Confira o aviso de saída muda antes de entregar.
+
+Exemplo de timeline para preservar a fala do vídeo, reduzir a música em 6 dB e aplicar uma sobreposição centralizada com fade. Os caminhos de entrada são relativos ao JSON. Chame `renderizar_video` com a pasta da timeline, `timeline: "edicao.json"` e `saida: "final_v2.mp4"`.
+
+```json
+{
+  "width": 1080, "height": 1920, "fps": 30,
+  "video": [{ "id": "fala", "src": "voz-e-imagem.mp4", "out": 8, "keepAudio": true }],
+  "audio": [{ "id": "musica", "src": "trilha.wav", "start": 0, "out": 8, "ganhoDb": -6, "fadeOut": 1 }],
+  "overlays": [{ "id": "marca", "src": "marca.png", "start": 0, "end": 3, "x": 0.5, "y": 0.5, "width": 0.4, "fade": 0.3 }]
+}
+```
+
+Antes de abrir o WhatsApp, `conferir_anexos` confere a leitura dos arquivos e soma seus tamanhos. A ponte do navegador e a conta do WhatsApp da máquina escolhida determinam se o envio pode prosseguir.
+
 ## 🎬 Engine de vídeo com timeline
 
 <img src="docs/img/estudio-video.jpg" alt="Estúdio de vídeo: prévia vertical, inspetor de clipe e trilhas de vídeo, legendas, sobreposições e áudio" width="100%"/>

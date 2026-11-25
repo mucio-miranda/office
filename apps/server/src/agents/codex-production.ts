@@ -5,6 +5,7 @@ import path from 'node:path';
 import type { Client, Office } from '@office/shared';
 import { clientDir, insideDir } from '../clients/folder.ts';
 import { config, REPO_ROOT } from '../config.ts';
+import { sessionImports } from './attachments.ts';
 import { codexExecutable, skillCatalog } from './codex.ts';
 
 function contains(a: string, b: string) {
@@ -13,7 +14,7 @@ function contains(a: string, b: string) {
 }
 
 export function startCodexJob(office: Office, client: Client, jobDir: string, thread: string | null, system: string,
-  request: string, token: string, lastHumanAt?: string) {
+  request: string, token: string, lastHumanAt?: string, workerId?: string | null) {
   const exe = codexExecutable();
   if (!exe) throw Error('O Codex CLI está indisponível na máquina do Office.');
   const skills = realpathSync(path.join(office.rootPath, '.claude', 'skills'));
@@ -44,7 +45,7 @@ export function startCodexJob(office: Office, client: Client, jobDir: string, th
     args.push('-c', 'mcp_servers.' + name + '={command=' + JSON.stringify(process.execPath) + ',args=' +
       JSON.stringify([path.join(sourceDir, script), ...params]) + ',env={ELECTRON_RUN_AS_NODE="1"},' + options + '}');
   };
-  const envKeys = 'env_vars=["OFFICE_JOB_TOKEN","OFFICE_API","OFFICE_CODEX_EXE","OFFICE_LAST_HUMAN_AT"]';
+  const envKeys = 'env_vars=["OFFICE_JOB_TOKEN","OFFICE_API","OFFICE_CODEX_EXE","OFFICE_LAST_HUMAN_AT","OFFICE_IMPORT_DIR"]';
   register('arquivos', 'codex-read.mjs', [cwd, skills, tmp, drive], 'default_tools_approval_mode="writes"');
   const render = path.join(sourceDir, 'office-render.mjs');
   const renderArgs = existsSync(render) ? [render] : ['--import', import.meta.resolve('tsx'), path.join(REPO_ROOT, 'packages/video-engine/src/cli.ts')];
@@ -59,6 +60,7 @@ export function startCodexJob(office: Office, client: Client, jobDir: string, th
   const chosen = catalog.filter(s => request.includes('`' + s.name + '`'));
   const prompt = [system, ...docs,
     'Execute a demanda com as ferramentas do Office. Leia as skills e suas referências na pasta skills, execute seus scripts originais com executar_skill. Gere versões novas com gravar_arquivo, entregue resultados com entregar_arquivo. Informe o caminho completo devolvido pela ferramenta para a Mesa. Se uma ferramenta falhar, corrija ou informe a etapa pendente.',
+    'Anexos marcados como importados: use copiar_para_local com de=importados e o caminho relativo indicado. Para scripts que usam o Drive, copie primeiro os arquivos ou pastas para temporarios. Para capas HTML da skill, use exportar_composicao e confira a prévia; para vídeo, confira o relatório de áudio. Entregue o PNG/JPG e o MP4 na pasta cliente com entregar_arquivo se estiverem em temporarios, e cite os caminhos finais entre crases para a Mesa. Antes de enviar arquivos pelo Chrome confira acesso e tamanho com conferir_anexos.',
     'Pasta cliente: ' + cwd, drive && 'Drive autorizado: ' + drive, 'Temporários desta demanda: ' + tmp,
     'Chrome: antes da primeira ação liste as máquinas e peça a escolha à equipe com [[AGUARDANDO_APROVACAO]]. Depois da resposta selecione a máquina escolhida. Ao voltar à conversa, use a escolha confirmada. Para arquivos ou ferramentas ausentes, informe qual acesso falta.',
     'Skills da casa:', ...catalog.map(s => path.relative(skills, s.file) + ' — ' + s.description),
@@ -66,7 +68,7 @@ export function startCodexJob(office: Office, client: Client, jobDir: string, th
   const script = /\.m?js$/i.test(exe);
   const child = spawn(script ? process.execPath : exe, script ? [exe,...args] : args, {
     cwd: jobDir, windowsHide: true, env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', OFFICE_CODEX_EXE: exe, OFFICE_API: 'http://127.0.0.1:' + config.port,
-      OFFICE_JOB_TOKEN: token, OFFICE_LAST_HUMAN_AT: lastHumanAt ?? '' },
+      OFFICE_IMPORT_DIR: workerId ? sessionImports(workerId) : '', OFFICE_JOB_TOKEN: token, OFFICE_LAST_HUMAN_AT: lastHumanAt ?? '' },
   });
   child.stdin.on('error', () => { /* O encerramento informa a falha no histórico. */ });
   child.stdin.end(prompt, 'utf8');

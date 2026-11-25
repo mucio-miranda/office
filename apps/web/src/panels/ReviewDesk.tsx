@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CalendarClock, Check, Clock, CloudUpload, CornerLeftUp, ExternalLink, FileText, FolderOpen, Maximize2, Megaphone, RotateCcw, Send, Trash2, X } from 'lucide-react';
+import { CalendarClock, Check, Clock, CloudUpload, Copy, CornerLeftUp, ExternalLink, FileText, FolderOpen, Maximize2, Megaphone, RotateCcw, Send, Trash2, X } from 'lucide-react';
 import { NETWORKS, NETWORK_LABEL, STAGE_LABEL, type Demand, type Network, type ReviewMark, type StageLogEntry } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, getToken, mediaUrl } from '../lib/api';
@@ -178,7 +178,8 @@ export function ReviewDesk({ d, onClose }: { d: Demand; onClose: () => void }) {
                     <figcaption>
                       <span className="truncate" title={f}>{info && f.toLowerCase().startsWith(info.folder.toLowerCase()) ? f.slice(info.folder.length + 1) : f}</span>
                       {(IMG.test(f) || VID.test(f)) && <button type="button" className="icon" title="Ver em tela grande (passa as outras peças com as setas)" onClick={() => setViewing(f)}><Maximize2 size={13} /></button>}
-                      <button type="button" className="icon" title="Abrir no app" onClick={() => openFile(f)}><ExternalLink size={13} /></button>
+                      <button type="button" className="icon" title="Abrir arquivo" onClick={() => desktop ? openFile(f) : window.open(mediaUrl(office!.id, f), '_blank', 'noopener,noreferrer')}><ExternalLink size={13} /></button>
+                      <button type="button" className="icon" title="Copiar caminho" onClick={() => navigator.clipboard ? navigator.clipboard.writeText(f).then(() => notify('Caminho copiado'), () => notify(f)) : notify(f)}><Copy size={13} /></button>
                       {desktop && <button type="button" className="icon" title="Mostrar na pasta" onClick={() => desktop?.showInFolder(f)}><FolderOpen size={13} /></button>}
                     </figcaption>
                   </figure>

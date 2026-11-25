@@ -15,8 +15,9 @@
     "@office/shared": "*",
     "@office/video-engine": "*",
     "fastify": "^5.4.0",
-    "zod": "^3.25.0",
-    "ws": "^8.18.0"
+    "puppeteer-core": "^24.43.1",
+    "ws": "^8.18.0",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/ws": "^8.18.0"

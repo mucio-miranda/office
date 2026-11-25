@@ -7,7 +7,7 @@ import { desktop } from './desktop';
  * print). Vira texto com o caminho, como no terminal. No app do Windows, o que já está neste PC vai só como caminho;
  * o resto sobe para a pasta de anexos do Office, que todo funcionário enxerga. Colar um caminho como texto continua normal.
  */
-export function useAttach(officeId: string, insert: (paths: string[]) => void, notify?: (msg: string) => void) {
+export function useAttach(officeId: string, insert: (paths: string[]) => void, notify?: (msg: string) => void, codexSession?: string) {
   const [dragging, setDragging] = useState(false);
   const [sending, setSending] = useState(0);
   const depth = useRef(0);
@@ -18,20 +18,20 @@ export function useAttach(officeId: string, insert: (paths: string[]) => void, n
     const base = `/api/offices/${officeId}`;
     try {
       const withPath = files.map((f) => ({ f, p: desktop?.pathForFile?.(f) || '' }));
-      const candidates = withPath.map((x) => x.p).filter(Boolean);
+      const candidates = codexSession ? [] : withPath.map((x) => x.p).filter(Boolean);
       const local = new Set<string>(candidates.length ? (await api<{ local: string[] }>(`${base}/anexos/caminhos`, { body: { paths: candidates } })).local : []);
       const out: string[] = [];
       for (const { f, p } of withPath) {
         if (p && local.has(p)) { out.push(p); setSending((n) => n - 1); continue; }
         try {
           const token = getToken();
-          const res = await fetch(`${base}/anexos?nome=${encodeURIComponent(f.name)}`, {
+          const res = await fetch(`${base}/anexos?nome=${encodeURIComponent(f.name)}${codexSession ? `&sessao=${encodeURIComponent(codexSession)}` : ''}`, {
             method: 'POST', body: f,
             headers: { 'Content-Type': 'application/octet-stream', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
           });
           const data = await res.json().catch(() => ({}));
           if (!res.ok || !data.path) throw new Error(data.error ?? `Não deu para anexar ${f.name}`);
-          out.push(data.path);
+          out.push(codexSession ? `importados: ${data.relativo}` : data.path);
         } catch (e) {
           notify?.((e as Error).message);
         } finally { setSending((n) => n - 1); }
@@ -41,10 +41,11 @@ export function useAttach(officeId: string, insert: (paths: string[]) => void, n
       setSending(0);
       notify?.((e as Error).message);
     }
-  }, [officeId, insert, notify]);
+  }, [officeId, insert, notify, codexSession]);
 
   const hasFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
   return {
+    select: handle,
     dragging,
     sending,
     bind: {

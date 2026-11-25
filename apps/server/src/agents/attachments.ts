@@ -1,4 +1,4 @@
-import { createWriteStream, existsSync, mkdirSync, statSync } from 'node:fs';
+import { createWriteStream, existsSync, mkdtempSync, mkdirSync, statSync } from 'node:fs';
 import { unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
@@ -39,8 +39,17 @@ export function attachmentPath(name: string, when = new Date()) {
   return out;
 }
 
-export async function saveAttachment(body: Readable, name: string) {
-  const out = attachmentPath(name);
+export function sessionImports(workerId: string) {
+  if (!/^[a-zA-Z0-9_-]+$/.test(workerId)) throw Error('Sessão inválida.');
+  const root = path.join(config.dataDir, 'importacoes', workerId);
+  mkdirSync(root, { recursive: true });
+  return root;
+}
+
+export async function saveAttachment(body: Readable, name: string, workerId?: string) {
+  const imports = workerId ? sessionImports(workerId) : null;
+  const safeName = attachmentName(name).replace(/^[.]+/, '_');
+  const out = imports ? path.join(mkdtempSync(path.join(imports, 'arquivo-')), safeName) : attachmentPath(name);
   let size = 0;
   const limit = new Transform({
     transform(chunk: Buffer, _enc, cb) {
@@ -54,7 +63,7 @@ export async function saveAttachment(body: Readable, name: string) {
     await unlink(out).catch(() => {});
     throw e;
   }
-  return { path: out, size: statSync(out).size };
+  return { path: out, size: statSync(out).size, ...(imports ? { relativo: path.relative(imports, out) } : {}) };
 }
 
 export function isOwner(officeId: string, by: string | null | undefined) {

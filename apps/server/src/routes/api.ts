@@ -1676,7 +1676,9 @@ export async function api(app: FastifyInstance) {
       if (!requireWorker(req, reply)) return;
       const name = String((req.query as any).nome ?? '').slice(0, 300);
       try {
-        return await saveAttachment(req.body as Readable, name);
+        const sessao = (req.query as { sessao?: string }).sessao;
+        if (sessao && !one("SELECT id FROM workers WHERE id = ? AND office_id = ? AND provider = 'codex' AND archived_at IS NULL", sessao, (req.params as any).officeId)) return reply.code(404).send({ error: 'Sessão GPT indisponível.' });
+        return await saveAttachment(req.body as Readable, name, sessao);
       } catch (e) { return reply.code(413).send({ error: (e as Error).message }); }
     });
     r.get('/api/offices/:officeId/workers', async (req, reply) => {

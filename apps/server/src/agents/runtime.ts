@@ -495,7 +495,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
     const compact = { CLAUDE_CODE_AUTO_COMPACT_WINDOW: process.env.OFFICE_COMPACT_WINDOW ?? String(COMPACT_WINDOW), MCP_TOOL_TIMEOUT: process.env.MCP_TOOL_TIMEOUT ?? '600000' };
     if (codex && client && token) {
       const human = one<{ createdAt: string }>("SELECT created_at FROM job_messages WHERE job_id=? AND role='usuario' AND author IS NOT NULL ORDER BY created_at DESC LIMIT 1", jobId);
-      child = startCodexJob(office, client, dir, session, system, input, token, human?.createdAt);
+      child = startCodexJob(office, client, dir, session, system, input, token, human?.createdAt, job.workerId);
     } else child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, ...compact, ...hookEnv, OFFICE_JOB_ID: jobId } });
   } catch (e) {
     addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o ${engine}: ${(e as Error).message}`);

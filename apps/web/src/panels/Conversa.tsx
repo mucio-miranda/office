@@ -97,7 +97,8 @@ export function Conversa({ c, session, view, setView, sessions, resume, onSessio
   const input = useRef<HTMLTextAreaElement>(null);
   // trecho selecionado numa mensagem: o botão "Responder" aparece em cima dele (como no Claude)
   const [quote, setQuote] = useState<{ text: string; x: number; y: number } | null>(null);
-  const attach = useAttach(office!.id, (paths) => { setText((t) => withPaths(t, paths)); input.current?.focus(); }, notify);
+  const attach = useAttach(office!.id, (paths) => { setText((t) => withPaths(t, paths)); input.current?.focus(); }, notify, session?.provider === 'codex' ? session.id : undefined);
+  const filePicker = useRef<HTMLInputElement>(null);
 
   // a conversa é a do titular: o trabalho dos ajudantes (sessão própria) não entra aqui; o resumo deles chega como aviso
   const helperIds = useStore((s) => s.workers).filter((w) => w.role === 'ajudante').map((w) => w.id).join(',');
@@ -312,6 +313,10 @@ export function Conversa({ c, session, view, setView, sessions, resume, onSessio
               onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); } }} />
             <div className="row gap conversa-actions">
               <span className="muted small">{attach.sending ? `Anexando ${attach.sending} arquivo${attach.sending > 1 ? 's' : ''}…` : newRequest ? 'Vai como pedido novo, em outro cartão' : running ? 'Enter envia: ele lê no próximo passo, sem parar o que está fazendo' : 'Enter envia · / mostra os comandos · arraste ou cole arquivos'}</span>
+              {session?.provider === 'codex' && <>
+                <input ref={filePicker} type="file" multiple hidden onChange={e => { const files = Array.from(e.target.files ?? []); e.target.value = ''; void attach.select(files); }} />
+                <button type="button" className="small" onClick={() => filePicker.current?.click()}>Importar arquivo local</button>
+              </>}
               <span className="spacer" />
               {session?.provider === 'codex' ? <span className="chip">GPT Codex</span> : <ModelPicker c={c} />}
               {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
