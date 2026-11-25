@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import type { Client, Transaction } from '@office/shared';
 import { useStore } from '../lib/store';
-import { api, brl } from '../lib/api';
+import { api, brl, isClosedClient, moneyText, parseMoney } from '../lib/api';
 import { PathField } from '../lib/PathPicker';
 import { Sparkles } from 'lucide-react';
 import { pctOf, resetText } from './LimitBadge';
@@ -131,22 +131,24 @@ function Clients({ clients, base }: { clients: Client[]; base: string }) {
     <div>
       <form className="toolbar" onSubmit={async (e) => {
         e.preventDefault();
-        await api(`${base}/clients`, { body: { name: f.name, folder: f.folder || null, monthlyFee: Number(f.monthlyFee || 0) } });
+        await api(`${base}/clients`, { body: { name: f.name, folder: f.folder || null, monthlyFee: parseMoney(f.monthlyFee) } });
         setF({ name: '', folder: '', monthlyFee: '' });
       }}>
         <input required placeholder="Nome do cliente" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
         <div style={{ flex: 1, minWidth: 260 }}><PathField value={f.folder} onChange={(v) => setF({ ...f, folder: v })} scope="office" officeId={officeId} placeholder="Pasta do cliente" title="Pasta do cliente" /></div>
-        <input type="number" min="0" step="0.01" placeholder="Mensalidade R$" value={f.monthlyFee} onChange={(e) => setF({ ...f, monthlyFee: e.target.value })} />
+        <input inputMode="decimal" placeholder="Mensalidade R$" value={f.monthlyFee} onChange={(e) => setF({ ...f, monthlyFee: e.target.value })} />
         <button className="primary">Adicionar</button>
       </form>
       <table className="table">
         <thead><tr><th>Cliente</th><th>Pasta</th><th>Mensalidade</th><th>Status</th></tr></thead>
         <tbody>
-          {clients.map((c) => (
+          {/* encerrados (e os unificados em outro cliente) não pagam: saem da lista; reativar é pela tela do cliente */}
+          {clients.filter((c) => !isClosedClient(c)).map((c) => (
             <tr key={c.id}>
               <td><span className="row gap"><span className="dot" style={{ background: c.color }} />{c.name}</span></td>
               <td className="muted mono truncate" style={{ maxWidth: 320 }}>{c.folder ?? '—'}</td>
-              <td><input className="inline" type="number" defaultValue={c.monthlyFee} onBlur={(e) => api(`${base}/clients/${c.id}`, { method: 'PATCH', body: { monthlyFee: Number(e.target.value) } })} /></td>
+              <td><input className="inline" inputMode="decimal" placeholder="0,00" defaultValue={moneyText(c.monthlyFee)}
+                onBlur={(e) => { const v = parseMoney(e.target.value); e.target.value = moneyText(v); if (v !== c.monthlyFee) api(`${base}/clients/${c.id}`, { method: 'PATCH', body: { monthlyFee: v } }); }} /></td>
               <td><select value={c.status} onChange={(e) => api(`${base}/clients/${c.id}`, { method: 'PATCH', body: { status: e.target.value } })}>
                 <option>ativo</option><option>pausado</option><option>encerrado</option></select></td>
             </tr>
@@ -164,15 +166,16 @@ function Transactions({ transactions, clients, base }: { transactions: Transacti
     <div>
       <form className="toolbar" onSubmit={async (e) => {
         e.preventDefault();
-        await api(`${base}/transactions`, { body: { ...f, amount: Number(f.amount), clientId: f.clientId || null } });
+        if (parseMoney(f.amount) <= 0) { useStore.getState().notify('Valor inválido: use, por exemplo, 1.500,00'); return; }
+        await api(`${base}/transactions`, { body: { ...f, amount: parseMoney(f.amount), clientId: f.clientId || null } });
         setF({ ...empty, kind: f.kind });
       }}>
         <select value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as Transaction['kind'] })}><option value="receita">Receita</option><option value="despesa">Despesa</option></select>
         <input required placeholder="Categoria" value={f.category} onChange={(e) => setF({ ...f, category: e.target.value })} />
         <input placeholder="Descrição" value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
-        <input required type="number" min="0.01" step="0.01" placeholder="Valor" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
+        <input required inputMode="decimal" title="Valor em reais, ex.: 1.500,00" placeholder="Valor R$" value={f.amount} onChange={(e) => setF({ ...f, amount: e.target.value })} />
         <input type="date" value={f.date} onChange={(e) => setF({ ...f, date: e.target.value })} />
-        <select value={f.clientId} onChange={(e) => setF({ ...f, clientId: e.target.value })}><option value="">Sem cliente</option>{clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
+        <select value={f.clientId} onChange={(e) => setF({ ...f, clientId: e.target.value })}><option value="">Sem cliente</option>{clients.filter((c) => !isClosedClient(c)).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</select>
         <label className="check"><input type="checkbox" checked={f.paid} onChange={(e) => setF({ ...f, paid: e.target.checked })} /> pago</label>
         <button className="primary">Lançar</button>
       </form>

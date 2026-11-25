@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Archive as ArchiveIcon, Bot, ChevronRight, FolderInput, FolderOpen, FolderPlus, History, PanelLeftClose, Pencil, PanelLeftOpen, Plus, Settings2, Sparkles, Terminal, Users, X } from 'lucide-react';
 import { BRIEFING_FIELDS, type Briefing, type Client, type ClientSession, type Worker } from '@office/shared';
 import { useStore } from '../lib/store';
-import { api, brl } from '../lib/api';
+import { api, brl, parseMoney } from '../lib/api';
 import { PathField } from '../lib/PathPicker';
 import { StageTrack } from './Demands';
 import { Conversa, when } from './Conversa';
@@ -517,7 +517,7 @@ function NewClient({ onClose }: { onClose: (id?: string) => void }) {
         setBusy(true);
         try {
           const r = await api(`/api/offices/${office!.id}/clients`, { body: {
-            name: f.name.trim(), monthlyFee: Number(f.monthlyFee || 0), approvalMode: f.approvalMode,
+            name: f.name.trim(), monthlyFee: parseMoney(f.monthlyFee), approvalMode: f.approvalMode,
             folder: f.folderMode === 'existente' ? f.folder || null : null, createFolder: true, interview: f.interview,
           } });
           if (r.briefing?.error) notify(r.briefing.error);
@@ -530,7 +530,7 @@ function NewClient({ onClose }: { onClose: (id?: string) => void }) {
         <div className="modal-body">
           <div className="grid2">
             <label>Nome<input autoFocus required value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} /></label>
-            {canSeeFinance(useStore.getState().office?.role) && <label>Mensalidade (R$)<input type="number" min={0} value={f.monthlyFee} onChange={(e) => setF({ ...f, monthlyFee: e.target.value })} /></label>}
+            {canSeeFinance(useStore.getState().office?.role) && <label>Mensalidade (R$)<input inputMode="decimal" placeholder="0,00" value={f.monthlyFee} onChange={(e) => setF({ ...f, monthlyFee: e.target.value })} /></label>}
           </div>
           <div className="col gap-s">
             <small className="muted">Pasta</small>
