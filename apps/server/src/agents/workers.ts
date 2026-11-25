@@ -18,7 +18,7 @@ export const activeWorkers = (officeId: string) =>
   all<Worker>('SELECT * FROM workers WHERE office_id = ? AND archived_at IS NULL ORDER BY created_at', officeId);
 
 export const titularOf = (officeId: string, clientId: string) =>
-  one<Worker>("SELECT * FROM workers WHERE office_id = ? AND client_id = ? AND role = 'titular' AND archived_at IS NULL ORDER BY created_at DESC LIMIT 1", officeId, clientId);
+  one<Worker>("SELECT * FROM workers WHERE office_id = ? AND client_id = ? AND role = 'titular' AND provider = 'claude' AND archived_at IS NULL ORDER BY created_at DESC LIMIT 1", officeId, clientId);
 
 /** O próximo nome livre da lista: nenhum ativo com ele e nenhum arquivado há menos de 30 dias. */
 export function nextName(officeId: string, when = new Date()) {
@@ -37,9 +37,9 @@ export function nextName(officeId: string, when = new Date()) {
 
 const colorOf = (name: string) => COLORS[[...name].reduce((s, c) => s + c.charCodeAt(0), 0) % COLORS.length];
 
-export function createWorker(officeId: string, clientId: string, role: Worker['role'], by: string | null, parentId: string | null = null) {
+export function createWorker(officeId: string, clientId: string, role: Worker['role'], by: string | null, parentId: string | null = null, provider: Worker['provider'] = 'claude') {
   const name = nextName(officeId);
-  const w: Worker = { id: uid(), officeId, clientId, name, color: colorOf(name), role, parentId, state: 'copa', room: 'copa', createdAt: now(), archivedAt: null };
+  const w: Worker = { id: uid(), officeId, clientId, name, color: colorOf(name), role, parentId, provider, state: 'copa', room: 'copa', createdAt: now(), archivedAt: null };
   insert('workers', { ...w, createdBy: by } as never);
   invalidate(officeId, 'workers');
   return w;
@@ -64,8 +64,8 @@ export function sessionFor(officeId: string, clientId: string, workerId: string 
  * Sessão nova do cliente, para uma demanda: começa com a conversa vazia (lê a memória do cliente) e, se pedido, com o
  * resumo de uma conversa anterior como passagem. As outras sessões continuam abertas e podem rodar junto.
  */
-export function createSession(officeId: string, clientId: string, by: string | null, title?: string | null, handoff?: string | null) {
-  const w = createWorker(officeId, clientId, 'titular', by);
+export function createSession(officeId: string, clientId: string, by: string | null, title?: string | null, handoff?: string | null, provider: Worker['provider'] = 'claude') {
+  const w = createWorker(officeId, clientId, 'titular', by, null, provider);
   const t = title?.trim().slice(0, 60) || null;
   update('workers', w.id, { title: t, handoff: handoff ?? null });
   invalidate(officeId, 'workers');

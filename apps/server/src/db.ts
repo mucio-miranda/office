@@ -213,6 +213,7 @@ const MIGRATIONS: string[] = [
      seq INTEGER PRIMARY KEY, session_id TEXT NOT NULL REFERENCES codex_sessions(id) ON DELETE CASCADE,
      prompt TEXT NOT NULL, answer TEXT NOT NULL);
    CREATE INDEX codex_turns_session ON codex_turns(session_id,seq);`,
+  `ALTER TABLE workers ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude' CHECK(provider IN ('claude','codex'));`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

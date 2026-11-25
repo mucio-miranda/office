@@ -255,7 +255,7 @@ export function Conversa({ c, session, view, setView, sessions, resume, onSessio
             contexto {Math.round(active.contextTokens / 1000)} mil
           </span>
         )}
-        <LimitBadge />
+        {session?.provider !== 'codex' && <LimitBadge />}
       </div>
       {view && (
         <div className="session-banner">
@@ -313,7 +313,7 @@ export function Conversa({ c, session, view, setView, sessions, resume, onSessio
             <div className="row gap conversa-actions">
               <span className="muted small">{attach.sending ? `Anexando ${attach.sending} arquivo${attach.sending > 1 ? 's' : ''}…` : newRequest ? 'Vai como pedido novo, em outro cartão' : running ? 'Enter envia: ele lê no próximo passo, sem parar o que está fazendo' : 'Enter envia · / mostra os comandos · arraste ou cole arquivos'}</span>
               <span className="spacer" />
-              <ModelPicker c={c} />
+              {session?.provider === 'codex' ? <span className="chip">GPT Codex</span> : <ModelPicker c={c} />}
               {running && active && <button type="button" className="small" onClick={() => api(`${base}/jobs/${active.id}/cancel`, { body: {} })}><Square size={12} /> Parar</button>}
               {active?.status === 'aguardando' && (
                 <button type="button" className="ghost small" title="Encerra este pedido sem responder: a demanda vai para Paradas e não é apagada"

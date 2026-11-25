@@ -157,9 +157,9 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   const openSessions = team.filter((w) => w.role === 'titular' && !w.archivedAt)
     .sort((a, b) => order(a) - order(b) || (b.lastJobAt ?? b.createdAt).localeCompare(a.lastJobAt ?? a.createdAt));
   const [sel, setSel] = useState<string | null>(null);
-  const session = openSessions.find((w) => w.id === sel) ?? openSessions[0] ?? null;
+  const session = openSessions.find((w) => w.id === sel) ?? openSessions.find(w => w.provider !== 'codex') ?? openSessions[0] ?? null;
   // ao entrar no cliente, abre a que precisa de você (ou a última que andou)
-  useEffect(() => { setSel(openSessions[0]?.id ?? null); setView(null); }, [c.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setSel(openSessions.find(w => w.provider !== 'codex')?.id ?? openSessions[0]?.id ?? null); setView(null); }, [c.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [creating, setCreating] = useState(false);
   const [codex, setCodex] = useState<{ enabled: boolean; sessions: { id: string; title: string }[] }>({ enabled: false, sessions: [] });
   const [provider, setProvider] = useState('claude');
@@ -205,17 +205,8 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   const createSession = async (e?: React.FormEvent) => {
     e?.preventDefault();
     try {
-      if (provider === 'codex') {
-        const s = await api<{ id: string; title: string }>(base + '/codex', { body: { title: newTitle.trim() } });
-        setCodex(old => ({ ...old, sessions: [s, ...old.sessions] }));
-        setSelectedCodex(s.id);
-        setCreating(false);
-        setNewTitle('');
-        setCarry(false);
-        return;
-      }
       setSelectedCodex(null);
-      const w = await api<Worker>(`${base}/conversa/nova`, { body: { title: newTitle.trim() || null, levarResumo: carry } });
+      const w = await api<Worker>(`${base}/conversa/nova`, { body: { title: newTitle.trim() || null, levarResumo: carry, provider } });
       setSel(w.id);
       setView(null);
       setCreating(false);
@@ -328,8 +319,8 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
               <form className="session-new" onSubmit={createSession}>
                 <input autoFocus value={newTitle} maxLength={60} placeholder="Nome da sessão (a demanda)" aria-label="Nome da sessão"
                   onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setCreating(false)} />
-                {codex.enabled && <label>Assistente <select value={provider} onChange={e => setProvider(e.target.value)}><option value="claude">Claude</option><option value="codex">GPT Codex · Consulta</option></select></label>}
-                {provider === 'claude' && <label className="small muted"><input type="checkbox" checked={carry} onChange={(e) => setCarry(e.target.checked)} /> levar o resumo da última conversa</label>}
+                {codex.enabled && <label>Assistente <select value={provider} onChange={e => setProvider(e.target.value)}><option value="claude">Claude</option><option value="codex">GPT Codex</option></select></label>}
+                <label className="small muted"><input type="checkbox" checked={carry} onChange={(e) => setCarry(e.target.checked)} /> levar o resumo da última conversa</label>
                 <div className="row gap"><button type="submit" className="small">Abrir</button><button type="button" className="ghost small" onClick={() => setCreating(false)}>Cancelar</button></div>
               </form>
             ) : (
@@ -337,7 +328,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
             ))}
             <div className="session-rows" role="list">
               {codex.sessions.map(s => <button type="button" key={s.id} className={'session-row session-pick ' + (selectedCodex === s.id ? 'on' : '')}
-                onClick={() => setSelectedCodex(s.id)}><b>{s.title}</b><small>GPT Codex</small></button>)}
+                onClick={() => setSelectedCodex(s.id)}><b>{s.title}</b><small>Consulta anterior · GPT</small></button>)}
               {openSessions.map((w) => {
                 const label = w.state === 'aguardando' ? 'esperando você' : w.state === 'trabalhando' ? 'rodando' : 'parada';
                 return (
@@ -350,7 +341,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
                     ) : (
                       <button type="button" className="session-pick" onClick={() => { setSelectedCodex(null); setSel(w.id); setView(null); }}>
                         <span className="row gap"><span className="status-dot" /><b className="truncate">{w.title ?? w.name}</b></span>
-                        <span className="muted small">{label}{w.lastJobAt ? ` · ${when(w.lastJobAt)}` : ''}</span>
+                        <span className="muted small">{w.provider === 'codex' ? 'GPT Codex · ' : ''}{label}{w.lastJobAt ? ` · ${when(w.lastJobAt)}` : ''}</span>
                       </button>
                     )}
                     {canWork(office!.role) && renaming !== w.id && (

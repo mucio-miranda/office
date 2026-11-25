@@ -1,3 +1,4 @@
+import { codexExecutable } from '../agents/codex.ts';
 import { registerCodex } from './codex.ts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -991,11 +992,12 @@ export async function api(app: FastifyInstance) {
     // sessão nova do cliente (uma por demanda): as outras continuam abertas
     r.post('/api/offices/:officeId/clients/:id/conversa/nova', async (req, reply) => {
       if (!requireWorker(req, reply)) return;
-      const b = body(z.object({ title: z.string().trim().max(60).nullable().optional(), levarResumo: z.boolean().default(false) }), req, reply);
+      const b = body(z.object({ title: z.string().trim().max(60).nullable().optional(), levarResumo: z.boolean().default(false), provider: z.enum(['claude', 'codex']).default('claude') }), req, reply);
       if (!b) return;
       const { officeId, id } = req.params as any;
       if (!one('SELECT id FROM clients WHERE id = ? AND office_id = ?', id, officeId)) return reply.code(404).send({ error: 'Cliente não encontrado' });
-      const r = newSession(officeId, id, `user:${req.user.id}`, b.title, b.levarResumo);
+      if (b.provider === 'codex' && !codexExecutable()) return reply.code(409).send({ error: 'Codex CLI indisponível na máquina do Office.' });
+      const r = newSession(officeId, id, `user:${req.user.id}`, b.title, b.levarResumo, b.provider);
       if (r.error) return reply.code(409).send({ error: r.error });
       return r.worker;
     });
@@ -1199,7 +1201,10 @@ export async function api(app: FastifyInstance) {
          FROM jobs j WHERE j.client_id = ? AND j.session_id IS NOT NULL GROUP BY j.session_id`, id);
       const byId = new Map(mine.map((s) => [s.sessionId, s]));
       const archived = new Map(all<{ sessionId: string; archivedAt: string }>('SELECT session_id, archived_at FROM archived_sessions WHERE client_id = ?', id).map((a) => [a.sessionId, a.archivedAt]));
-      return listSessions(found.cwd).map((s) => ({
+      const gpt = all<{id: string; title: string; startedAt: string; updatedAt: string}>(`SELECT j.session_id AS id, COALESCE(w.title,w.name) AS title,
+        MIN(j.created_at) AS started_at, MAX(j.updated_at) AS updated_at FROM jobs j JOIN workers w ON w.id=j.worker_id
+        WHERE w.provider='codex' AND j.client_id=? AND j.stage IS NOT 'aprovacao' AND j.session_id IS NOT NULL GROUP BY j.session_id`, id);
+      return [...listSessions(found.cwd), ...gpt.map(s => ({ ...s, sizeMb: 0 }))].sort((a,b) => b.updatedAt.localeCompare(a.updatedAt)).map((s) => ({
         ...s, origin: byId.has(s.id) ? 'office' : 'terminal', current: s.id === found.c.sessionId,
         costUsd: byId.get(s.id)?.cost ?? 0, people: byId.get(s.id)?.people?.split(',') ?? [],
         archivedAt: s.id === found.c.sessionId ? null : archived.get(s.id) ?? null,
@@ -1256,9 +1261,11 @@ export async function api(app: FastifyInstance) {
       if (!requireWorker(req, reply)) return;
       const { officeId, id, sid } = req.params as any;
       const found = clientCwd(officeId, id);
-      if (!found || !SESSION_ID.test(sid) || !sessionFile(found.cwd, sid)) return reply.code(404).send({ error: 'Sessão não encontrada' });
+      const previous = found && SESSION_ID.test(sid) ? one<Worker>(`SELECT w.* FROM workers w JOIN jobs j ON j.worker_id=w.id
+        WHERE w.office_id=? AND w.client_id=? AND w.provider='codex' AND j.session_id=? AND j.stage IS NOT 'aprovacao' LIMIT 1`, officeId,id,sid) : null;
+      if (!found || !SESSION_ID.test(sid) || (!previous && !sessionFile(found.cwd, sid))) return reply.code(404).send({ error: 'Sessão não encontrada' });
       // a conversa antiga (do terminal ou do Office) vira uma sessão aberta do cliente
-      const r = resumeAsSession(officeId, id, sid, `user:${req.user.id}`, listSessions(found.cwd).find((x) => x.id === sid)?.title?.slice(0, 60));
+      const r = resumeAsSession(officeId, id, sid, `user:${req.user.id}`, previous?.title ?? listSessions(found.cwd).find((x) => x.id === sid)?.title?.slice(0, 60), previous?.provider);
       db.prepare('DELETE FROM archived_sessions WHERE client_id = ? AND session_id = ?').run(id, sid); // continuar nela desarquiva
       logActivity(officeId, `user:${req.user.id}`, 'retomou uma sessão', `${found.c.name}: ${sid}`);
       invalidate(officeId, 'workers');

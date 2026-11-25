@@ -347,7 +347,7 @@ export function clientMessage(officeId: string, clientId: string, raw: string, b
   insert('demands', d as never);
   invalidate(officeId, 'demands');
   logActivity(officeId, by, 'pediu', d.title);
-  if (!ambiguous) return runStage(d, d.pipeline[0], by);
+  if (!ambiguous || sess.provider === 'codex') return runStage(d, d.pipeline[0], by);
   // ambíguo: a triagem roda em segundo plano (~1 s) e o pedido começa logo depois, já com a função certa
   triageKind(raw).then((k) => {
     const fresh = getDemand(d.id);
@@ -398,20 +398,20 @@ export function resetConversation(clientId: string): string | null {
  * Sessão nova do cliente (uma por demanda): as outras continuam abertas e podem rodar junto. Com `carry`, a primeira
  * mensagem lê o resumo de conversa mais recente do cliente como passagem.
  */
-export function newSession(officeId: string, clientId: string, by: string, title?: string | null, carry = false) {
+export function newSession(officeId: string, clientId: string, by: string, title?: string | null, carry = false, provider: Worker['provider'] = 'claude') {
   const client = getClient(clientId);
   if (!client) return { error: 'Cliente não encontrado.' };
-  const w = createSession(officeId, clientId, by, title, carry ? latestSummary(clientId) : null);
+  const w = createSession(officeId, clientId, by, title, carry ? latestSummary(clientId) : null, provider);
   logActivity(officeId, by, 'abriu uma sessão', `${client.name}: ${w.title ?? w.name}`);
   return { worker: w };
 }
 
 /** Continua uma conversa do terminal (ou uma antiga do Office) como uma sessão do cliente. */
-export function resumeAsSession(officeId: string, clientId: string, sessionId: string, by: string, title?: string | null) {
+export function resumeAsSession(officeId: string, clientId: string, sessionId: string, by: string, title?: string | null, provider: Worker['provider'] = 'claude') {
   const open = sessionsOf(clientId).find((w) => w.sessionId === sessionId);
   if (open) return { worker: open };
   const last = one<AgentJob>('SELECT session_cost FROM jobs WHERE client_id = ? AND session_id = ? ORDER BY updated_at DESC LIMIT 1', clientId, sessionId);
-  const w = createSession(officeId, clientId, by, title ?? 'Sessão retomada');
+  const w = createSession(officeId, clientId, by, title ?? 'Sessão retomada', null, provider);
   update('workers', w.id, { sessionId, sessionCost: last ? last.sessionCost ?? 0 : -1 });
   return { worker: { ...w, sessionId } };
 }
@@ -903,7 +903,8 @@ function finishRefresh(job: AgentJob, ok: boolean) {
   if (ok) {
     // mesma pessoa, conversa nova: o resumo vai como passagem de bastão da primeira mensagem
     if (job.workerId) update('workers', job.workerId, { sessionId: null, sessionCost: 0 });
-    update('clients', client.id, { sessionId: null, sessionCost: 0 });
+    if (!job.workerId || one<Worker>('SELECT provider FROM workers WHERE id=?', job.workerId)?.provider !== 'codex')
+      update('clients', client.id, { sessionId: null, sessionCost: 0 });
     if (job.workerId && summary && existsSync(summary)) update('workers', job.workerId, { handoff: summary });
     addMessage(job.id, job.officeId, 'sistema', 'Conversa nova: a memória do cliente e o resumo da anterior foram carregados. A anterior continua na aba Sessões.');
   }

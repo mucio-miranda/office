@@ -1,3 +1,4 @@
+import { startCodexJob } from './codex-production.ts';
 import { changedSkillFiles, skillsFingerprint } from './curator.ts';
 import { randomBytes } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -358,13 +359,15 @@ async function start(jobId: string, typed: string, resume: boolean) {
   const client = job.clientId ? one<Client>('SELECT * FROM clients WHERE id = ?', job.clientId) : undefined;
   const reviewer = job.stage === 'aprovacao';
   // o ajudante trabalha em sessão própria, fora da conversa do cliente (que é a do titular)
-  const helper = job.workerId ? one<{ role: string; name: string }>('SELECT role, name FROM workers WHERE id = ?', job.workerId) : undefined;
+  const helper = job.workerId ? one<Pick<Worker, 'role' | 'name' | 'provider'>>('SELECT role, name, provider FROM workers WHERE id = ?', job.workerId) : undefined;
   const isHelper = helper?.role === 'ajudante';
   const conversation = client && !reviewer && !isHelper ? client : undefined;
   // cada titular é uma sessão do cliente, com a sua conversa: várias podem existir e rodar ao mesmo tempo
   const holder = conversation && job.workerId ? one<Worker>('SELECT * FROM workers WHERE id = ?', job.workerId) : undefined;
   // vale a conversa atual da sessão: depois de uma conversa nova (sessionId vazio), um pedido antigo que estava em aberto
   // continua na conversa nova, e não reabre a antiga (que era justamente a grande)
+  const codex = !reviewer && helper?.provider === 'codex';
+  const engine = codex ? 'GPT Codex' : 'Claude Code';
   const session = holder ? holder.sessionId ?? null : conversation ? conversation.sessionId ?? null : (resume ? job.sessionId : null);
   // sem sessão para retomar, a mensagem precisa levar o pedido inteiro junto
   const input = !session && typed !== job.prompt ? `${job.prompt}\n\n${typed}` : typed;
@@ -373,7 +376,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   // o cliente guarda a última conversa usada (telas e rotinas antigas); a sessão guarda a dela
   const saveSession = (id: string) => {
     if (holder) { update('workers', holder.id, { sessionId: id }); invalidate(office.id, 'workers'); }
-    if (conversation) update('clients', conversation.id, { sessionId: id });
+    if (conversation && !codex) update('clients', conversation.id, { sessionId: id });
   };
 
   const dir = path.join(config.dataDir, 'jobs', jobId);
@@ -410,7 +413,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   const usesChrome = !reviewer && !lean && agent.allowedTools.includes('mcp__claude-in-chrome');
   const token = (job.clientId && !reviewer) || usesChrome ? issueJobToken(jobId) : null;
   // calendário de conteúdo: toda tarefa de cliente pode ler e atualizar o dele
-  if (job.clientId && !reviewer && token && existsSync(config.officeMcp)) {
+  if (!codex && job.clientId && !reviewer && token && existsSync(config.officeMcp)) {
     mcp.servers.office = {
       command: process.execPath, args: [config.officeMcp],
       env: { ELECTRON_RUN_AS_NODE: '1', OFFICE_API: `http://127.0.0.1:${config.port}`, OFFICE_JOB_TOKEN: token },
@@ -421,14 +424,15 @@ async function start(jobId: string, typed: string, resume: boolean) {
     if (usesChrome) mcp.hints.push('- **Navegador dividido**: o Chrome e a pasta Downloads servem a todos os clientes. Ao usar o Chrome você pega a vez dele sozinho (às vezes espera outro cliente terminar). Adiante antes o que não precisa do Chrome (base, composição, scripts); junte o uso do navegador (tunning, downloads) num trecho só e, quando os arquivos baixados já estiverem na pasta do trabalho, chame `navegador_liberar` para outro cliente usar.');
   }
   // REA e outros pesados: só no pedido que os cita
-  if (!reviewer && !lean) for (const d of onDemandFor(input, userServers())) {
+  if (!codex && !reviewer && !lean) for (const d of onDemandFor(input, userServers())) {
     mcp.servers[d.id] = d.server as never;
     mcp.hints.push(d.hint);
   }
   const mcpIds = Object.keys(mcp.servers);
   const sysFile = path.join(dir, 'system.md');
   // o funcionário do cliente tem nome próprio (titular ou ajudante): é com ele que a IA se apresenta
-  writeFileSync(sysFile, systemPrompt(helper?.name ? { ...agent, name: helper.name } : agent, office, mcp.hints), 'utf8');
+  const system = systemPrompt(helper?.name ? { ...agent, name: helper.name } : agent, office, mcp.hints);
+  writeFileSync(sysFile, system, 'utf8');
 
   const args = [
     '-p', '--input-format', 'stream-json', '--output-format', 'stream-json', '--verbose',
@@ -465,7 +469,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
   if (usesChrome) args.push('--chrome', '--add-dir', path.join(homedir(), 'Downloads'));
   // vez do navegador e do render: o gancho pede ao Office antes de usar o Chrome ou de renderizar (Bash com ffmpeg,
   // Whisper, motor de vídeo) e espera se outro cliente estiver usando; o render devolve a vez quando o comando termina
-  if (!reviewer && token && existsSync(config.officeHook)) {
+  if (!codex && !reviewer && token && existsSync(config.officeHook)) {
     const settingsFile = path.join(dir, 'settings.json');
     const q = (p: string) => `"${p.replace(/\\/g, '/')}"`;
     const hook = { type: 'command', command: `${q(process.execPath)} ${q(config.officeHook)}`, timeout: 4 * 3600 };
@@ -489,11 +493,16 @@ async function start(jobId: string, typed: string, resume: boolean) {
     // teto de contexto: ao passar disso a conversa é resumida e segue (sem o teto ela ia a ~1 milhão de tokens, relidos a cada passo)
     // MCP_TOOL_TIMEOUT: a cópia do Drive (copiar_para_local) espera até ~4 min dentro da ferramenta
     const compact = { CLAUDE_CODE_AUTO_COMPACT_WINDOW: process.env.OFFICE_COMPACT_WINDOW ?? String(COMPACT_WINDOW), MCP_TOOL_TIMEOUT: process.env.MCP_TOOL_TIMEOUT ?? '600000' };
-    child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, ...compact, ...hookEnv, OFFICE_JOB_ID: jobId } });
+    if (codex && client && token) {
+      const human = one<{ createdAt: string }>("SELECT created_at FROM job_messages WHERE job_id=? AND role='usuario' AND author IS NOT NULL ORDER BY created_at DESC LIMIT 1", jobId);
+      child = startCodexJob(office, client, dir, session, system, input, token, human?.createdAt);
+    } else child = spawn(bin, [...pre, ...args], { cwd, windowsHide: true, env: { ...process.env, ...compact, ...hookEnv, OFFICE_JOB_ID: jobId } });
   } catch (e) {
-    addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o Claude Code: ${(e as Error).message}`);
-    setJob(jobId, { status: 'erro' });
+    addMessage(jobId, office.id, 'sistema', `Não consegui iniciar o ${engine}: ${(e as Error).message}`);
+    const failed = setJob(jobId, { status: 'erro' });
+    if (codex) onJobFinished(failed, (e as Error).message, false);
     setAgentStatus(agent.id, office.id, 'erro');
+    jobTokens.delete(jobId);
     running.delete(jobId);
     releaseLiveForJob(jobId);
     pump();
@@ -503,14 +512,19 @@ async function start(jobId: string, typed: string, resume: boolean) {
   // o prompt vai pelo stdin (sem limite de linha de comando nem problema de aspas no Windows), e a entrada fica aberta
   // para as mensagens que chegarem durante o trabalho
   child.stdin?.on('error', () => liveInput.delete(jobId));
-  child.stdin?.write(userLine(input));
-  liveInput.set(jobId, child);
+  if (!codex) {
+    child.stdin?.write(userLine(input));
+    liveInput.set(jobId, child);
+  }
 
   let buf = '';
   let lastCtx = 0;
   let finalText = '';
   let isError = false;
   let stderr = '';
+  let codexComplete = false;
+  child.once('error', e => { stderr = e.message; isError = true; });
+  child.stdout?.setEncoding('utf8');
 
   child.stdout?.on('data', (chunk) => {
     buf += chunk.toString();
@@ -521,6 +535,20 @@ async function start(jobId: string, typed: string, resume: boolean) {
       if (!line) continue;
       let ev: any;
       try { ev = JSON.parse(line); } catch { continue; }
+      if (codex) {
+        if (ev.type === 'thread.started' && ev.thread_id) {
+          setJob(jobId, { sessionId: ev.thread_id });
+          saveSession(ev.thread_id);
+        } else if (ev.type === 'item.completed' && ev.item?.type === 'agent_message') {
+          finalText = ev.item.text ?? '';
+          const visible = finalText.replace(APPROVAL_MARKER, '').trim();
+          if (visible) addMessage(jobId, office.id, 'agente', visible);
+        } else if (ev.type === 'item.started' && ev.item?.type === 'mcp_tool_call') {
+          addMessage(jobId, office.id, 'ferramenta', [ev.item.server, ev.item.tool].join(' · '));
+        } else if (ev.type === 'turn.completed') codexComplete = true;
+        else if (ev.type === 'turn.failed') { isError = true; stderr = ev.error?.message ?? 'A rodada do Codex falhou.'; }
+        continue;
+      }
       if (ev.type === 'system' && ev.subtype === 'init' && ev.session_id) {
         setJob(jobId, { sessionId: ev.session_id });
         saveSession(ev.session_id);
@@ -601,7 +629,7 @@ async function start(jobId: string, typed: string, resume: boolean) {
       return;
     }
     // a sessão não existe mais (apagada, ou de outra pasta): segue numa nova e avisa, em vez de parar
-    if (session && (code !== 0 || isError) && /no conversation found/i.test(`${stderr} ${finalText}`)) {
+    if (!codex && session && (code !== 0 || isError) && /no conversation found/i.test(`${stderr} ${finalText}`)) {
       if (conversation) update('clients', conversation.id, { sessionId: null, sessionCost: 0 });
       if (holder) update('workers', holder.id, { sessionId: null, sessionCost: 0 });
       setJob(jobId, { sessionId: null, status: 'fila' });
@@ -611,8 +639,8 @@ async function start(jobId: string, typed: string, resume: boolean) {
       pump();
       return;
     }
-    if (code !== 0 && !finalText) {
-      addMessage(jobId, office.id, 'sistema', `O Claude Code saiu com erro (código ${code}). ${stderr.trim().slice(-800)}`);
+    if ((codex && (!codexComplete || !finalText.trim() || isError || code !== 0)) || (code !== 0 && !finalText)) {
+      addMessage(jobId, office.id, 'sistema', `O ${engine} saiu com erro (código ${code}). ${stderr.trim().slice(-800)}`);
       const failed = setJob(jobId, { status: 'erro' });
       setAgentStatus(agent.id, office.id, 'erro');
       onJobFinished(failed, '', false);

@@ -50,7 +50,7 @@ export function decideHelper(officeId: string, id: string, approve: boolean, by:
   if (helpers.length >= MAX_HELPERS_PER_CLIENT) throw new Error(`Este cliente já tem ${MAX_HELPERS_PER_CLIENT} ajudantes trabalhando. Espere um terminar.`);
   const asker = one<Worker>('SELECT * FROM workers WHERE id = ?', r.workerId);
   const client = one<Client>('SELECT * FROM clients WHERE id = ?', r.clientId)!;
-  const helper = createWorker(officeId, r.clientId, 'ajudante', by, r.workerId);
+  const helper = createWorker(officeId, r.clientId, 'ajudante', by, r.workerId, asker?.provider);
   update('helper_requests', id, { status: 'aprovado', helperId: helper.id, decidedBy: by });
   const prompt = [
     `## Tarefa de ajudante (${client.name})`,

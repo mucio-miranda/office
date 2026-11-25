@@ -829,6 +829,7 @@ export const MAX_WORKERS = 50;
 
 export type WorkerState = 'trabalhando' | 'aguardando' | 'copa';
 export interface Worker {
+  provider?: 'claude' | 'codex';
   id: ID;
   officeId: ID;
   /** O cliente ou projeto dele: nasce, trabalha e é arquivado ali. */
