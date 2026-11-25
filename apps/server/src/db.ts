@@ -205,6 +205,14 @@ const MIGRATIONS: string[] = [
      session_cost = COALESCE((SELECT c.session_cost FROM clients c WHERE c.id = workers.client_id), 0)
    WHERE role = 'titular' AND archived_at IS NULL
      AND id = (SELECT w2.id FROM workers w2 WHERE w2.client_id = workers.client_id AND w2.role = 'titular' AND w2.archived_at IS NULL ORDER BY w2.created_at DESC LIMIT 1);`,
+  `CREATE TABLE codex_sessions (
+     id TEXT PRIMARY KEY, client_id TEXT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+     title TEXT NOT NULL, thread TEXT, context_digest TEXT);
+   CREATE INDEX codex_sessions_client ON codex_sessions(client_id);
+   CREATE TABLE codex_turns (
+     seq INTEGER PRIMARY KEY, session_id TEXT NOT NULL REFERENCES codex_sessions(id) ON DELETE CASCADE,
+     prompt TEXT NOT NULL, answer TEXT NOT NULL);
+   CREATE INDEX codex_turns_session ON codex_turns(session_id,seq);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

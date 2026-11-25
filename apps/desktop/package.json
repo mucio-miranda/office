@@ -1,7 +1,7 @@
 {
   "name": "@office/desktop",
   "productName": "Office",
-  "version": "0.15.52",
+  "version": "0.15.53",
   "description": "Office: escritório virtual com funcionários de IA, como app de Windows.",
   "author": "Mucio Miranda",
   "license": "MIT",
@@ -46,6 +46,7 @@
           "office-render.mjs",
           "office-mcp.mjs",
           "office-hook.mjs",
+          "codex-read.mjs",
           "web/**",
           "agents/**",
           "assets/**"

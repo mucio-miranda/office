@@ -1,3 +1,4 @@
+import { registerCodex } from './codex.ts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
@@ -326,6 +327,7 @@ export async function api(app: FastifyInstance) {
 
   app.register(async (r) => {
     r.addHook('preHandler', requireUser);
+    registerCodex(r);
 
     r.get('/api/me', async (req, reply) => {
       // renova o cookie de sessão (usado por <video>/<img>) a partir do token da UI

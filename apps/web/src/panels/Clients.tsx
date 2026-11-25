@@ -1,3 +1,4 @@
+import { CodexChat } from './CodexChat';
 import { ClientDrive } from './ClientDrive';
 import { canSeeFinance, canWork } from '@office/shared';
 import { useEffect, useState } from 'react';
@@ -160,6 +161,10 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   // ao entrar no cliente, abre a que precisa de você (ou a última que andou)
   useEffect(() => { setSel(openSessions[0]?.id ?? null); setView(null); }, [c.id]); // eslint-disable-line react-hooks/exhaustive-deps
   const [creating, setCreating] = useState(false);
+  const [codex, setCodex] = useState<{ enabled: boolean; sessions: { id: string; title: string }[] }>({ enabled: false, sessions: [] });
+  const [provider, setProvider] = useState('claude');
+  const [selectedCodex, setSelectedCodex] = useState<string | null>(null);
+  useEffect(() => { api<typeof codex>(base + '/codex').then(setCodex).catch(() => {}); }, [base]);
   const [newTitle, setNewTitle] = useState('');
   const [carry, setCarry] = useState(false);
   const [renaming, setRenaming] = useState<string | null>(null);
@@ -184,6 +189,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
       const w = await api<Worker>(`${base}/sessoes/${id}/retomar`, { body: {} });
       setSel(w.id);
       setView(null);
+      setSelectedCodex(null);
       setTab('conversa');
       notify('A conversa virou uma sessão aberta do cliente');
     } catch (x) { notify((x as Error).message); }
@@ -199,6 +205,16 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   const createSession = async (e?: React.FormEvent) => {
     e?.preventDefault();
     try {
+      if (provider === 'codex') {
+        const s = await api<{ id: string; title: string }>(base + '/codex', { body: { title: newTitle.trim() } });
+        setCodex(old => ({ ...old, sessions: [s, ...old.sessions] }));
+        setSelectedCodex(s.id);
+        setCreating(false);
+        setNewTitle('');
+        setCarry(false);
+        return;
+      }
+      setSelectedCodex(null);
       const w = await api<Worker>(`${base}/conversa/nova`, { body: { title: newTitle.trim() || null, levarResumo: carry } });
       setSel(w.id);
       setView(null);
@@ -312,24 +328,27 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
               <form className="session-new" onSubmit={createSession}>
                 <input autoFocus value={newTitle} maxLength={60} placeholder="Nome da sessão (a demanda)" aria-label="Nome da sessão"
                   onChange={(e) => setNewTitle(e.target.value)} onKeyDown={(e) => e.key === 'Escape' && setCreating(false)} />
-                <label className="small muted"><input type="checkbox" checked={carry} onChange={(e) => setCarry(e.target.checked)} /> levar o resumo da última conversa</label>
+                {codex.enabled && <label>Assistente <select value={provider} onChange={e => setProvider(e.target.value)}><option value="claude">Claude</option><option value="codex">GPT Codex · Consulta</option></select></label>}
+                {provider === 'claude' && <label className="small muted"><input type="checkbox" checked={carry} onChange={(e) => setCarry(e.target.checked)} /> levar o resumo da última conversa</label>}
                 <div className="row gap"><button type="submit" className="small">Abrir</button><button type="button" className="ghost small" onClick={() => setCreating(false)}>Cancelar</button></div>
               </form>
             ) : (
-              <button type="button" className="small session-add" onClick={() => setCreating(true)}><Plus size={13} /> Nova sessão</button>
+              <button type="button" className="small session-add" onClick={() => { setProvider("claude"); setCreating(true); }}><Plus size={13} /> Nova sessão</button>
             ))}
             <div className="session-rows" role="list">
+              {codex.sessions.map(s => <button type="button" key={s.id} className={'session-row session-pick ' + (selectedCodex === s.id ? 'on' : '')}
+                onClick={() => setSelectedCodex(s.id)}><b>{s.title}</b><small>GPT Codex</small></button>)}
               {openSessions.map((w) => {
                 const label = w.state === 'aguardando' ? 'esperando você' : w.state === 'trabalhando' ? 'rodando' : 'parada';
                 return (
-                  <div key={w.id} role="listitem" className={`session-row st-${w.state} ${session?.id === w.id && !view ? 'on' : ''}`}>
+                  <div key={w.id} role="listitem" className={`session-row st-${w.state} ${!selectedCodex && session?.id === w.id && !view ? 'on' : ''}`}>
                     {renaming === w.id ? (
                       <form className="session-rename" onSubmit={(e) => { e.preventDefault(); renameSession(w); }}>
                         <input autoFocus value={renameText} maxLength={60} aria-label="Novo nome da sessão" onChange={(e) => setRenameText(e.target.value)}
                           onBlur={() => renameSession(w)} onKeyDown={(e) => e.key === 'Escape' && setRenaming(null)} />
                       </form>
                     ) : (
-                      <button type="button" className="session-pick" onClick={() => { setSel(w.id); setView(null); }}>
+                      <button type="button" className="session-pick" onClick={() => { setSelectedCodex(null); setSel(w.id); setView(null); }}>
                         <span className="row gap"><span className="status-dot" /><b className="truncate">{w.title ?? w.name}</b></span>
                         <span className="muted small">{label}{w.lastJobAt ? ` · ${when(w.lastJobAt)}` : ''}</span>
                       </button>
@@ -343,11 +362,11 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
                   </div>
                 );
               })}
-              {openSessions.length === 0 && <p className="muted small">Nenhuma sessão aberta. O primeiro pedido abre uma, ou use "Nova sessão".</p>}
+              {openSessions.length + codex.sessions.length === 0 && <p className="muted small">Nenhuma sessão aberta. O primeiro pedido abre uma, ou use "Nova sessão".</p>}
             </div>
           </aside>
-          <Conversa c={c} session={session} view={view} setView={setView} sessions={sessions} resume={resume}
-            onSessions={() => setTab('sessoes')} onInterview={interview} onBriefing={() => setTab('briefing')} />
+          {selectedCodex ? <CodexChat key={selectedCodex} url={base + '/codex/' + selectedCodex} writable={canWork(office!.role)} /> : <Conversa c={c} session={session} view={view} setView={setView} sessions={sessions} resume={resume}
+            onSessions={() => setTab('sessoes')} onInterview={interview} onBriefing={() => setTab('briefing')} />}
         </div>
       )}
       {tab === 'sessoes' && (
@@ -361,7 +380,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
           <div className="session-list" role="list">
             {sessions.filter((s) => !s.archivedAt && !openSessions.some((w) => w.sessionId === s.id)).map((s) => (
               <div key={s.id} role="listitem" className={`session-item row ${view === s.id ? 'on' : ''}`}>
-                <button type="button" className="session-open" onClick={() => { setView(s.id); setTab('conversa'); }}>
+                <button type="button" className="session-open" onClick={() => { setSelectedCodex(null); setView(s.id); setTab('conversa'); }}>
                   <span className="row gap">{s.origin === 'terminal' ? <Terminal size={12} /> : <History size={12} />}<b className="truncate">{s.title}</b></span>
                   <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)}{s.people.length ? ` · ${s.people.join(', ')}` : ''}</span>
                 </button>
@@ -377,7 +396,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
             )}
             {showArchived && sessions.filter((s) => s.archivedAt).map((s) => (
               <div key={s.id} role="listitem" className={`session-item row archived ${view === s.id ? 'on' : ''}`}>
-                <button type="button" className="session-open" onClick={() => { setView(s.id); setTab('conversa'); }}>
+                <button type="button" className="session-open" onClick={() => { setSelectedCodex(null); setView(s.id); setTab('conversa'); }}>
                   <span className="row gap">{s.origin === 'terminal' ? <Terminal size={12} /> : <History size={12} />}<b className="truncate">{s.title}</b></span>
                   <span className="muted small">{s.origin === 'terminal' ? 'terminal' : 'Office'} · {when(s.startedAt)} até {when(s.updatedAt)} · arquivada {when(s.archivedAt!)}</span>
                 </button>
