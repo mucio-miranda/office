@@ -42,7 +42,16 @@ const MAX_BYTES = 25 * 1024 * 1024;
  * A biblioteca da agência. `Documents\REZZU\REFERENCIAS` é um atalho (junção) para a pasta do Drive; o caminho real é o
  * que aparece na tela e o que a equipe acha no Drive.
  */
+const roots = new Map<string, { at: number; value: string }>();
 export const refsRoot = (office: Office) => {
+  // guardado por um minuto: no Drive cada resolução leva ~25 ms, e o moodboard pede isso para cada referência
+  const hit = roots.get(office.rootPath);
+  if (hit && Date.now() - hit.at < 60_000) return hit.value;
+  const value = resolveRefsRoot(office);
+  roots.set(office.rootPath, { at: Date.now(), value });
+  return value;
+};
+function resolveRefsRoot(office: Office) {
   // pela pasta mais próxima que existe: a biblioteca pode ainda não existir, e o caminho tem que ser o mesmo antes e depois
   // de criada (nome curto do Windows, "RUNNER~1", vira o longo)
   let cur = path.join(office.rootPath, 'REFERENCIAS');
@@ -54,7 +63,7 @@ export const refsRoot = (office: Office) => {
     cur = up;
   }
   try { return path.join(realpathSync.native(cur), ...rest); } catch { return path.join(office.rootPath, 'REFERENCIAS'); }
-};
+}
 const indexFile = (office: Office) => path.join(refsRoot(office), 'indice.json');
 const slug = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'ref';
 

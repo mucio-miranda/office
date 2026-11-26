@@ -1457,19 +1457,19 @@ export async function api(app: FastifyInstance) {
     r.get('/api/offices/:officeId/moodboards', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const { officeId } = req.params as any;
-      return moodboardList(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, all<Client>('SELECT * FROM clients WHERE office_id = ? ORDER BY name', officeId));
+      return await moodboardList(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, all<Client>('SELECT * FROM clients WHERE office_id = ? ORDER BY name', officeId));
     });
     r.get('/api/offices/:officeId/moodboards/nicho/:niche', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const { officeId, niche } = req.params as any;
-      return nicheBoard(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, niche) ?? reply.code(404).send({ error: 'Nicho sem referências' });
+      return (await nicheBoard(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, niche)) ?? reply.code(404).send({ error: 'Nicho sem referências' });
     });
     r.get('/api/offices/:officeId/clients/:id/moodboard', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const { officeId, id } = req.params as any;
       const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
       if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
-      return clientBoard(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, c);
+      return await clientBoard(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, c);
     });
 
     // referências: adicionar (arquivo ou link) e remover (vai para _apagados, fora das pastas que as skills leem)

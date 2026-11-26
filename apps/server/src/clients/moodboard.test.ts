@@ -23,15 +23,15 @@ writeFileSync(path.join(root, 'REFERENCIAS', 'indice.json'), JSON.stringify({ re
 ] }));
 writeFileSync(path.join(root, 'segredo.jpg'), 'x');
 
-test('nicho: mostra o que existe, a melhor nota primeiro, e não sai da pasta de referências', () => {
-  const b = nicheBoard(office, 'juridico')!;
+test('nicho: mostra o que existe, a melhor nota primeiro, e não sai da pasta de referências', async () => {
+  const b = (await nicheBoard(office, 'juridico'))!;
   assert.deepEqual(b.items.map((i) => i.id), ['juridico-0002', 'juridico-0001']);
   assert.ok(b.items[0].file.endsWith(path.join('REFERENCIAS', 'juridico', 'juridico-0002.jpg')));
   assert.equal(b.name, 'Jurídico');
-  assert.equal(nicheBoard(office, 'imobiliario'), null);
+  assert.equal(await nicheBoard(office, 'imobiliario'), null);
 });
 
-test('o tema sai das referências, com fundo e destaque legíveis', () => {
+test('o tema sai das referências, com fundo e destaque legíveis', async () => {
   const t = themeFrom(['#101418', '#101418', '#c8a074', '#f4f1ec'], true, 'Playfair Display');
   assert.ok(t.bg.startsWith('#1'));
   assert.equal(t.fg, '#f6f2ec');
@@ -39,7 +39,7 @@ test('o tema sai das referências, com fundo e destaque legíveis', () => {
   assert.equal(themeFrom([], false, null).fg, '#1b1917');
 });
 
-test('cliente: pega qualquer pasta de referência, sem lixo de página salva, ícones nem o resto da pasta', () => {
+test('cliente: pega qualquer pasta de referência, sem lixo de página salva, ícones nem o resto da pasta', async () => {
   const good = put('CLIENTES/X/DOCUMENTOS/ARTES/REFERENCIAS - NICHO/ref1.jpg');
   const nested = put('CLIENTES/X/DOCUMENTOS/IDENTIDADE VISUAL/REFERENCIAS/perfil/post.png');
   put('CLIENTES/X/DOCUMENTOS/ARTES/REFERENCIAS - NICHO/pagina_files/lixo.jpg');
@@ -48,18 +48,18 @@ test('cliente: pega qualquer pasta de referência, sem lixo de página salva, í
   put('CLIENTES/X/FOTOS/foto.jpg');
   put('CLIENTES/X/DOCUMENTOS/ARTES/TESTE ARTE-REFERENCIA/12a/12a.png');
   put('CLIENTES/X/DOCUMENTOS/ARTES/REFERENCIAS - NICHO/_trabalho/fundo.jpg');
-  const b = clientBoard(office, client({ niche: 'juridico' }));
+  const b = await clientBoard(office, client({ niche: 'juridico' }));
   assert.deepEqual(b.items.map((i) => i.file).sort(), [good, nested].sort());
   assert.equal(b.nicheItems.length, 2);
   assert.equal(b.items.find((i) => i.file === nested)!.group, 'perfil');
 });
 
-test('a marca do cliente veste o moodboard, e o nicho sai dela ou do nome', () => {
+test('a marca do cliente veste o moodboard, e o nicho sai dela ou do nome', async () => {
   const dir = 'CLIENTES/M/DOCUMENTOS/IDENTIDADE VISUAL';
   mkdirSync(path.join(root, ...dir.split('/')), { recursive: true });
   writeFileSync(path.join(root, ...dir.split('/'), 'marca.json'), JSON.stringify({ segmento: 'juridico', handle: '@m', cores: { escuro: '#1E140F', claro: '#F6F2ED', acento: '#C8A074' }, fontes: { titulo: 'Playfair Display', apoio: 'Proxima Nova' } }));
   const c = client({ id: 'm', folder: 'CLIENTES/M', name: 'Sem pista' });
-  const b = clientBoard(office, c);
+  const b = await clientBoard(office, c);
   assert.equal(b.theme.bg, '#1E140F');
   assert.equal(b.theme.titleFont, 'Playfair Display');
   assert.equal(b.niche, 'juridico');
@@ -69,8 +69,8 @@ test('a marca do cliente veste o moodboard, e o nicho sai dela ou do nome', () =
   assert.equal(nicheOf(office, client({ name: 'Gustavo Advocacia', folder: null, niche: 'imobiliario' })), 'imobiliario');
 });
 
-test('a lista traz nichos e clientes com capas', () => {
-  const r = moodboardList(office, [client({ niche: 'juridico' }), client({ id: 'fim', status: 'encerrado' })]);
+test('a lista traz nichos e clientes com capas', async () => {
+  const r = await moodboardList(office, [client({ niche: 'juridico' }), client({ id: 'fim', status: 'encerrado' })]);
   assert.equal(r.niches.find((n) => n.niche === 'juridico')!.count, 2);
   assert.equal(r.clients.length, 1);
   assert.ok(r.clients[0].covers.length >= 2);

@@ -1,4 +1,5 @@
-import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
+import { access, readdir, stat } from 'node:fs/promises';
 import path from 'node:path';
 import type { Client, MoodboardItem, MoodboardSummary, MoodboardTheme, Office } from '@office/shared';
 import { clientDir, isFolder } from './folder.ts';
@@ -88,15 +89,24 @@ export function themeFrom(colors: string[], dark: boolean, font: string | null):
 
 // ---------------------------------------------------------------- biblioteca por nicho
 
-function indexOf(office: Office): { refs: IndexRef[]; nichos: Record<string, { titulo?: string; texto?: string }> } {
+type Index = { refs: IndexRef[]; nichos: Record<string, { titulo?: string; texto?: string }> };
+const indexes = new Map<string, { mtime: number; size: number; index: Index }>();
+/** Lido de novo s\u00F3 quando o arquivo muda: a lista consulta o \u00EDndice uma vez por nicho e por cliente. */
+function indexOf(office: Office): Index {
   const file = path.join(refsRoot(office), 'indice.json');
-  if (!existsSync(file)) return { refs: [], nichos: {} };
+  let st;
+  try { st = statSync(file); } catch { return { refs: [], nichos: {} }; }
+  const hit = indexes.get(file);
+  if (hit && hit.mtime === st.mtimeMs && hit.size === st.size) return hit.index;
+  let index: Index;
   try {
     const ind = JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
-    return { refs: Array.isArray(ind.refs) ? ind.refs : [], nichos: ind.nichos && typeof ind.nichos === 'object' ? ind.nichos : {} };
+    index = { refs: Array.isArray(ind.refs) ? ind.refs : [], nichos: ind.nichos && typeof ind.nichos === 'object' ? ind.nichos : {} };
   } catch {
     return { refs: [], nichos: {} };
   }
+  indexes.set(file, { mtime: st.mtimeMs, size: st.size, index });
+  return index;
 }
 const libraryOf = (office: Office) => indexOf(office).refs;
 
@@ -110,10 +120,30 @@ function toItem(office: Office, r: IndexRef): MoodboardItem {
   };
 }
 
-function nicheItems(office: Office, niche: string) {
-  return libraryOf(office)
-    .filter((r) => r.segmento === niche && !r.arquivo.split(/[\\/]/).includes('..') && existsSync(refFile(office, r)))
-    .sort((a, b) => score(b) - score(a) || a.id.localeCompare(b.id));
+const nicheCache = new Map<string, { at: number; refs: IndexRef[] }>();
+const nicheScans = new Map<string, Promise<IndexRef[]>>();
+/**
+ * Guardado por 30 s (ou até o índice mudar): a lista passa por todos os nichos e clientes, e conferir as ~800 referências no
+ * Drive a cada passada travava o servidor.
+ */
+async function nicheItems(office: Office, niche: string): Promise<IndexRef[]> {
+  let mtime = 0;
+  try { mtime = statSync(path.join(refsRoot(office), 'indice.json')).mtimeMs; } catch { /* sem índice */ }
+  const key = `${office.rootPath}|${niche}|${mtime}`;
+  const hit = nicheCache.get(key);
+  if (hit && Date.now() - hit.at < 30_000) return hit.refs;
+  const pending = nicheScans.get(key);
+  if (pending) return pending;
+  const scan = (async () => {
+    const lib = libraryOf(office).filter((r) => r.segmento === niche && !r.arquivo.split(/[\\/]/).includes('..'));
+    const ok = await Promise.all(lib.map((r) => access(refFile(office, r)).then(() => true, () => false)));
+    const refs = lib.filter((_, i) => ok[i]).sort((a, b) => score(b) - score(a) || a.id.localeCompare(b.id));
+    for (const [k, v] of nicheCache) if (Date.now() - v.at >= 30_000) nicheCache.delete(k);
+    nicheCache.set(key, { at: Date.now(), refs });
+    return refs;
+  })().finally(() => nicheScans.delete(key));
+  nicheScans.set(key, scan);
+  return scan;
 }
 
 function nicheTheme(refs: IndexRef[], niche: string, office?: Office) {
@@ -133,35 +163,49 @@ function marcaOf(dir: string | null): Marca | null {
 }
 
 const CACHE_MS = 30_000;
-const scans = new Map<string, { at: number; files: { file: string; rel: string; mtime: number }[] }>();
+type RefFile = { file: string; rel: string; mtime: number };
+const scans = new Map<string, { at: number; files: RefFile[] }>();
+const walking = new Map<string, Promise<RefFile[]>>();
 
-/** Imagens dentro de qualquer pasta de referência do cliente, das mais novas para as mais antigas. */
-function clientRefs(dir: string | null) {
-  if (!dir || !existsSync(dir)) return [];
+/**
+ * Imagens dentro de qualquer pasta de referência do cliente, das mais novas para as mais antigas. Assíncrono: no Drive, varrer
+ * as pastas dos clientes leva dezenas de segundos e, síncrono, travava o Office inteiro. Com `allowStale`, devolve a última
+ * varredura na hora e atualiza por trás (a lista de moodboards); sem, espera a varredura nova (o quadro aberto).
+ */
+async function clientRefs(dir: string | null, allowStale = false): Promise<RefFile[]> {
+  if (!dir) return [];
   const cached = scans.get(dir);
   if (cached && Date.now() - cached.at < CACHE_MS) return cached.files;
-  const files: { file: string; rel: string; mtime: number }[] = [];
-  const walk = (abs: string, rel: string, depth: number, inside: boolean) => {
+  const scan = walking.get(dir) ?? walkRefs(dir);
+  walking.set(dir, scan);
+  if (cached && allowStale) { scan.catch(() => {}); return cached.files; }
+  return scan;
+}
+
+function walkRefs(dir: string) {
+  const files: RefFile[] = [];
+  const walk = async (abs: string, rel: string, depth: number, inside: boolean): Promise<void> => {
     if (depth > 8) return;
     let entries;
-    try { entries = readdirSync(abs, { withFileTypes: true }); } catch { return; }
+    try { entries = await readdir(abs, { withFileTypes: true }); } catch { return; }
+    const subs: Promise<void>[] = [];
     for (const e of entries) {
       if (e.name.startsWith('.') || /_files$|^_trabalho$|^_apagados$|^node_modules$/i.test(e.name)) continue;
       const full = path.join(abs, e.name);
       const childRel = rel ? `${rel}/${e.name}` : e.name;
       // a pasta começa com o nome: "TESTE ARTE-REFERENCIA", por exemplo, é trabalho da skill, não referência
-      if (isFolder(e, full)) walk(full, childRel, depth + 1, inside || /^REFER[EÊ]NCIAS?\b/i.test(e.name));
+      if (isFolder(e, full)) subs.push(walk(full, childRel, depth + 1, inside || /^REFER[EÊ]NCIAS?\b/i.test(e.name)));
       else if (inside && e.isFile() && IMAGE.test(e.name)) {
-        let st;
-        try { st = statSync(full); } catch { continue; }
-        if (st.size >= MIN_BYTES) files.push({ file: full, rel: childRel, mtime: st.mtimeMs });
+        subs.push(stat(full).then((st) => { if (st.size >= MIN_BYTES) files.push({ file: full, rel: childRel, mtime: st.mtimeMs }); }, () => {}));
       }
     }
+    await Promise.all(subs);
   };
-  walk(dir, '', 0, false);
-  files.sort((a, b) => b.mtime - a.mtime);
-  scans.set(dir, { at: Date.now(), files });
-  return files;
+  return walk(dir, '', 0, false).then(() => {
+    files.sort((a, b) => b.mtime - a.mtime || a.rel.localeCompare(b.rel));
+    scans.set(dir, { at: Date.now(), files });
+    return files;
+  }).finally(() => walking.delete(dir));
 }
 
 /** Nicho do cliente: o escolhido no Office, o da marca ou o que dá para deduzir do nome e da pasta. */
@@ -178,54 +222,54 @@ export function nicheOf(office: Office, client: Client) {
   return guess && known.has(guess) ? guess : null;
 }
 
-function clientTheme(office: Office, client: Client, marca: Marca | null, niche: string | null): MoodboardTheme {
+async function clientTheme(office: Office, client: Client, marca: Marca | null, niche: string | null): Promise<MoodboardTheme> {
   const c = marca?.cores;
   if (c && isHex(c.escuro) && isHex(c.claro)) {
     const swatches = [c.escuro, c.claro, c.acento, c.acento2, c.neutro].filter(isHex);
     return { bg: c.escuro, fg: c.claro, accent: isHex(c.acento) ? c.acento : c.claro, swatches, titleFont: marca?.fontes?.titulo ?? null, bodyFont: marca?.fontes?.apoio ?? null };
   }
-  const base = nicheTheme(niche ? nicheItems(office, niche) : [], niche ?? '', office);
+  const base = nicheTheme(niche ? await nicheItems(office, niche) : [], niche ?? '', office);
   return isHex(client.color) && Math.abs(lum(client.color) - lum(base.bg)) > 0.3 ? { ...base, accent: client.color } : base;
 }
 
 // ---------------------------------------------------------------- saídas
 
-export function moodboardList(office: Office, clients: Client[]): { niches: MoodboardSummary[]; clients: MoodboardSummary[] } {
+export async function moodboardList(office: Office, clients: Client[]): Promise<{ niches: MoodboardSummary[]; clients: MoodboardSummary[] }> {
   const library = libraryOf(office);
   const nicheIds = [...new Set(library.map((r) => r.segmento))].sort();
-  const niches = nicheIds.map((id): MoodboardSummary => {
-    const refs = nicheItems(office, id);
+  const niches = await Promise.all(nicheIds.map(async (id): Promise<MoodboardSummary> => {
+    const refs = await nicheItems(office, id);
     return { key: `nicho:${id}`, name: nicheLabel(id), count: refs.length, theme: nicheTheme(refs, id, office), covers: refs.slice(0, COVERS).map((r) => refFile(office, r)), niche: id };
-  });
-  const list = clients.filter((c) => c.status !== 'encerrado').map((c): MoodboardSummary => {
+  }));
+  const list = await Promise.all(clients.filter((c) => c.status !== 'encerrado').map(async (c): Promise<MoodboardSummary> => {
     const dir = clientDir(office, c);
     const niche = nicheOf(office, c);
-    const own = clientRefs(dir);
-    const fromNiche = niche ? nicheItems(office, niche) : [];
+    const [own, fromNiche, theme] = await Promise.all([clientRefs(dir, true), niche ? nicheItems(office, niche) : [], clientTheme(office, c, marcaOf(dir), niche)]);
     return {
-      key: `cliente:${c.id}`, name: c.name, count: own.length, theme: clientTheme(office, c, marcaOf(dir), niche), niche,
+      key: `cliente:${c.id}`, name: c.name, count: own.length, theme, niche,
       covers: [...own.map((f) => f.file), ...fromNiche.map((r) => refFile(office, r))].slice(0, COVERS),
     };
-  });
+  }));
   return { niches, clients: list };
 }
 
-export function nicheBoard(office: Office, niche: string) {
-  const refs = nicheItems(office, niche);
+export async function nicheBoard(office: Office, niche: string) {
+  const refs = await nicheItems(office, niche);
   if (!refs.length) return null;
   return { key: `nicho:${niche}`, name: nicheLabel(niche), niche, folder: path.join(refsRoot(office), niche), theme: nicheTheme(refs, niche, office), handle: null, items: refs.map((r) => toItem(office, r)), nicheItems: [] as MoodboardItem[] };
 }
 
-export function clientBoard(office: Office, client: Client) {
+export async function clientBoard(office: Office, client: Client) {
   const dir = clientDir(office, client);
   const marca = marcaOf(dir);
   const niche = nicheOf(office, client);
-  const items = clientRefs(dir).slice(0, MAX_ITEMS).map((f): MoodboardItem => ({
+  const [own, fromNiche, theme] = await Promise.all([clientRefs(dir), niche ? nicheItems(office, niche) : [], clientTheme(office, client, marca, niche)]);
+  const items = own.slice(0, MAX_ITEMS).map((f): MoodboardItem => ({
     id: f.rel, file: f.file, layout: null, tema: null, tags: [], paleta: [], nota: null, obs: '', origem: '', width: null, height: null,
     group: f.rel.split('/').slice(0, -1).at(-1) ?? null,
   }));
   return {
-    key: `cliente:${client.id}`, name: client.name, niche, folder: dir, theme: clientTheme(office, client, marca, niche), handle: marca?.handle ?? null, items,
-    nicheItems: niche ? nicheItems(office, niche).slice(0, 36).map((r) => toItem(office, r)) : [],
+    key: `cliente:${client.id}`, name: client.name, niche, folder: dir, theme, handle: marca?.handle ?? null, items,
+    nicheItems: fromNiche.slice(0, 36).map((r) => toItem(office, r)),
   };
 }
