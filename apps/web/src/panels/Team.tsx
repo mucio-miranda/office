@@ -1,3 +1,4 @@
+import { DriveApiCard } from './DriveApiCard';
 import { useEffect, useState } from 'react';
 import { Copy, Palette, Pencil, Plus, RefreshCw, Trash2 } from 'lucide-react';
 import { MAX_CUSTOM_ROOMS, ROLE_LABEL, isRetiredAgent, WALL_TYPES, type SkillsState, type AgentProfile, type Member, type WallType } from '@office/shared';
@@ -109,6 +110,7 @@ export function Team() {
       {isOwner && <ModelCard />}
       {isOwner && <SkillsCard />}
       {isOwner && <BackupCard />}
+      {isOwner && <DriveApiCard />}
 
       <ToolsCard />
 

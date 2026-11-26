@@ -33,6 +33,8 @@ import { startTurnover, closeSession, newSession, resumeAsSession, adoptFiles, a
 import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
 import { requestCommand } from '../agents/commands.ts';
+import { runGit } from '../agents/gitLocal.ts';
+import { disconnectDriveApi, driveApiStatus, driveCopyStatus, driveLoginUrl, finishDriveLogin, getDriveCopy, makeShortcut, redirectUri, setDriveApiClient, startDriveCopy, waitDriveCopy } from '../clients/googleDrive.ts';
 import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef, setNicheFont } from '../clients/references.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePlan, saveCheck, undoRenames } from '../clients/month.ts';
@@ -43,7 +45,7 @@ import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../age
 import { localPaths, saveAttachment } from '../agents/attachments.ts';
 import type { Readable } from 'node:stream';
 import { decideHelper, requestHelper } from '../agents/helpers.ts';
-import { driveFolderLink, driveLink as driveFileLink, drivePathOf, inDrive } from '../clients/driveId.ts';
+import { driveFileId, driveFolderLink, driveIdFromLink, driveLink as driveFileLink, drivePathOf, inDrive } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { localDay, startDaily } from '../agents/daily.ts';
@@ -163,6 +165,18 @@ function findUser<T>(name: string): T | undefined {
 export async function api(app: FastifyInstance) {
   // ---------------- autenticação ----------------
   // o servidor MCP `office` de uma tarefa: só daqui desta máquina e só o cliente da tarefa
+  // retorno do login do Google (API do Drive): só nesta máquina, e o `state` amarra ao pedido feito pelo dono
+  app.get('/api/google-drive/retorno', async (req, reply) => {
+    if (!isLocal(req)) return reply.code(403).send({ error: 'Só nesta máquina.' });
+    const q = req.query as { code?: string; state?: string; error?: string };
+    const page = (t: string) => reply.type('text/html; charset=utf-8').send(`<!doctype html><meta charset="utf-8"><title>Office</title><body style="font:16px system-ui;padding:40px;max-width:520px">${t}</body>`);
+    if (q.error || !q.code || !q.state) return page(`<h2>Não conectou</h2><p>${q.error === 'access_denied' ? 'A permissão foi negada.' : 'O Google não devolveu a autorização.'} Volte ao Office e tente de novo.</p>`);
+    try {
+      const email = await finishDriveLogin(q.code, q.state);
+      return page(`<h2>Pronto</h2><p>O Office está ligado ao Google Drive${email ? ` da conta <b>${email.replace(/[<>&"]/g, '')}</b>` : ''}. Pode fechar esta aba.</p>`);
+    } catch (e) { return page(`<h2>Não conectou</h2><p>${(e as Error).message.replace(/[<>&"]/g, '')}</p>`); }
+  });
+
   app.post('/api/agente/:tool', async (req, reply) => {
     if (!isLocal(req)) return reply.code(403).send({ error: 'Só nesta máquina.' });
     const h = req.headers.authorization;
@@ -179,6 +193,39 @@ export async function api(app: FastifyInstance) {
       const r = drivePathOf(String((req.body as { link?: string } | undefined)?.link ?? ''), office.driveRoot);
       if (!r) return reply.code(400).send({ error: 'Isso não parece um link do Drive. Mande o link completo (drive.google.com/...).' });
       return r;
+    }
+    // git local na pasta do repositório (o funcionário não troca de pasta); enviar continua só por pedir_comando
+    if (job && tool === 'git_local') {
+      try {
+        const r = await runGit((req.body ?? {}) as never);
+        logActivity(job.officeId, `agent:${job.agentId}`, 'git', `${String((req.body as any)?.comando)} em ${String((req.body as any)?.pasta)}`.slice(0, 200));
+        return r;
+      } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+    }
+    // API do Google Drive: atalho no Meu Drive e cópia de Drive para Drive (nunca apaga, move nem compartilha)
+    if (job && (tool === 'drive_atalho' || tool === 'drive_copiar' || tool === 'drive_copia_status')) {
+      const q = (req.body ?? {}) as { link?: string; pasta?: string; para?: string; id?: string };
+      try {
+        if (tool === 'drive_copia_status') {
+          const c = getDriveCopy(String(q.id ?? ''), job.id);
+          if (!c) return reply.code(404).send({ error: 'Cópia não encontrada nesta tarefa. Repita drive_copiar (o que já existe é pulado).' });
+          return c.done ? driveCopyStatus(c) : await waitDriveCopy(c);
+        }
+        const office = one<Office>('SELECT * FROM offices WHERE id = ?', job.officeId)!;
+        const src = driveIdFromLink(String(q.link ?? ''));
+        if (!src) return reply.code(400).send({ error: 'Mande `link` com o link do Drive (drive.google.com/...).' });
+        const destPath = String((tool === 'drive_atalho' ? q.pasta : q.para) ?? '');
+        const dest = driveIdFromLink(destPath) ?? (path.isAbsolute(destPath) && existsSync(destPath) && inDrive(destPath, office.driveRoot) ? driveFileId(destPath, undefined, true) : null);
+        if (!dest) return reply.code(400).send({ error: `Não achei a pasta de destino no Drive: ${destPath || '(vazio)'}. Mande o caminho completo de uma pasta que já existe no H: (ou o link dela).` });
+        if (tool === 'drive_atalho') {
+          const r = await makeShortcut(src, dest);
+          logActivity(job.officeId, `agent:${job.agentId}`, 'criou atalho no Drive', `${r.nome} em ${destPath}`);
+          return { ok: true, ...r, texto: `${r.criado ? 'Atalho criado' : 'O atalho já existia'}: "${r.nome}" em ${destPath}. No H: aparece em alguns segundos; confira com drive_caminho.` };
+        }
+        const c = startDriveCopy(job.id, src, dest);
+        logActivity(job.officeId, `agent:${job.agentId}`, 'copiou no Drive', `${String(q.link).slice(0, 80)} para ${destPath}`);
+        return await waitDriveCopy(c);
+      } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
     }
     if (job && (tool === 'copiar_para_local' || tool === 'copia_status' || tool === 'mover')) {
       const office = one<Office>('SELECT * FROM offices WHERE id = ?', job.officeId)!;
@@ -1837,6 +1884,29 @@ export async function api(app: FastifyInstance) {
     });
 
     // baixa o release oficial e confere o SHA256; só o dono do escritório instala programas nesta máquina
+    // API do Google Drive: o dono cola a credencial OAuth dele e conecta a conta da agência
+    r.get('/api/offices/:officeId/google-drive', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      return { ...driveApiStatus(), retorno: redirectUri() };
+    });
+    r.put('/api/offices/:officeId/google-drive', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      const b = body(z.object({ clientId: z.string().max(300), clientSecret: z.string().max(300) }), req, reply);
+      if (!b) return;
+      try { setDriveApiClient(b.clientId, b.clientSecret); } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+      logActivity((req.params as any).officeId, `user:${req.user.id}`, 'configurou a API do Drive', '');
+      return driveApiStatus();
+    });
+    r.post('/api/offices/:officeId/google-drive/conectar', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      try { return { url: driveLoginUrl() }; } catch (e) { return reply.code(400).send({ error: (e as Error).message }); }
+    });
+    r.post('/api/offices/:officeId/google-drive/desconectar', async (req, reply) => {
+      if (!requireOwner(req, reply)) return;
+      disconnectDriveApi();
+      return driveApiStatus();
+    });
+
     r.post('/api/offices/:officeId/tools/:id/install', async (req, reply) => {
       const { officeId, id } = req.params as any;
       if (membership(officeId, req.user.id)?.role !== 'dono') return reply.code(403).send({ error: 'Só o dono do escritório instala ferramentas.' });

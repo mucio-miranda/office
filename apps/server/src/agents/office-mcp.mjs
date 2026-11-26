@@ -57,6 +57,26 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { acao: { type: 'string', enum: ['git_push', 'gh_repo_create'] }, pasta: { type: 'string', description: 'caminho completo do repositório local' }, remoto: { type: 'string', description: 'git_push: remoto (padrão origin)' }, branch: { type: 'string', description: 'git_push: branch (padrão main)' }, nome: { type: 'string', description: 'gh_repo_create: dono/repositorio' }, visibilidade: { type: 'string', enum: ['privado', 'publico'], description: 'gh_repo_create: a pessoa decide' }, motivo: { type: 'string', description: 'por que, em uma linha' } }, required: ['acao', 'pasta', 'motivo'] },
   },
   {
+    name: 'git_local',
+    description: 'Roda git local na pasta de um repositório (você não troca de pasta aqui): init, status, add, commit, log, diff, show, branch, remote, config (só user.name e user.email deste repositório), rev-parse, ls-files. Sem shell: mande o subcomando e os argumentos separados, ex.: comando "commit", args ["-m", "mensagem"]. Enviar ao GitHub: pedir_comando.',
+    inputSchema: { type: 'object', properties: { pasta: { type: 'string', description: 'caminho completo do repositório' }, comando: { type: 'string' }, args: { type: 'array', items: { type: 'string' } } }, required: ['pasta', 'comando'] },
+  },
+  {
+    name: 'drive_atalho',
+    description: 'Põe no Meu Drive um atalho de uma pasta ou arquivo do Drive que está só "compartilhado com a conta" (fora do H:), pela API do Drive da agência. Depois de alguns segundos ele aparece no H: dentro da pasta indicada. Use quando drive_caminho disser que o link está fora do Meu Drive e a equipe precisa dele por perto.',
+    inputSchema: { type: 'object', properties: { link: { type: 'string', description: 'link do Drive do item compartilhado' }, pasta: { type: 'string', description: 'pasta do H: (caminho completo, já existente) onde fica o atalho' } }, required: ['link', 'pasta'] },
+  },
+  {
+    name: 'drive_copiar',
+    description: 'Copia um arquivo ou uma pasta inteira do Drive (inclusive de link só compartilhado, fora do H:) para uma pasta da agência, de Drive para Drive, sem baixar nada. Nunca sobrescreve: o que já existe com o mesmo nome fica e é listado como pulado. Espera até ~4 min; se não terminar, devolve o id para drive_copia_status. Confira a contagem no fim.',
+    inputSchema: { type: 'object', properties: { link: { type: 'string', description: 'link do Drive do arquivo ou pasta de origem' }, para: { type: 'string', description: 'pasta de destino no H: (caminho completo, já existente) ou link dela' } }, required: ['link', 'para'] },
+  },
+  {
+    name: 'drive_copia_status',
+    description: 'Espera uma cópia de drive_copiar (até ~4 min por chamada) e diz quanto já foi.',
+    inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
+  },
+  {
     name: 'copiar_para_local',
     description: 'Copia arquivos ou pastas do Google Drive (H:) para o disco local antes de editar: vídeos brutos e qualquer arquivo grande. O Drive baixa enquanto lê, e um comando seu (ffmpeg, whisper, Copy-Item) cai no limite de tempo no meio de um arquivo de GB. Aqui a cópia roda no Office, em segundo plano e com retomada se o Drive falhar. Espera até ~4 min; se não terminar, devolve o id e o progresso: chame copia_status para esperar mais. Nunca apaga nem mexe no original. Copie para a pasta TMP do trabalho (C:\REZZU-TEMP\...).',
     inputSchema: { type: 'object', properties: { de: { type: 'array', items: { type: 'string' }, description: 'caminhos completos de arquivos ou pastas' }, para: { type: 'string', description: 'pasta de destino (caminho completo)' } }, required: ['de', 'para'] },

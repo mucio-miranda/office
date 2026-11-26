@@ -139,7 +139,7 @@ export function drivePathOf(link: string, hint?: string | null, dbs = driveMetad
         sid = p.sid;
       }
       const base = { id, nome: item.title, pasta: item.folder === 1 };
-      if (!root) { found ??= { ...base, caminho: null, motivo: 'Está compartilhado com a conta, mas fora do Meu Drive (sem atalho): não aparece no H:. Peça para adicionar um atalho no Meu Drive ou use o conector do Drive.' }; continue; }
+      if (!root) { found ??= { ...base, caminho: null, motivo: 'Está compartilhado com a conta, mas fora do Meu Drive (sem atalho): não aparece no H:. Use drive_copiar para trazer o conteúdo para a pasta da agência, ou drive_atalho para pôr um atalho no Meu Drive.' }; continue; }
       for (const mount of myDriveMounts(hint)) {
         const p = path.join(mount, ...names);
         if (existsSync(p)) return { ...base, caminho: p };
