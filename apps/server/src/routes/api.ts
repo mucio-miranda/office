@@ -41,7 +41,7 @@ import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../age
 import { localPaths, saveAttachment } from '../agents/attachments.ts';
 import type { Readable } from 'node:stream';
 import { decideHelper, requestHelper } from '../agents/helpers.ts';
-import { driveFolderLink, driveLink as driveFileLink } from '../clients/driveId.ts';
+import { driveFolderLink, driveLink as driveFileLink, drivePathOf } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { localDay, startDaily } from '../agents/daily.ts';
@@ -172,6 +172,12 @@ export async function api(app: FastifyInstance) {
     if (job && tool === 'render_pegar') return { ok: takeRender(job) };
     if (job && tool === 'render_liberar') { releaseRender(job.id); return { ok: true }; }
     // arquivos pelo Office: copiar do Drive para o disco (sem o limite de tempo de um comando) e mover com trava
+    if (job && tool === 'drive_caminho') {
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', job.officeId)!;
+      const r = drivePathOf(String((req.body as { link?: string } | undefined)?.link ?? ''), office.driveRoot);
+      if (!r) return reply.code(400).send({ error: 'Isso não parece um link do Drive. Mande o link completo (drive.google.com/...).' });
+      return r;
+    }
     if (job && (tool === 'copiar_para_local' || tool === 'copia_status' || tool === 'mover')) {
       const office = one<Office>('SELECT * FROM offices WHERE id = ?', job.officeId)!;
       const roots = [office.rootPath, ...(office.driveRoot ? [office.driveRoot] : []), ...office.extraDirs];
@@ -2091,7 +2097,7 @@ export async function api(app: FastifyInstance) {
     // ---------------- arquivos (só dentro das pastas do escritório) ----------------
     const allowedRoots = (officeId: string) => {
       const o = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
-      return [o.rootPath, ...o.extraDirs].map((p) => path.resolve(p).toLowerCase());
+      return [o.rootPath, ...(o.driveRoot ? [o.driveRoot] : []), ...o.extraDirs].map((p) => path.resolve(p).toLowerCase());
     };
     const inside = (officeId: string, p: string) => {
       const abs = path.resolve(p).toLowerCase();

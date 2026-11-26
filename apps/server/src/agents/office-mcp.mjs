@@ -62,6 +62,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] },
   },
   {
+    name: 'drive_caminho',
+    description: 'Acha no computador (H:) o arquivo ou a pasta de um link do Google Drive (drive.google.com/file/d/..., /drive/folders/..., docs) pelo banco local do Drive para computador, só leitura. Use sempre que a pessoa mandar um link do Drive, em vez de procurar pelo nome ou montar script. Devolve o caminho; se não estiver no H:, diz o motivo.',
+    inputSchema: { type: 'object', properties: { link: { type: 'string', description: 'o link do Drive (ou só o código do arquivo)' } }, required: ['link'] },
+  },
+  {
     name: 'mover',
     description: 'Move ou renomeia um arquivo ou pasta dentro das pastas do escritório (comandos de mover são bloqueados). Use SÓ quando a pessoa pediu nesta conversa para mover ou renomear aquilo; nunca por conta própria e nunca brutos de cliente sem o pedido dela. Não sobrescreve (se o destino existe, recusa); se `para` é uma pasta que existe, vai para dentro dela com o mesmo nome. No mesmo disco (ex.: dentro do Drive H:) é na hora, sem enviar de novo. Devolve como desfazer.',
     inputSchema: { type: 'object', properties: { de: { type: 'string', description: 'caminho completo do que mover' }, para: { type: 'string', description: 'caminho completo do destino (pasta existente ou novo nome)' }, motivo: { type: 'string', description: 'o pedido da pessoa, em poucas palavras' } }, required: ['de', 'para', 'motivo'] },

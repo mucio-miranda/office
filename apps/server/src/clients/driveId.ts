@@ -79,3 +79,77 @@ export const driveFolderLink = (dir: string, dbs?: string[]) => {
   const id = driveFileId(dir, dbs, true);
   return id ? `https://drive.google.com/drive/folders/${id}` : null;
 };
+
+/* ---------------- do link para o caminho no computador ---------------- */
+
+/** O código de um link do Drive (`/file/d/<id>`, `/drive/folders/<id>`, `?id=<id>`, docs/sheets) ou o próprio código. */
+export function driveIdFromLink(s: string): string | null {
+  const t = s.trim();
+  const m = /\/(?:file\/d|folders|document\/d|spreadsheets\/d|presentation\/d)\/([A-Za-z0-9_-]{20,})/.exec(t) ?? /[?&]id=([A-Za-z0-9_-]{20,})/.exec(t);
+  if (m) return m[1];
+  return REAL_ID.test(t) ? t : null;
+}
+
+const MY_DRIVE = /^(Meu Drive|My Drive)$/i;
+
+/** Onde o "Meu Drive" está montado (H:\Meu Drive): pela pasta do Drive do escritório e, sem ela, procurando nas letras. */
+export function myDriveMounts(hint?: string | null): string[] {
+  const out: string[] = [];
+  if (hint) {
+    const parts = path.resolve(hint).split(/[\\/]+/);
+    const i = parts.findIndex((p) => MY_DRIVE.test(p));
+    if (i > 0) out.push(path.join(`${parts[0]}${path.sep}`, ...parts.slice(1, i + 1)));
+  }
+  if (process.platform === 'win32') {
+    for (const l of 'DEFGHIJKLMNOPQRSTUVWXYZ') for (const n of ['Meu Drive', 'My Drive']) {
+      const p = path.join(`${l}:${path.sep}`, n);
+      if (!out.includes(p) && existsSync(p)) out.push(p);
+    }
+  }
+  return out;
+}
+
+export interface DrivePath { id: string; nome: string; pasta: boolean; caminho: string | null; motivo?: string }
+
+/**
+ * Caminho no computador de um link do Drive: sobe pelas pastas no banco local do Drive para computador (só leitura) até o
+ * "Meu Drive" e junta com onde ele está montado. Item que não está no Meu Drive (compartilhado comigo sem atalho, drive
+ * compartilhado) não tem caminho garantido: devolve o motivo.
+ */
+export function drivePathOf(link: string, hint?: string | null, dbs = driveMetadataDbs()): DrivePath | null {
+  const id = driveIdFromLink(link);
+  if (!id) return null;
+  let found: DrivePath | null = null;
+  for (const file of dbs) {
+    let db: DatabaseSync | null = null;
+    try {
+      db = new DatabaseSync(file, { readOnly: true });
+      const item = db.prepare('SELECT stable_id AS sid, local_title AS title, is_folder AS folder FROM items WHERE id = ? AND trashed = 0 AND is_tombstone = 0').get(id) as { sid: number; title: string; folder: number } | undefined;
+      if (!item) continue;
+      const parent = db.prepare('SELECT p.stable_id AS sid, p.local_title AS title FROM stable_parents sp JOIN items p ON p.stable_id = sp.parent_stable_id WHERE sp.item_stable_id = ? AND p.trashed = 0');
+      const names = [item.title];
+      let sid = item.sid;
+      let root = false;
+      for (let i = 0; i < 40; i++) {
+        const ps = parent.all(sid) as unknown as { sid: number; title: string }[];
+        if (!ps.length) break;
+        const p = ps[0];
+        if (MY_DRIVE.test(p.title)) { root = true; break; }
+        names.unshift(p.title);
+        sid = p.sid;
+      }
+      const base = { id, nome: item.title, pasta: item.folder === 1 };
+      if (!root) { found ??= { ...base, caminho: null, motivo: 'Está compartilhado com a conta, mas fora do Meu Drive (sem atalho): não aparece no H:. Peça para adicionar um atalho no Meu Drive ou use o conector do Drive.' }; continue; }
+      for (const mount of myDriveMounts(hint)) {
+        const p = path.join(mount, ...names);
+        if (existsSync(p)) return { ...base, caminho: p };
+      }
+      found ??= { ...base, caminho: null, motivo: `Achei no Drive (${names.join(' / ')}), mas não no computador: o Google Drive para computador está aberto?` };
+    } catch {
+      // banco em uso ou formato novo: tenta a próxima conta
+    } finally {
+      try { db?.close(); } catch { /* já fechado */ }
+    }
+  }
+  return found ?? { id, nome: '', pasta: false, caminho: null, motivo: 'Este código não está no banco do Drive para computador: o link pode ser de outra conta, estar na lixeira ou ainda não ter sincronizado.' };
+}

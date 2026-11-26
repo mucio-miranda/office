@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync, unlinkSync, writeFileSync, type Dirent } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, statSync, unlinkSync, writeFileSync, type Dirent } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import type { Client, Office } from '@office/shared';
@@ -38,7 +38,14 @@ function toTrash(office: Office, abs: string, group: string, by: string, extra: 
 const IMAGE = /\.(png|jpe?g|webp)$/i;
 const MAX_BYTES = 25 * 1024 * 1024;
 
-const refsRoot = (office: Office) => path.join(office.rootPath, 'REFERENCIAS');
+/**
+ * A biblioteca da agência. `Documents\REZZU\REFERENCIAS` é um atalho (junção) para a pasta do Drive; o caminho real é o
+ * que aparece na tela e o que a equipe acha no Drive.
+ */
+export const refsRoot = (office: Office) => {
+  const p = path.join(office.rootPath, 'REFERENCIAS');
+  try { return realpathSync.native(p); } catch { return p; }
+};
 const indexFile = (office: Office) => path.join(refsRoot(office), 'indice.json');
 const slug = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'ref';
 

@@ -3,6 +3,7 @@ import path from 'node:path';
 import type { Client, MoodboardItem, MoodboardSummary, MoodboardTheme, Office } from '@office/shared';
 import { clientDir, isFolder } from './folder.ts';
 import { clientPaths } from './layout.ts';
+import { refsRoot } from './references.ts';
 
 /**
  * Moodboards: um por nicho, da biblioteca da agência (REFERENCIAS\<segmento> + indice.json, mantidos pela skill
@@ -88,7 +89,7 @@ export function themeFrom(colors: string[], dark: boolean, font: string | null):
 // ---------------------------------------------------------------- biblioteca por nicho
 
 function indexOf(office: Office): { refs: IndexRef[]; nichos: Record<string, { titulo?: string; texto?: string }> } {
-  const file = path.join(office.rootPath, 'REFERENCIAS', 'indice.json');
+  const file = path.join(refsRoot(office), 'indice.json');
   if (!existsSync(file)) return { refs: [], nichos: {} };
   try {
     const ind = JSON.parse(readFileSync(file, 'utf8').replace(/^\uFEFF/, ''));
@@ -99,7 +100,7 @@ function indexOf(office: Office): { refs: IndexRef[]; nichos: Record<string, { t
 }
 const libraryOf = (office: Office) => indexOf(office).refs;
 
-const refFile = (office: Office, r: IndexRef) => path.join(office.rootPath, 'REFERENCIAS', ...String(r.arquivo).split(/[\\/]/));
+const refFile = (office: Office, r: IndexRef) => path.join(refsRoot(office), ...String(r.arquivo).split(/[\\/]/));
 const score = (r: IndexRef) => r.nota ?? 0;
 
 function toItem(office: Office, r: IndexRef): MoodboardItem {
@@ -212,7 +213,7 @@ export function moodboardList(office: Office, clients: Client[]): { niches: Mood
 export function nicheBoard(office: Office, niche: string) {
   const refs = nicheItems(office, niche);
   if (!refs.length) return null;
-  return { key: `nicho:${niche}`, name: nicheLabel(niche), niche, folder: path.join(office.rootPath, 'REFERENCIAS', niche), theme: nicheTheme(refs, niche, office), handle: null, items: refs.map((r) => toItem(office, r)), nicheItems: [] as MoodboardItem[] };
+  return { key: `nicho:${niche}`, name: nicheLabel(niche), niche, folder: path.join(refsRoot(office), niche), theme: nicheTheme(refs, niche, office), handle: null, items: refs.map((r) => toItem(office, r)), nicheItems: [] as MoodboardItem[] };
 }
 
 export function clientBoard(office: Office, client: Client) {
