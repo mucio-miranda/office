@@ -43,8 +43,17 @@ const MAX_BYTES = 25 * 1024 * 1024;
  * que aparece na tela e o que a equipe acha no Drive.
  */
 export const refsRoot = (office: Office) => {
-  const p = path.join(office.rootPath, 'REFERENCIAS');
-  try { return realpathSync.native(p); } catch { return p; }
+  // pela pasta mais próxima que existe: a biblioteca pode ainda não existir, e o caminho tem que ser o mesmo antes e depois
+  // de criada (nome curto do Windows, "RUNNER~1", vira o longo)
+  let cur = path.join(office.rootPath, 'REFERENCIAS');
+  const rest: string[] = [];
+  while (!existsSync(cur)) {
+    const up = path.dirname(cur);
+    if (up === cur) return path.join(office.rootPath, 'REFERENCIAS');
+    rest.unshift(path.basename(cur));
+    cur = up;
+  }
+  try { return path.join(realpathSync.native(cur), ...rest); } catch { return path.join(office.rootPath, 'REFERENCIAS'); }
 };
 const indexFile = (office: Office) => path.join(refsRoot(office), 'indice.json');
 const slug = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'ref';
