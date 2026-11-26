@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createServer } from 'node:http';
 import { once } from 'node:events';
-import { mkdtemp, mkdir, writeFile, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, mkdir, writeFile, readFile, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -42,7 +42,7 @@ test('produção de mídia pela interface GPT, com arquivos de sessões distinta
         const result = await call('consultar_operacao',{id:op.id});
         if (JSON.parse(result[0].text).estado === 'concluída') {
           const copy = JSON.parse(result[1].text);
-          assert.equal(copy.absoluto,path.join(temp,copy.relativo));
+          assert.equal(copy.absoluto,await realpath(path.join(temp,copy.relativo)));
           assert.equal(await readFile(path.join(copy.absoluto,'v9.mp4'),'utf8'),'versão selecionada'); return;
         }
         await new Promise(r => setTimeout(r,50));
