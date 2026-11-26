@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Check, UserPlus, X } from 'lucide-react';
+import { Check, SquareTerminal, UserPlus, X } from 'lucide-react';
 import type { HelperRequest } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api } from '../lib/api';
@@ -17,7 +17,7 @@ export function HelperRequests({ clientId }: { clientId?: string }) {
     setBusy(h.id);
     try {
       const r = await api<{ helper: { name: string } | null }>(`/api/offices/${office!.id}/helpers/${h.id}`, { body: { approve } });
-      notify(approve ? `${r.helper?.name ?? 'O ajudante'} começou a tarefa` : 'Pedido recusado');
+      notify(!approve ? 'Pedido recusado' : h.kind === 'comando' ? 'Comando aprovado; a saída chega na conversa' : `${r.helper?.name ?? 'O ajudante'} começou a tarefa`);
     } catch (e) { notify((e as Error).message); }
     setBusy(null);
   };
@@ -28,10 +28,10 @@ export function HelperRequests({ clientId }: { clientId?: string }) {
         const c = clients.find((x) => x.id === h.clientId);
         return (
           <div key={h.id} className="helper-request">
-            <UserPlus size={16} />
+            {h.kind === 'comando' ? <SquareTerminal size={16} /> : <UserPlus size={16} />}
             <div className="helper-text">
-              <b>{who?.name ?? 'O funcionário'} pede um ajudante{!clientId && c ? <> · <button className="link" onClick={() => open('clientes', c.id)}>{c.name}</button></> : null}</b>
-              <span>{h.task}</span>
+              <b>{who?.name ?? 'O funcionário'} {h.kind === 'comando' ? 'pede para rodar um comando' : 'pede um ajudante'}{!clientId && c ? <> · <button className="link" onClick={() => open('clientes', c.id)}>{c.name}</button></> : null}</b>
+              {h.kind === 'comando' ? <code className="helper-cmd">{h.task}</code> : <span>{h.task}</span>}
               {h.reason && <small className="muted">Motivo: {h.reason}</small>}
             </div>
             <div className="row gap-s">

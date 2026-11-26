@@ -892,6 +892,8 @@ export interface HelperRequest {
   helperId: ID | null;
   createdAt: string;
   decidedBy: string | null;
+  /** 'comando': pede para o Office rodar um comando aprovado (git push, gh repo create); `task` traz o comando exato. */
+  kind?: 'ajudante' | 'comando';
 }
 
 /** Limite da assinatura do Claude (fração usada, 0 a 1), como o Claude Code informou na última rodada. */

@@ -214,6 +214,9 @@ const MIGRATIONS: string[] = [
      prompt TEXT NOT NULL, answer TEXT NOT NULL);
    CREATE INDEX codex_turns_session ON codex_turns(session_id,seq);`,
   `ALTER TABLE workers ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude' CHECK(provider IN ('claude','codex'));`,
+  // pedido de comando (git push, gh repo create): o funcionário pede, uma pessoa aprova e o Office executa
+  `ALTER TABLE helper_requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'ajudante';
+   ALTER TABLE helper_requests ADD COLUMN command TEXT;`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

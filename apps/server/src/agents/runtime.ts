@@ -451,6 +451,10 @@ async function start(jobId: string, typed: string, resume: boolean) {
   // e da conta (Notion, Trello, Drive, rea...), ~14 mil tokens a mais no início e uma lista de ~17 mil reinjetada a cada
   // resumo, o que fazia a conversa encher de novo em 2-3 minutos (resumo em loop, 23/11/2026)
   args.push('--strict-mcp-config');
+  // commits e PRs do funcionário saem sem o Claude como coautor (regra da casa)
+  const settingsFile = path.join(dir, 'settings.json');
+  writeFileSync(settingsFile, JSON.stringify({ includeCoAuthoredBy: false, attribution: { commit: '', pr: '' } }), 'utf8');
+  args.push('--settings', settingsFile);
   if (lean) args.push('--tools', 'Read', 'Write');
   if (mcpIds.length) {
     const mcpFile = path.join(dir, 'mcp.json');

@@ -32,6 +32,7 @@ import { SESSION_ID, listSessions, sessionFile, sessionTail } from '../agents/se
 import { startTurnover, closeSession, newSession, resumeAsSession, adoptFiles, approveDemand, clientMessage, decideLearning, defaultPipeline, grantDirs, deskInfo, driveDraft, jobCwd, manualEdits, markPublished, pausePipeline, processPipeline, publishDraft, requestChanges, schedulePublish, sendDemandToDrive, startBriefing, startPipeline } from '../agents/pipeline.ts';
 import { marksText } from '../agents/outputs.ts';
 import { clientBoard, moodboardList, nicheBoard } from '../clients/moodboard.ts';
+import { requestCommand } from '../agents/commands.ts';
 import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef, setNicheFont } from '../clients/references.ts';
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePlan, saveCheck, undoRenames } from '../clients/month.ts';
@@ -210,6 +211,12 @@ export async function api(app: FastifyInstance) {
       return { ok: true, n: addPreviews(job.id, files, since) };
     }
     if (!job?.clientId) return reply.code(401).send({ error: 'Tarefa encerrada ou sem cliente.' });
+    if (tool === 'pedir_comando') {
+      try {
+        const r = requestCommand(job, (req.body ?? {}) as never);
+        return { ok: true, pedido: r.id, comando: r.task, texto: 'Pedido enviado. Uma pessoa precisa aprovar na tela; a saída do comando chega nesta conversa. Não tente rodar de outro jeito enquanto isso.' };
+      } catch (e) { return reply.code(409).send({ error: (e as Error).message }); }
+    }
     if (tool === 'pedir_ajudante') {
       const q = (req.body ?? {}) as { tarefa?: string; motivo?: string };
       try {

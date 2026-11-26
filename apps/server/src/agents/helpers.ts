@@ -3,6 +3,7 @@ import { MAX_WORKERS, type AgentJob, type Client, type HelperRequest, type Worke
 import { all, insert, logActivity, now, one, update } from '../db.ts';
 import { broadcast, invalidate } from '../realtime.ts';
 import { deliverToJob, enqueueJob } from './runtime.ts';
+import { decideCommand } from './commands.ts';
 import { activeWorkers, archiveWorker, createWorker, titularOf } from './workers.ts';
 
 /**
@@ -20,7 +21,7 @@ export function requestHelper(job: AgentJob, task: string, reason: string) {
   const asker = one<Worker>('SELECT * FROM workers WHERE id = ?', job.workerId);
   if (!asker || asker.archivedAt) throw new Error('Funcionário não encontrado.');
   if (asker.role === 'ajudante') throw new Error('Ajudante não chama outro ajudante: termine a sua tarefa e devolva a quem pediu.');
-  const open = all<HelperRequest>("SELECT * FROM helper_requests WHERE client_id = ? AND status = 'pendente'", job.clientId);
+  const open = all<HelperRequest>("SELECT * FROM helper_requests WHERE client_id = ? AND status = 'pendente' AND kind = 'ajudante'", job.clientId);
   if (open.length >= 3) throw new Error('Já há pedidos de ajudante esperando aprovação neste cliente. Siga com o que der enquanto isso.');
   const r: HelperRequest = {
     id: uid(), officeId: job.officeId, clientId: job.clientId, workerId: asker.id, jobId: job.id,
@@ -38,6 +39,13 @@ export function decideHelper(officeId: string, id: string, approve: boolean, by:
   const r = one<HelperRequest>('SELECT * FROM helper_requests WHERE id = ? AND office_id = ?', id, officeId);
   if (!r) throw new Error('Pedido não encontrado.');
   if (r.status !== 'pendente') throw new Error('Esse pedido já foi decidido.');
+  if (r.kind === 'comando') {
+    // roda em segundo plano (um push pode levar minutos); a saída chega na conversa de quem pediu
+    void decideCommand(r, approve, by).catch((e) => {
+      if (r.jobId) deliverToJob(r.jobId, `O comando aprovado não rodou: ${(e as Error).message}`, 'Comando falhou', by);
+    });
+    return null;
+  }
   const parentJob = one<AgentJob>('SELECT * FROM jobs WHERE id = ?', r.jobId);
   if (!approve) {
     update('helper_requests', id, { status: 'recusado', decidedBy: by });

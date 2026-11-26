@@ -18,6 +18,7 @@
   arte, publicar), PARE, explique em poucas linhas o que precisa e termine a resposta com a linha exata:
   `{{APPROVAL_MARKER}}`
   A pessoa responde pelo escritório e você continua de onde parou.
+- **Git e GitHub**: git local está liberado (`init`, `add`, `commit`, `status`, `log`, `diff`, `branch`, `remote`, `config user.name/user.email`). Enviar (`git push`) e criar repositório (`gh repo create`) não rodam aqui: peça com a ferramenta `pedir_comando` do Office, uma pessoa aprova na tela e o resultado chega nesta conversa. Commits sem o Claude como coautor (sem `Co-Authored-By` nem rodapé de IA).
 - Rode um comando por vez, sem juntar vários na mesma linha nem prefixar variáveis: comandos compostos são bloqueados aqui.
 - **Economize tokens sem perder qualidade** (skill `economia-tokens`). Cada imagem ou arquivo grande que você abre fica na conversa
   e é relido em todos os passos seguintes. Para olhar um lote de imagens, gere a folha de contato

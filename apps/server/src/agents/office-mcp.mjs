@@ -52,6 +52,11 @@ const TOOLS = [
     inputSchema: { type: 'object', properties: { tarefa: { type: 'string', description: 'o que o ajudante deve fazer, com as pastas e arquivos de entrada e onde salvar' }, motivo: { type: 'string', description: 'por que vale a pena em paralelo' } }, required: ['tarefa', 'motivo'] },
   },
   {
+    name: 'pedir_comando',
+    description: 'Pede para o Office rodar um comando que sai do computador e que você não pode rodar aqui: enviar ao GitHub (git_push) ou criar o repositório no GitHub (gh_repo_create, já ligando a pasta e enviando). Uma pessoa vê o comando exato na tela e aprova; a saída chega nesta conversa. Faça antes o git local (init, add, commit). Para gh_repo_create, pergunte antes à pessoa se o repositório é privado ou público.',
+    inputSchema: { type: 'object', properties: { acao: { type: 'string', enum: ['git_push', 'gh_repo_create'] }, pasta: { type: 'string', description: 'caminho completo do repositório local' }, remoto: { type: 'string', description: 'git_push: remoto (padrão origin)' }, branch: { type: 'string', description: 'git_push: branch (padrão main)' }, nome: { type: 'string', description: 'gh_repo_create: dono/repositorio' }, visibilidade: { type: 'string', enum: ['privado', 'publico'], description: 'gh_repo_create: a pessoa decide' }, motivo: { type: 'string', description: 'por que, em uma linha' } }, required: ['acao', 'pasta', 'motivo'] },
+  },
+  {
     name: 'copiar_para_local',
     description: 'Copia arquivos ou pastas do Google Drive (H:) para o disco local antes de editar: vídeos brutos e qualquer arquivo grande. O Drive baixa enquanto lê, e um comando seu (ffmpeg, whisper, Copy-Item) cai no limite de tempo no meio de um arquivo de GB. Aqui a cópia roda no Office, em segundo plano e com retomada se o Drive falhar. Espera até ~4 min; se não terminar, devolve o id e o progresso: chame copia_status para esperar mais. Nunca apaga nem mexe no original. Copie para a pasta TMP do trabalho (C:\REZZU-TEMP\...).',
     inputSchema: { type: 'object', properties: { de: { type: 'array', items: { type: 'string' }, description: 'caminhos completos de arquivos ou pastas' }, para: { type: 'string', description: 'pasta de destino (caminho completo)' } }, required: ['de', 'para'] },
