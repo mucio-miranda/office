@@ -11,6 +11,8 @@ export interface OfficeDesktop {
   showInFolder(p: string): Promise<void>;
   openPath(p: string): Promise<string>;
   toggleFullscreen(): Promise<void>;
+  /** Abre um terminal com `claude --resume` na pasta. Devolve o erro, ou vazio. Versões antigas do app não têm. */
+  claudeTerminal?(o: { cwd: string; session?: string | null }): Promise<string>;
   setAutoStart(on: boolean): Promise<void>;
   setTheme(t: 'light' | 'dark'): Promise<void>;
   /** Versões antigas do app não têm: confira antes de usar. */

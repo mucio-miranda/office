@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { HelperRequests } from './HelperRequests';
-import { ArrowUp, Check, ChevronDown, History, Reply, Sparkles, Square, Wrench } from 'lucide-react';
+import { ArrowUp, Check, ChevronDown, History, Reply, Sparkles, Square, SquareTerminal, Wrench } from 'lucide-react';
 import { desktop } from '../lib/desktop';
 import { LimitBadge } from './LimitBadge';
 import { MODEL_CHOICES, canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage, type Worker } from '@office/shared';
@@ -10,9 +10,9 @@ import { api, mediaUrl } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
 import { useAttach, withPaths } from '../lib/attach';
 import { ReviewDesk, versionsOf } from './ReviewDesk';
+import { IMG } from '../lib/media';
 
 const ACTIVE: AgentJob['status'][] = ['fila', 'rodando', 'aguardando'];
-const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const MAX_JOBS = 30;
 export const when = (iso: string) => new Date(iso).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 type Line = { role: 'usuario' | 'agente'; text: string; at: string };
@@ -169,7 +169,7 @@ export function Conversa({ c, session, view, setView, sessions, resume, onSessio
       if (desktop) {
         if (e.ctrlKey || e.metaKey) await desktop.showInFolder(r.abs);
         else { const err = await desktop.openPath(r.abs); if (err) notify(err); }
-      } else if (!r.dir && /\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm|pdf|mp3|wav|m4a|txt|md|srt)$/i.test(r.abs)) {
+      } else if (!r.dir && (IMG.test(r.abs) || /\.(mp4|mov|m4v|webm|pdf|mp3|wav|m4a|txt|md|srt)$/i.test(r.abs))) {
         window.open(mediaUrl(office!.id, r.abs), '_blank', 'noreferrer');
       } else {
         await navigator.clipboard?.writeText(r.abs).catch(() => {});
@@ -249,6 +249,18 @@ export function Conversa({ c, session, view, setView, sessions, resume, onSessio
         <button type="button" className="ghost small" onClick={onSessions} title="Conversas anteriores do Office e do terminal: dá para ler e continuar como sessão">
           <History size={13} /> Histórico
         </button>
+        {desktop?.claudeTerminal && (
+          <button type="button" className="ghost small" title="Abre um terminal na pasta deste cliente com claude --resume, para escolher e continuar uma conversa ali"
+            onClick={async () => {
+              try {
+                const { cwd } = await api<{ cwd: string }>(`/api/offices/${office!.id}/clients/${c.id}/pasta-conversa`);
+                const err = await desktop!.claudeTerminal!({ cwd });
+                if (err) notify(err);
+              } catch (e) { notify((e as Error).message); }
+            }}>
+            <SquareTerminal size={13} /> Terminal
+          </button>
+        )}
         <span className="spacer" />
         {!!active?.contextTokens && (
           <span className={`muted small mono ${active.contextTokens > 60_000 ? 'ctx-high' : ''}`}

@@ -6,13 +6,13 @@ import { api, mediaUrl } from '../lib/api';
 import { ReviewDesk, versionsOf } from './ReviewDesk';
 import { usePersisted } from '../lib/persisted';
 import { HelperRequests } from './HelperRequests';
+import { IMG } from '../lib/media';
 
 /**
  * Mesa de trabalho: o que os funcionários terminaram ou querem decidir com você, peça por peça, sem precisar procurar
  * nas pastas. Cada peça abre na mesa do diretor de arte, com os caminhos reais de cada arquivo.
  */
 
-const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const VID = /\.(mp4|mov|webm)$/i;
 const MAX_DONE = 12;
 

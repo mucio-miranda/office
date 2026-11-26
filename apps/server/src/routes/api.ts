@@ -36,12 +36,13 @@ import { addClientRef, addNicheRef, fetchImage, removeClientRef, removeNicheRef,
 import { clientDir, ensureStructure, folderName, indexClient, insideDir } from '../clients/folder.ts';
 import { applyRenames, assignPiece, autoOf, isMonth, monthOf, piecesOf, renamePlan, saveCheck, undoRenames } from '../clients/month.ts';
 import { thumbOf } from '../clients/thumb.ts';
+import { RAW, rawPreview } from '../clients/raw.ts';
 import { clientBase, deleteEntries, linkOf, listFolder, shortcuts } from '../clients/browse.ts';
 import { agendaOf, conferencePrompt, schedule, type ScheduleInput } from '../agents/agenda.ts';
 import { localPaths, saveAttachment } from '../agents/attachments.ts';
 import type { Readable } from 'node:stream';
 import { decideHelper, requestHelper } from '../agents/helpers.ts';
-import { driveFolderLink, driveLink as driveFileLink, drivePathOf } from '../clients/driveId.ts';
+import { driveFolderLink, driveLink as driveFileLink, drivePathOf, inDrive } from '../clients/driveId.ts';
 import { installTool, listTools } from '../agents/tools.ts';
 import { closeLive, focusLive, getLive, listLive, watchFrame } from '../agents/live.ts';
 import { localDay, startDaily } from '../agents/daily.ts';
@@ -1089,7 +1090,11 @@ export async function api(app: FastifyInstance) {
       const { officeId } = req.params as any;
       const file = path.resolve(String((req.query as any).path ?? ''));
       if (!inside(officeId, file) || !existsSync(file)) return reply.code(404).send({ error: 'Arquivo não encontrado' });
-      return { link: statSync(file).isDirectory() ? driveFolderLink(file) : driveFileLink(file) };
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      // fora do Drive (C:\REZZU-TEMP, disco local) não existe link: dizer isso, e não "pode estar subindo"
+      if (!inDrive(file, office.driveRoot)) return { link: null, motivo: `Este arquivo está só neste computador (${path.dirname(file)}), fora do Drive, então não tem link. Se a equipe precisa dele, peça para salvar na pasta do trabalho no Drive.` };
+      const link = statSync(file).isDirectory() ? driveFolderLink(file) : driveFileLink(file);
+      return { link, motivo: link ? null : 'O Drive ainda não deu o link deste arquivo: ele pode estar subindo. Tente de novo em alguns minutos.' };
     });
 
     // as peças do post para ver no calendário, com a pasta do mês e o link do Drive
@@ -1185,8 +1190,11 @@ export async function api(app: FastifyInstance) {
       const file = path.resolve((req.query as any).path ?? '');
       const w = Math.max(80, Math.min(640, Number((req.query as any).w) || 320));
       if (!inside((req.params as any).officeId, file) || !existsSync(file)) return reply.code(404).send({ error: 'Arquivo não encontrado' });
-      const thumb = await thumbOf(file, w);
-      if (!thumb) return sendMedia(req, reply, file);
+      // foto RAW da câmera: a miniatura sai da prévia JPEG que vem dentro dela
+      const src = RAW.test(file) ? await rawPreview(file) : file;
+      if (!src) return reply.code(415).send({ error: 'Este RAW não traz prévia para mostrar.' });
+      const thumb = await thumbOf(src, w);
+      if (!thumb) return sendMedia(req, reply, src);
       reply.header('Cache-Control', 'private, max-age=86400');
       return sendMedia(req, reply, thumb);
     });
@@ -1196,6 +1204,30 @@ export async function api(app: FastifyInstance) {
       const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
       return c ? { c, cwd: jobCwd(one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!, c) } : null;
     };
+    // trocar a pasta de um cliente que já existe (pasta renomeada ou separada no Drive): só aponta, não move nada
+    r.post('/api/offices/:officeId/clients/:id/trocar-pasta', async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const c = one<Client>('SELECT * FROM clients WHERE id = ? AND office_id = ?', id, officeId);
+      if (!c) return reply.code(404).send({ error: 'Cliente não encontrado' });
+      const dir = path.resolve(String((req.body as { folder?: string } | undefined)?.folder ?? ''));
+      if (!existsSync(dir) || !statSync(dir).isDirectory()) return reply.code(400).send({ error: 'Essa pasta não existe.' });
+      if (!inside(officeId, dir)) return reply.code(403).send({ error: 'A pasta precisa estar dentro das pastas do escritório.' });
+      const office = one<Office>('SELECT * FROM offices WHERE id = ?', officeId)!;
+      const drive = office.driveRoot ? path.resolve(office.driveRoot) : null;
+      const driveFolder = drive && dir.toLowerCase().startsWith(drive.toLowerCase() + path.sep) ? dir.slice(drive.length + 1).split(path.sep).join('/') : null;
+      update('clients', id, { folder: dir, driveFolder });
+      logActivity(officeId, `user:${req.user.id}`, 'trocou a pasta do cliente', `${c.name}: ${c.folder ?? '—'} → ${dir}`);
+      invalidate(officeId, 'clients');
+      return { folder: dir, driveFolder };
+    });
+    // pasta onde as conversas deste cliente rodam (o botão do terminal abre o claude --resume nela)
+    r.get('/api/offices/:officeId/clients/:id/pasta-conversa', async (req, reply) => {
+      if (!requireMember(req, reply)) return;
+      const { officeId, id } = req.params as any;
+      const found = clientCwd(officeId, id);
+      return found ? { cwd: found.cwd } : reply.code(404).send({ error: 'Cliente não encontrado' });
+    });
     r.get('/api/offices/:officeId/clients/:id/sessoes', async (req, reply) => {
       if (!requireMember(req, reply)) return;
       const { officeId, id } = req.params as any;
@@ -2121,6 +2153,12 @@ export async function api(app: FastifyInstance) {
       if (!requireMember(req, reply)) return;
       const file = path.resolve((req.query as any).path ?? '');
       if (!inside((req.params as any).officeId, file) || !existsSync(file)) return reply.code(404).send({ error: 'Arquivo não encontrado' });
+      if (RAW.test(file)) {
+        const prev = await rawPreview(file);
+        if (!prev) return reply.code(415).send({ error: 'Este RAW não traz prévia para mostrar.' });
+        reply.header('Cache-Control', 'private, max-age=86400');
+        return sendMedia(req, reply, prev);
+      }
       return sendMedia(req, reply, file);
     });
   });

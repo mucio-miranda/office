@@ -6,6 +6,7 @@ import { useStore } from '../lib/store';
 import { api } from '../lib/api';
 import { desktop } from '../lib/desktop';
 import { Preview, type IndexedFile } from './Archive';
+import { RAW_EXT } from '../lib/media';
 
 /**
  * As pastas do cliente como estão no Drive, para ninguém precisar abrir o Drive: uma pasta por vez, com caminho clicável,
@@ -17,7 +18,7 @@ type Kind = IndexedFile['kind'] | 'pasta';
 interface Entry { name: string; rel: string; dir: boolean; size: number; mtime: string; kind: Kind; items?: number }
 interface Listing { base: string; rel: string; crumbs: { name: string; rel: string }[]; exists: boolean; entries: Entry[]; shortcuts: { label: string; rel: string }[] }
 
-const THUMB = /\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm)$/i;
+const THUMB = new RegExp(String.raw`\.(png|jpe?g|webp|gif|mp4|mov|m4v|webm|${RAW_EXT})$`, 'i');
 const mb = (n: number) => (n > 1e9 ? `${(n / 1e9).toFixed(1)} GB` : n > 1e6 ? `${(n / 1e6).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1e3))} KB`);
 const absOf = (base: string, rel: string) => `${base.replace(/[\\/]+$/, '')}\\${rel.replace(/\//g, '\\')}`;
 

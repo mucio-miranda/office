@@ -6,6 +6,7 @@ import {
   type UtilityProcess,
 } from 'electron';
 import { createWriteStream, existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
 import { createServer } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import path from 'node:path';
@@ -255,6 +256,16 @@ function registerIpc() {
   ipcMain.handle('office:showInFolder', (_e, p: string) => { if (path.isAbsolute(p) && existsSync(p)) shell.showItemInFolder(p); });
   ipcMain.handle('office:openPath', (_e, p: string) => (path.isAbsolute(p) && existsSync(p) ? shell.openPath(p) : 'Arquivo não encontrado'));
 
+  // terminal com o Claude Code na pasta do cliente: `claude --resume` mostra as conversas dali para escolher
+  ipcMain.handle('office:claudeTerminal', (_e, o: { cwd: string; session?: string | null }) => {
+    if (process.platform !== 'win32') return 'Só no Windows por enquanto.';
+    if (!o?.cwd || !path.isAbsolute(o.cwd) || !existsSync(o.cwd) || /["%^&|<>]/.test(o.cwd)) return 'Pasta não encontrada.';
+    const sid = o.session && /^[0-9a-f-]{8,64}$/i.test(o.session) ? ` ${o.session}` : '';
+    const child = spawn('cmd.exe', ['/d', '/s', '/c', `start "Claude" /D "${o.cwd}" cmd.exe /k claude --resume${sid}`], { windowsVerbatimArguments: true, detached: true, stdio: 'ignore', windowsHide: true });
+    child.on('error', () => { /* sem cmd: nada a fazer */ });
+    child.unref();
+    return '';
+  });
   ipcMain.handle('office:fullscreen', () => win?.setFullScreen(!win.isFullScreen()));
   ipcMain.handle('office:updateState', () => update);
   ipcMain.handle('office:installUpdate', () => { if (update.state === 'pronta') installUpdate?.(); });

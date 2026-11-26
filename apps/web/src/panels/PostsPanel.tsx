@@ -4,6 +4,7 @@ import { POST_FORMAT_LABEL, canWork, type PostFormat } from '@office/shared';
 import { useStore } from '../lib/store';
 import { api, mediaUrl } from '../lib/api';
 import { usePersisted } from '../lib/persisted';
+import { IMG } from '../lib/media';
 
 /**
  * Posts: a página da social media. Mostra, mês a mês e cliente por cliente, o que já está pronto na pasta do mês no Drive,
@@ -27,7 +28,6 @@ const TABS: { id: State | 'todos'; label: string }[] = [
   { id: 'todos', label: 'Tudo' },
 ];
 const STATE_LABEL: Record<State, string> = { producao: 'em produção', pronto: 'pronto', agendado: 'agendado', postado: 'postado' };
-const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const VID = /\.(mp4|mov|webm|m4v)$/i;
 const ym = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const ymd = (d: Date) => `${ym(d)}-${String(d.getDate()).padStart(2, '0')}`;
@@ -273,10 +273,10 @@ function PostDetail({ it, client, worker, save, onClose }: { it: Item; client: s
   const file = it.files[Math.min(i, it.files.length - 1)];
   const name = (p: string) => p.split(/[\\/]/).pop() ?? p;
   const link = async (p: string) => {
-    try { return (await api<{ link: string | null }>(`/api/offices/${office!.id}/link?path=${encodeURIComponent(p)}`)).link; } catch { return null; }
+    try { return await api<{ link: string | null; motivo?: string | null }>(`/api/offices/${office!.id}/link?path=${encodeURIComponent(p)}`); } catch (e) { return { link: null, motivo: (e as Error).message }; }
   };
-  const openDrive = async (p: string) => { const l = await link(p); if (l) window.open(l, '_blank'); else notify('O Drive ainda não deu o link (pode estar subindo).'); };
-  const copyLink = async (p: string) => { const l = await link(p); if (l) copy(l, notify, 'Link copiado'); else notify('O Drive ainda não deu o link (pode estar subindo).'); };
+  const openDrive = async (p: string) => { const r = await link(p); if (r.link) window.open(r.link, '_blank'); else notify(r.motivo || 'O Drive ainda não deu o link.'); };
+  const copyLink = async (p: string) => { const r = await link(p); if (r.link) copy(r.link, notify, 'Link copiado'); else notify(r.motivo || 'O Drive ainda não deu o link.'); };
   const folder = file ? file.replace(/[\\/][^\\/]+$/, '') : null;
   const captionChanged = caption !== it.caption;
   const keepState = it.state === 'producao' ? 'pronto' : it.state;

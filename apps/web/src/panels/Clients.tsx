@@ -144,6 +144,7 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
   const team = workers.filter((w) => w.clientId === c.id);
   const helpers = team.filter((w) => w.role === 'ajudante' && !w.archivedAt);
   const patch = (body: Partial<Client>) => api(base, { method: 'PATCH', body });
+  const [movingFolder, setMovingFolder] = useState<string | null>(null);
   const mine = demands.filter((d) => d.clientId === c.id);
   const rafa = agents.find((a) => a.slug === 'gerente');
   const [tab, setTab] = useState<Tab>('conversa');
@@ -294,6 +295,19 @@ function ClientDetail({ c, squad }: { c: Client; squad: Squad | null }) {
               <div>
                 <small className="muted">Pasta do cliente</small>
                 <code className="truncate" title={c.folder ?? ''}>{c.folder ?? 'sem pasta'}</code>
+                {movingFolder !== null ? (
+                  <div className="row gap">
+                    <PathField value={movingFolder} onChange={setMovingFolder} scope="office" officeId={office!.id} placeholder="Pasta nova do cliente" title="Pasta do cliente" />
+                    <button className="small" disabled={!movingFolder.trim()} onClick={async () => {
+                      try { await api(`${base}/trocar-pasta`, { body: { folder: movingFolder } }); notify('Pasta do cliente trocada. Nada foi movido.'); setMovingFolder(null); } catch (e) { notify((e as Error).message); }
+                    }}>Salvar</button>
+                    <button className="ghost small" onClick={() => setMovingFolder(null)}>Cancelar</button>
+                  </div>
+                ) : (
+                  <button className="ghost small" title="Aponta o cliente para outra pasta que já existe (renomeada ou separada no Drive). Nada é movido." onClick={() => setMovingFolder(c.folder ?? '')}>
+                    <FolderInput size={14} /> Trocar pasta
+                  </button>
+                )}
                 <button className="ghost small" title="Cria só as pastas que faltam (REDES SOCIAIS e ARQUIVOS no padrão novo); nada é movido nem apagado"
                   onClick={async () => { const r = await api(`${base}/folder`, { body: {} }); notify(r.createdDirs.length ? `${r.createdDirs.length} pasta(s) criada(s)` : 'A estrutura já estava completa'); }}>
                   <FolderPlus size={14} /> Completar a estrutura padrão

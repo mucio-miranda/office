@@ -7,13 +7,13 @@ import { renderMarkdown } from '../lib/markdown';
 import { desktop } from '../lib/desktop';
 import { PostCards } from './PostCards';
 import { MediaViewer } from '../lib/MediaViewer';
+import { IMG } from '../lib/media';
 
 /**
  * Mesa do diretor de arte: as peças de cada etapa e versão lado a lado com o histórico, prévia de imagem, vídeo e
  * texto, e o pedido de ajuste com áreas marcadas direto na imagem (arraste para marcar e diga o que mudar ali).
  */
 
-const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const VID = /\.(mp4|mov|webm)$/i;
 const TXT = /\.(md|txt)$/i;
 const base = (f: string) => f.split(/[\\/]/).pop() ?? f;

@@ -6,6 +6,7 @@ import { api, mediaUrl } from '../lib/api';
 import { desktop } from '../lib/desktop';
 import { TextPreview, openFile } from './ReviewDesk';
 import { ClientDrive } from './ClientDrive';
+import { IMG } from '../lib/media';
 
 /**
  * Arquivo dos clientes (o armário da redação): os pastas de cada cliente como estão no Drive (ClientDrive),
@@ -16,7 +17,6 @@ import { ClientDrive } from './ClientDrive';
 type Kind = 'imagem' | 'video' | 'audio' | 'doc' | 'design' | 'outro';
 export interface IndexedFile { rel: string; size: number; mtime: string; kind: Kind }
 
-const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const VID = /\.(mp4|m4v|mov|webm)$/i;
 const AUD = /\.(mp3|wav|m4a|ogg|aac|flac)$/i;
 const PDF = /\.pdf$/i;

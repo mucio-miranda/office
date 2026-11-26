@@ -4,13 +4,13 @@ import { useStore } from './store';
 import { api, mediaUrl } from './api';
 import { desktop } from './desktop';
 import { ZoomImage } from './ZoomImage';
+import { IMG } from './media';
 
 /**
  * Visualizador em tela grande: lâmina por lâmina (setas do teclado também), vídeo com player e o link do Drive de cada
  * arquivo. Abre por cima de qualquer painel ou modal.
  */
 
-const IMG = /\.(png|jpe?g|webp|gif)$/i;
 const VID = /\.(mp4|mov|webm|m4v)$/i;
 const name = (p: string) => p.split(/[\\/]/).pop() ?? p;
 
@@ -28,12 +28,13 @@ export function MediaViewer({ files, title, start = 0, onClose }: { files: strin
     return () => window.removeEventListener('keydown', key, true);
   }, [files.length, onClose]);
   const link = async () => {
-    try { return (await api<{ link: string | null }>(`/api/offices/${office!.id}/link?path=${encodeURIComponent(file)}`)).link; } catch { return null; }
+    try { return await api<{ link: string | null; motivo?: string | null }>(`/api/offices/${office!.id}/link?path=${encodeURIComponent(file)}`); } catch (e) { return { link: null, motivo: (e as Error).message }; }
   };
-  const openDrive = async () => { const l = await link(); if (l) window.open(l, '_blank'); else notify('O Drive ainda não deu o link deste arquivo (pode estar subindo).'); };
+  const openDrive = async () => { const r = await link(); if (r.link) window.open(r.link, '_blank'); else notify(r.motivo || 'O Drive ainda não deu o link deste arquivo.'); };
   const copyLink = async () => {
-    const l = await link();
-    if (!l) { notify('O Drive ainda não deu o link deste arquivo (pode estar subindo).'); return; }
+    const r = await link();
+    const l = r.link;
+    if (!l) { notify(r.motivo || 'O Drive ainda não deu o link deste arquivo.'); return; }
     try { await navigator.clipboard.writeText(l); notify('Link copiado'); } catch { notify(l); }
   };
 

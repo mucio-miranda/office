@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -152,4 +152,12 @@ export function drivePathOf(link: string, hint?: string | null, dbs = driveMetad
     }
   }
   return found ?? { id, nome: '', pasta: false, caminho: null, motivo: 'Este código não está no banco do Drive para computador: o link pode ser de outra conta, estar na lixeira ou ainda não ter sincronizado.' };
+}
+
+/** O arquivo está no Meu Drive montado (pelo caminho real: os atalhos de Documents\REZZU apontam para lá)? */
+export function inDrive(file: string, hint?: string | null) {
+  let real = path.resolve(file);
+  try { real = realpathSync.native(file); } catch { /* sem resolver, vale o caminho como veio */ }
+  const k = real.toLowerCase();
+  return myDriveMounts(hint).some((m) => { const r = m.toLowerCase(); return k === r || k.startsWith(r + path.sep); });
 }

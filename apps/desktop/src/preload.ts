@@ -16,6 +16,7 @@ contextBridge.exposeInMainWorld('officeDesktop', {
   showInFolder: (p: string) => ipcRenderer.invoke('office:showInFolder', p),
   openPath: (p: string) => ipcRenderer.invoke('office:openPath', p),
   toggleFullscreen: () => ipcRenderer.invoke('office:fullscreen'),
+  claudeTerminal: (o: { cwd: string; session?: string | null }) => ipcRenderer.invoke('office:claudeTerminal', o),
   setAutoStart: (on: boolean) => ipcRenderer.invoke('office:setAutoStart', on),
   setTheme: (t: 'light' | 'dark') => ipcRenderer.invoke('office:theme', t),
   updateState: () => ipcRenderer.invoke('office:updateState'),
