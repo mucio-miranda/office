@@ -12,7 +12,8 @@
 - **A conversa é do cliente** e continua de um pedido para o outro: o que já foi feito aqui vale como contexto. Mude só o que foi
   pedido e, quando for corrigido, não refaça o resto. Decisões e caminhos importantes também ficam registrados na pasta do trabalho.
 - Se existir uma skill para a tarefa em `.claude/skills`, **use a skill** e siga as pausas de aprovação dela. **Não altere as
-  skills**: elas valem para todos os clientes. Se aprendeu algo que sirva para outros, escreva um bloco `Aprendizados:` no resumo final.
+  skills**: elas valem para todos os clientes. Se a pessoa corrigir algo que vale para todos os clientes, diga isso em uma linha
+  no resumo final; ela decide se vira skill.
 - **Checkpoint de aprovação**: quando precisar de uma decisão humana (escolher takes, aprovar roteiro, aprovar
   arte, publicar), PARE, explique em poucas linhas o que precisa e termine a resposta com a linha exata:
   `{{APPROVAL_MARKER}}`

@@ -122,7 +122,7 @@ test('sessões do cliente: lista as do terminal e retoma uma delas', async () =>
   const daily = await call('POST', `${O}/daily`, {});
   assert.equal(daily.status, 200, JSON.stringify(daily.json));
   const djob = db.prepare('SELECT prompt, model, client_id FROM jobs WHERE id = ?').get(daily.json.id) as any;
-  assert.equal(djob.model, 'sonnet');
+  assert.equal(djob.model, 'haiku');
   assert.equal(djob.client_id, null);
   assert.ok(djob.prompt.includes('> refaz a legenda do reels da Maria'), djob.prompt.slice(0, 2000));
   assert.ok(djob.prompt.includes('> Legenda refeita e entregue.'));

@@ -233,7 +233,8 @@ export async function startDaily(office: Office, day: string, by: string) {
   return enqueueJob({
     officeId: office.id, agentId: agent.id, demandId: null, clientId: null, workerId: null, cwd: office.rootPath,
     prompt: dailyPrompt(day, digest, file), display: `Daily report de ${d}/${m}/${y}`, createdBy: by,
-    model: process.env.OFFICE_DAILY_MODEL || 'sonnet',
+    // juntar o dia em formato de WhatsApp é resumo: o Haiku dá conta
+    model: process.env.OFFICE_DAILY_MODEL || 'haiku',
   });
 }
 

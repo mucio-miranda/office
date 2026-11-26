@@ -13,7 +13,8 @@ import { houseRules } from './templates.ts';
 import { mcpConfig } from './tools.ts';
 import { onDemandFor, userServers } from './ondemand.ts';
 import { openLiveForJob, releaseLiveForJob } from './live.ts';
-import { pct, recordUsage } from './usage.ts';
+import { latestUsage, pct, recordUsage } from './usage.ts';
+import { MAX_LIMIT_RETRIES, clockText, hitFiveHourLimit, retryAt } from './limit.ts';
 import { onJobCheckpoint, onJobFinished } from './pipeline.ts';
 import { availableDirs, deniedTools, mentionedDirs } from './permissions.ts';
 import { anexosDir, isOwner } from './attachments.ts';
@@ -88,6 +89,8 @@ export const COMPACT_WINDOW = 200_000;
 /** Limite semanal da assinatura a partir do qual a conversa avisa (uma vez por semana e por faixa). */
 export const LIMIT_ALERTS = [0.8, 0.95];
 const limitAlerted = new Set<string>();
+/** pedidos parados pelo limite de 5 h: quantas vezes já voltaram sozinhos */
+const limitRetries = new Map<string, number>();
 
 // a vez do render: o gancho pede só quando o comando renderiza ou transcreve, e devolve quando ele termina
 const RENDER_LEASE = 3 * 3_600_000;
@@ -636,6 +639,25 @@ async function start(jobId: string, typed: string, resume: boolean) {
       addMessage(jobId, office.id, 'sistema', 'Não encontrei a conversa anterior deste cliente, então comecei uma nova. O agente não lembra do que foi dito antes.');
       followups.delete(jobId);
       queue.unshift({ jobId, input: pending ? `${typed}\n\n${pending}` : typed, resume: false });
+      pump();
+      return;
+    }
+    // limite de 5 h da assinatura: não é erro do trabalho; volta sozinho quando a janela renovar
+    const tries = limitRetries.get(jobId) ?? 0;
+    if (!codex && (isError || code !== 0) && hitFiveHourLimit(`${finalText} ${stderr}`) && tries < MAX_LIMIT_RETRIES) {
+      limitRetries.set(jobId, tries + 1);
+      const at = retryAt(`${finalText} ${stderr}`, latestUsage()?.fiveHourResets);
+      const resumed = !!one<AgentJob>('SELECT session_id FROM jobs WHERE id = ?', jobId)?.sessionId;
+      const input = resumed ? 'A janela de 5 h da assinatura renovou. Continue de onde parou, sem refazer o que já ficou pronto.' : typed;
+      setJob(jobId, { status: 'fila' });
+      setAgentStatus(agent.id, office.id, 'livre');
+      addMessage(jobId, office.id, 'sistema', `Bateu o limite de 5 h da assinatura do Claude. Continuo sozinho às ${clockText(at)}, quando a janela renovar; se o Office estiver fechado, retomo ao abrir.`);
+      setTimeout(() => {
+        const cur = one<AgentJob>('SELECT status FROM jobs WHERE id = ?', jobId);
+        if (cur?.status !== 'fila' || running.has(jobId) || queue.some((q) => q.jobId === jobId)) return;
+        queue.push({ jobId, input, resume: resumed });
+        pump();
+      }, Math.max(0, at - Date.now())).unref?.();
       pump();
       return;
     }

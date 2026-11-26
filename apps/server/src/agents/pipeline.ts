@@ -124,7 +124,7 @@ ${missing.length ? `\n## Não encontrei na pasta do cliente\n${missing.map((m) =
 - Grave nas pastas reais do cliente, seguindo o padrão que já existe aqui. Não crie uma estrutura nova sem precisar. Se o CLAUDE.md da raiz mandar o trabalho para outra pasta (o Drive da agência, com uma pasta de trabalho por pedido, e os temporários fora dele), siga o CLAUDE.md e as skills: as peças citadas com caminho completo aparecem na mesa, desde que a pasta esteja liberada no escritório. Se ela estiver indisponível (Drive fechado, disco fora), pare e peça para abrir; não grave em outro lugar como alternativa.
 - Quando precisar de uma decisão (proposta, referência, amostra), pare com a linha \`${APPROVAL_MARKER}\` e cite os caminhos completos do que mostrar: as peças aparecem na mesa do diretor de arte.
 - Só envie ao Drive quando o diretor de arte pedir nesta conversa: copie sem sobrescrever e confira depois. Não publique em rede nenhuma.
-- Ao terminar, responda com um resumo curto e os caminhos completos das peças finais. Se aprendeu algo que valha para outros clientes, acrescente um bloco \`Aprendizados:\`. Não altere as skills.`;
+- Ao terminar, responda com um resumo curto e os caminhos completos das peças finais. Não altere as skills.`;
 }
 
 function reviewPrompt(d: Demand, office: Office, client?: Client) {
@@ -214,7 +214,9 @@ function runStage(d: Demand, stage: Stage, by: string, feedback?: string): strin
   const prompt = stage === 'briefing' && client
     ? (isDraft(fresh) ? draftPrompt(client, office) : briefingPrompt(client, office))
     : `${processPrompt(fresh, proc, office, client)}${feedback ? `\n\n## Ajustes pedidos\n${feedback}` : ''}`;
-  enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, clientId: d.clientId, workerId: d.workerId ?? undefined, prompt, display: feedback ?? (d.description || d.title), createdBy: by, stage, cwd: jobCwd(office, client) });
+  enqueueJob({ officeId: d.officeId, agentId: agent.id, demandId: d.id, clientId: d.clientId, workerId: d.workerId ?? undefined, prompt, display: feedback ?? (d.description || d.title), createdBy: by, stage, cwd: jobCwd(office, client),
+    // rascunho de briefing é ler e resumir arquivos: o Haiku dá conta e gasta bem menos do limite
+    ...(stage === 'briefing' && client && isDraft(fresh) ? { model: 'haiku' } : {}) });
   return null;
 }
 
