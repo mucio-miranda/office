@@ -217,6 +217,9 @@ const MIGRATIONS: string[] = [
   // pedido de comando (git push, gh repo create): o funcionário pede, uma pessoa aprova e o Office executa
   `ALTER TABLE helper_requests ADD COLUMN kind TEXT NOT NULL DEFAULT 'ajudante';
    ALTER TABLE helper_requests ADD COLUMN command TEXT;`,
+  // cérebros: pastas de notas (cofres do Obsidian) ligadas ao escritório; as notas continuam na pasta do usuário
+  `CREATE TABLE cerebros (id TEXT PRIMARY KEY, office_id TEXT NOT NULL REFERENCES offices(id) ON DELETE CASCADE,
+     name TEXT NOT NULL, path TEXT NOT NULL, created_at TEXT NOT NULL);`,
 ];
 
 db.exec('CREATE TABLE IF NOT EXISTS _migrations (n INTEGER PRIMARY KEY)');

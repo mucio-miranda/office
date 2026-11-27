@@ -5,7 +5,7 @@ import {
   Activity, Bot, Box, Calendar, ChevronsUpDown, Clapperboard, CircleDollarSign, KanbanSquare, Menu, Search, Users, Hand, Clock, Keyboard, Circle,
   LocateFixed, Navigation, RotateCcw, RotateCw, ChevronUp, ChevronDown, Map as MapIcon, Minus, Armchair, Compass, Palette as PaletteIcon,
   Paintbrush, Briefcase, Archive as ArchiveIcon, Inbox, SwatchBook,
-  Tag, Plus, PanelLeftClose, PanelLeftOpen, ListChecks, Download, Send,
+  Brain, Tag, Plus, PanelLeftClose, PanelLeftOpen, ListChecks, Download, Send,
 } from 'lucide-react';
 import { usePersisted } from './lib/persisted';
 import { useStore, type PanelId } from './lib/store';
@@ -30,6 +30,7 @@ const NAV: { id: NavId; icon: typeof Box; label: string; key: string }[] = [
   { id: null, icon: Box, label: 'Escritório', key: 'O' },
   { id: 'mesa', icon: Inbox, label: 'Mesa', key: 'N' },
   { id: 'moodboard', icon: SwatchBook, label: 'Moodboards', key: 'L' },
+  { id: 'cerebro', icon: Brain, label: 'Cérebro', key: 'I' },
   { id: 'clientes', icon: Briefcase, label: 'Clientes', key: 'K' },
   { id: 'arquivo', icon: ArchiveIcon, label: 'Arquivo', key: 'J' },
   { id: 'demandas', icon: KanbanSquare, label: 'Demandas', key: 'B' },
@@ -56,7 +57,7 @@ export function OfficeView() {
   const waiting = useStore((s) => s.jobs.filter((j) => j.status === 'aguardando').length);
   const drone = useStore((s) => s.drone);
   // páginas de tela cheia (funcionário, estúdio): o mapa abre pelo cabeçalho para não cobrir a caixa de mensagem nem a timeline
-  const flush = panel === 'agente' || panel === 'clientes' || panel === 'video' || panel === 'arquivo' || panel === 'moodboard';
+  const flush = panel === 'agente' || panel === 'clientes' || panel === 'video' || panel === 'arquivo' || panel === 'moodboard' || panel === 'cerebro';
   const [peek, setPeek] = useState(false);
   const droneDragging = useStore((s) => s.droneDragging);
   const touring = useStore((s) => s.tour !== null);

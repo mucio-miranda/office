@@ -1,5 +1,6 @@
 import { codexExecutable } from '../agents/codex.ts';
 import { registerCodex } from './codex.ts';
+import { registerCerebro } from './cerebro.ts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
@@ -390,6 +391,7 @@ export async function api(app: FastifyInstance) {
   app.register(async (r) => {
     r.addHook('preHandler', requireUser);
     registerCodex(r);
+    registerCerebro(r);
 
     r.get('/api/me', async (req, reply) => {
       // renova o cookie de sessão (usado por <video>/<img>) a partir do token da UI

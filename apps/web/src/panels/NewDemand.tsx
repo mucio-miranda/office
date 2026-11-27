@@ -8,11 +8,17 @@ import { api } from '../lib/api';
  * Demanda nova direto do mapa: escolhe o cliente, escreve o pedido e o funcionário já começa, na conversa do cliente
  * (a mesma sessão do Claude Code que continua de um pedido para o outro).
  */
-export function NewDemand({ agentId, clientId, onClose }: { agentId?: string | null; clientId?: string | null; onClose: () => void }) {
+export function NewDemand({ agentId, clientId, initialText, onClose, onDone }: {
+  agentId?: string | null; clientId?: string | null; onClose: () => void;
+  /** pedido já escrito (ex.: vindo de uma nota do Cérebro), para conferir e mandar */
+  initialText?: string;
+  /** chamado depois que a demanda começou */
+  onDone?: () => void;
+}) {
   const { office, clients, agents, open, notify } = useStore();
   const active = clients.filter((c) => c.status === 'ativo');
   const [f, setF] = useState({
-    clientId: clientId ?? (active.length === 1 ? active[0].id : ''), agentId: agentId ?? '', text: '', process: '', dueDate: '', priority: 'media',
+    clientId: clientId ?? (active.length === 1 ? active[0].id : ''), agentId: agentId ?? '', text: initialText ?? '', process: '', dueDate: '', priority: 'media',
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
@@ -42,6 +48,7 @@ export function NewDemand({ agentId, clientId, onClose }: { agentId?: string | n
             },
           });
           notify(`${agent?.name ?? 'O funcionário'} começou a demanda de ${client?.name}`);
+          onDone?.();
           onClose();
           open('clientes', f.clientId);
         } catch (x) { setErr((x as Error).message); }
