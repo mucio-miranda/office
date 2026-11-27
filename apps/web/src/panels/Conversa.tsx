@@ -5,6 +5,7 @@ import { desktop } from '../lib/desktop';
 import { LimitBadge } from './LimitBadge';
 import { MODEL_CHOICES, canWork, type AgentJob, type Client, type ClientSession, type Demand, type JobMessage, type Worker } from '@office/shared';
 import { useStore } from '../lib/store';
+import { MicButton } from '../lib/MicButton';
 import { useDraft } from '../lib/draft';
 import { api, mediaUrl } from '../lib/api';
 import { renderMarkdown } from '../lib/markdown';
@@ -338,6 +339,8 @@ export function Conversa({ c, session, view, setView, sessions, resume, onSessio
                   <Square size={12} /> Encerrar
                 </button>
               )}
+              <MicButton officeId={office!.id} onError={notify}
+                onText={(t) => { setText((cur) => (cur.trim() ? `${cur.trimEnd()} ${t}` : t)); input.current?.focus(); }} />
               <div className="send-group">
                 <button className="primary small" disabled={busy || !text.trim()}><ArrowUp size={14} /> Enviar</button>
                 <button type="button" className="primary small icon-only" aria-label="Mais opções de envio" aria-expanded={sendMenu} onClick={() => setSendMenu((v) => !v)}><ChevronDown size={14} /></button>

@@ -1545,3 +1545,4 @@ body { cursor: var(--cur-arrow), default; }
   .conversa-split { flex-direction: column; }
   .session-col { width: auto; max-height: 30vh; }
 }
+.mic-on { color: #fff; background: #d33b3b; border-color: #d33b3b; font-variant-numeric: tabular-nums; }

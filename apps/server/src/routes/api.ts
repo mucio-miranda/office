@@ -3,9 +3,9 @@ import { registerCodex } from './codex.ts';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { randomBytes } from 'node:crypto';
-import { createReadStream, existsSync, statSync, readdirSync, readFileSync } from 'node:fs';
+import { createReadStream, existsSync, mkdtempSync, rmSync, statSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { homedir, networkInterfaces } from 'node:os';
+import { homedir, networkInterfaces, tmpdir } from 'node:os';
 import { POST_FORMATS, POST_STATUSES, MONTH_STEPS, CHECK_STATES, MONTH_STEP_LABEL,
   BRIEFING_FIELDS, DEMAND_COLUMNS, MAX_CUSTOM_ROOMS, NETWORKS, annexRect, basePlanProblem, buildingOf, planProblem, roomRect, type BaseRoomRect, type Rect, PROCESSES, WALL_TYPES, processById, uid,
   type AgentJob, type AgentProfile, type Worker, type DirectMessage, type HelperRequest, type CalendarEvent, type Client, type CustomRoom, type Demand, type JobMessage, type Learning, type Member, type Office, type Transaction, type User,
@@ -53,7 +53,7 @@ import { latestUsage } from '../agents/usage.ts';
 import { copyStatus, getCopy, moveSafe, startCopy, waitCopy } from '../agents/files.ts';
 import { addPreviews, mediaInDirs, mediaPaths, previewFileOf, previewsOf } from '../agents/previews.ts';
 import { captionRow, exportRow, previewFile, previewTimeline, renderTimeline } from '../video/service.ts';
-import { EXPORT_FORMATS, probe } from '@office/video-engine';
+import { EXPORT_FORMATS, probe, transcribe } from '@office/video-engine';
 
 const COLORS = ['#ff5c8a', '#7c5cff', '#22c3a6', '#ffb020', '#3fa7ff', '#ff7a45', '#9be15d', '#e056fd'];
 const pick = () => COLORS[Math.floor(Math.random() * COLORS.length)];
@@ -1764,6 +1764,23 @@ export async function api(app: FastifyInstance) {
       return { local: localPaths((req.params as any).officeId, `user:${req.user.id}`, paths) };
     });
     r.addContentTypeParser('application/octet-stream', (_req, payload, done) => done(null, payload));
+    // microfone do chat: o áudio gravado vira texto no próprio computador (whisper.cpp), e o texto volta para a caixa
+    r.post('/api/offices/:officeId/transcrever', { bodyLimit: 30 * 1024 * 1024 }, async (req, reply) => {
+      if (!requireWorker(req, reply)) return;
+      const chunks: Buffer[] = [];
+      for await (const c of req.body as Readable) chunks.push(Buffer.from(c));
+      const audio = Buffer.concat(chunks);
+      if (audio.length < 1000) return reply.code(400).send({ error: 'Áudio vazio: segure um pouco mais antes de parar.' });
+      const dir = mkdtempSync(path.join(tmpdir(), 'office-voz-'));
+      const file = path.join(dir, 'fala.webm');
+      try {
+        writeFileSync(file, audio);
+        const words = await transcribe(file, { language: 'pt' });
+        return { texto: words.map((w) => w.text).join(' ').replace(/\s+([,.!?;:])/g, '$1').replace(/\s+/g, ' ').trim() };
+      } catch (e) {
+        return reply.code(500).send({ error: (e as Error).message });
+      } finally { rmSync(dir, { recursive: true, force: true }); }
+    });
     r.post('/api/offices/:officeId/anexos', async (req, reply) => {
       if (!requireWorker(req, reply)) return;
       const name = String((req.query as any).nome ?? '').slice(0, 300);
