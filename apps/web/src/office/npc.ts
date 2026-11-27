@@ -79,7 +79,8 @@ export function idleSpot(id: string, spots: IdleSpot[], reroll = false): IdleSpo
   const taken = new Set([...claims.entries()].filter(([k]) => k !== id).map(([, v]) => v));
   const busyGroups = new Set(spots.filter((s) => taken.has(s.key)).map((s) => s.group));
   const free = spots.filter((s) => !taken.has(s.key) && s.key !== mine);
-  if (!free.length) return cur ?? spots[hash(id) % spots.length];
+  // tudo ocupado: fica no que já tem; sem lugar nenhum, não entra no mapa (dois nunca no mesmo lugar)
+  if (!free.length) return cur ?? null;
   // sorteio com peso: companhia vale mais, objeto vale mais que canto vazio
   const weight = (s: IdleSpot) => 1 + (busyGroups.has(s.group) ? 3 : 0) + (s.group !== 'copa' ? 1.5 : 0);
   const total = free.reduce((n, s) => n + weight(s), 0);

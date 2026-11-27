@@ -8,7 +8,7 @@ import { BOUNDS, FIXO_KIND, FURN_BOX, baseFurniture, roomAt, type FurnitureKind 
 import { PixelFurniture } from '../pixel/Furniture';
 import { usePlan } from './plan';
 import { seatsOf } from '../seats';
-import { clickDesk, droneBlocksClick, player, walkAndSit } from '../World';
+import { clickDesk, droneBlocksClick, player, seatTaken, walkAndSit } from '../World';
 import { farSides, useView } from '../view';
 import { FurnitureMesh } from '../Furniture';
 import { OutlineColor } from '../pixel/kit';
@@ -291,8 +291,10 @@ export function DecorLayer() {
         e.stopPropagation();
         // mesa de pessoa (trocada por outra do catálogo): mesmo clique da mesa original (ficar com ela e sentar)
         if (it.id.startsWith('mesa:') && clickDesk({ kind: 'mesa', x: it.x, z: it.z })) return;
-        const s = [...seats].sort((a, b) => Math.hypot(a.x - player.x, a.z - player.z) - Math.hypot(b.x - player.x, b.z - player.z))[0];
-        walkAndSit(s, s.dir);
+        // a cadeira livre mais perto; todas ocupadas, não senta no colo de ninguém
+        const s = seats.filter((x) => !seatTaken(x)).sort((a, b) => Math.hypot(a.x - player.x, a.z - player.z) - Math.hypot(b.x - player.x, b.z - player.z))[0];
+        if (s) walkAndSit(s, s.dir);
+        else useStore.getState().notify('Esse lugar já está ocupado.');
       },
       // o clique do mesmo gesto não pode chegar ao chão (viraria "andar até aqui" e cancelaria o sentar)
       onClick: (e: any) => e.stopPropagation(),

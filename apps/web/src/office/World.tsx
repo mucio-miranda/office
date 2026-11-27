@@ -365,9 +365,9 @@ function Player({ onNearby, p, active }: { onNearby: (n: Nearby | null) => void;
     // mesas de trabalho e peças de sentar (as ocupadas por funcionários ficam de fora)
     if (!player.seated) {
       for (const s of sittable(useDecor.getState().items)) {
-        if (spots.some(([, w]) => Math.hypot(w.x - s.x, w.z - s.z) < 0.4)) continue;
         const d = Math.hypot(s.x - player.x, s.z - player.z);
-        if (d < 1.6 && (!best || d < best.d)) best = { d, key: `s:${s.key}`, n: { label: 'Sentar', action: () => sitHere(s, s.dir) } };
+        if (d >= 1.6 || (best && d >= best.d) || seatTaken(s)) continue;
+        best = { d, key: `s:${s.key}`, n: { label: 'Sentar', action: () => sitHere(s, s.dir) } };
       }
     }
     for (const [w, spot] of spots) {
@@ -446,7 +446,24 @@ function Remote({ pr, p }: { pr: Presence; p: ScenePalette }) {
  */
 export type WorkerSpot = Vec2 & { dir: number; seated: boolean; copa: boolean; play?: boolean };
 /** Lugares para passar o tempo (objetos de qualquer sala e a copa), com quem está nas mesas de trabalho fora. */
-const idleSpots = (): IdleSpot[] => [...leisureSpots(useDecor.getState().items), ...copaSpots()];
+const idleSpots = (): IdleSpot[] => {
+  const people = humanSeats();
+  return [...leisureSpots(useDecor.getState().items), ...copaSpots()].filter((s) => !people.some((h) => Math.hypot(h.x - s.x, h.z - s.z) < 0.4));
+};
+/** Onde tem pessoa sentada agora (você e as outras do escritório): funcionário nenhum vai para esse lugar. */
+function humanSeats(): Vec2[] {
+  const out: Vec2[] = Object.values(useStore.getState().presences).filter((pr) => pr.seated).map((pr) => pr.pos);
+  if (player.seated) out.push({ x: player.x, z: player.z });
+  return out;
+}
+/** Lugar já ocupado por funcionário (de cliente ou de função) ou por outra pessoa? Você mesmo não conta. */
+export function seatTaken(s: Vec2) {
+  const st = useStore.getState();
+  const near = (p: Vec2) => Math.hypot(p.x - s.x, p.z - s.z) < 0.4;
+  return workerSpots(st.workers).some(([, w]) => near(w))
+    || st.agents.filter(isFixedAgent).some((a) => near(agentSeat(a)))
+    || Object.values(st.presences).some((pr) => pr.userId !== st.user?.id && pr.seated && near(pr.pos));
+}
 export function workerSpots(all: Worker[]) {
   // um avatar por cliente, mesmo com várias sessões abertas
   const workers = mapWorkers(all);
@@ -455,7 +472,7 @@ export function workerSpots(all: Worker[]) {
   const inCopa = workers.filter((w) => workerPhase(w, now) === 'copa');
   // na mesa: a da sala ou uma mesa de trabalho do Decorar; as mesas dos funcionários de função não contam
   const fixed = useStore.getState().agents.filter(isFixedAgent).map(agentSeat);
-  const seats = seatWorkers(atDesk, useDecor.getState().items, fixed);
+  const seats = seatWorkers(atDesk, useDecor.getState().items, [...fixed, ...humanSeats()]);
   const count: Record<string, number> = {};
   const desk = atDesk.map((w) => {
     const s = seats.get(w.id);
