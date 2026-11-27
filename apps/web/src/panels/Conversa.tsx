@@ -255,7 +255,12 @@ export function Conversa({ c, session, view, setView, sessions, resume, onSessio
             onClick={async () => {
               try {
                 const { cwd } = await api<{ cwd: string }>(`/api/offices/${office!.id}/clients/${c.id}/pasta-conversa`);
-                const err = await desktop!.claudeTerminal!({ cwd });
+                // abre direto a conversa desta tela: a lista do `claude --resume` não mostra as conversas feitas pelo
+                // Office (rodam em modo não interativo). Com o funcionário trabalhando nela, só a lista, para as duas
+                // janelas não escreverem na mesma conversa.
+                const sid = active ? null : view ?? mine.find((j) => j.sessionId)?.sessionId ?? null;
+                if (active) notify('O funcionário está trabalhando nesta conversa: abri só a lista do terminal. Espere ele terminar para continuar esta aqui.');
+                const err = await desktop!.claudeTerminal!({ cwd, session: sid });
                 if (err) notify(err);
               } catch (e) { notify((e as Error).message); }
             }}>
